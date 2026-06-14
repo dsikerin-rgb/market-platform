@@ -8,6 +8,7 @@ namespace App\Filament\Pages;
 
 use App\Domain\Operations\OperationType;
 use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\TenantContractResource;
 use App\Models\Market;
 use App\Models\Operation;
 use App\Models\Tenant;
@@ -281,6 +282,11 @@ class MapReviewResults extends Page
                 ],
                 is_array($diagnostics['candidate_spaces'] ?? null) ? $diagnostics['candidate_spaces'] : []
             );
+            if (is_array($diagnostics['settlement_contract_review'] ?? null)) {
+                $diagnostics['settlement_contract_review'] = $this->annotateSettlementContractReview(
+                    $diagnostics['settlement_contract_review']
+                );
+            }
             $assessment = $this->buildAssessmentMeta($diagnostics);
 
             $rows[] = array_merge($row, [
@@ -552,6 +558,29 @@ class MapReviewResults extends Page
      */
     private function buildAssessmentMeta(array $diagnostics): array
     {
+        $contractReview = is_array($diagnostics['settlement_contract_review'] ?? null)
+            ? $diagnostics['settlement_contract_review']
+            : [];
+        $contractReviewLabel = trim((string) ($contractReview['assessment_label'] ?? ''));
+
+        if ($contractReviewLabel !== '' && ($contractReview['state'] ?? null) !== 'unknown') {
+            $tone = (string) ($contractReview['tone'] ?? 'neutral');
+            $state = (string) ($contractReview['state'] ?? '');
+            $rank = match ($state) {
+                'other_space', 'multiple_spaces' => 8,
+                'unlinked_contract', 'missing_local_contract', 'no_contract_in_osv' => 12,
+                'current_space' => 18,
+                'represented_by_exact_contracts' => 24,
+                default => 30,
+            };
+
+            return [
+                'label' => $contractReviewLabel,
+                'tone' => in_array($tone, ['success', 'danger', 'warning', 'neutral'], true) ? $tone : 'neutral',
+                'rank' => $rank,
+            ];
+        }
+
         $classification = is_array($diagnostics['unconfirmed_link_classification'] ?? null)
             ? $diagnostics['unconfirmed_link_classification']
             : [];
@@ -721,6 +750,34 @@ class MapReviewResults extends Page
     private function spaceUrl(int $spaceId): string
     {
         return MarketSpaceResource::getUrl('edit', ['record' => $spaceId]);
+    }
+
+    private function contractUrl(int $contractId): string
+    {
+        return TenantContractResource::getUrl('edit', ['record' => $contractId]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $review
+     * @return array<string, mixed>
+     */
+    private function annotateSettlementContractReview(array $review): array
+    {
+        $review['rows'] = array_map(function (array $row): array {
+            $contractId = (int) ($row['local_contract_id'] ?? 0);
+            if ($contractId > 0) {
+                $row['contract_url'] = $this->contractUrl($contractId);
+            }
+
+            $row['linked_spaces'] = array_map(fn (array $space): array => $space + [
+                'space_url' => $this->spaceUrl((int) ($space['space_id'] ?? 0)),
+                'map_url' => $this->mapUrl((int) ($space['space_id'] ?? 0)),
+            ], is_array($row['linked_spaces'] ?? null) ? $row['linked_spaces'] : []);
+
+            return $row;
+        }, is_array($review['rows'] ?? null) ? $review['rows'] : []);
+
+        return $review;
     }
 
     /**

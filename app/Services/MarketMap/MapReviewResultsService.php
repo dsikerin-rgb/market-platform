@@ -10,6 +10,7 @@ use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewCaseResolver;
 use App\Domain\Operations\SpaceReviewDecision;
 use App\Domain\Operations\SpaceReviewStateMachine;
+use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
@@ -919,6 +920,7 @@ class MapReviewResultsService
             $debtSummary = $this->debtSummaryFromResolved(
                 $debtResolver->resolveForMarketSpace($spaceId, $marketId)
             );
+            $settlementContractReview = $this->settlementContractReviewForSpace($space, $marketId);
             $unconfirmedLinkClassification = $this->unconfirmedLinkClassification(
                 $space,
                 $counts,
@@ -955,6 +957,7 @@ class MapReviewResultsService
                     'accrual_details' => $accrualDetails[$spaceId] ?? [],
                     'financial_signal' => $resolvedFinancialSignal,
                     'debt_summary' => $debtSummary,
+                    'settlement_contract_review' => $settlementContractReview,
                     'unconfirmed_link_classification' => $unconfirmedLinkClassification,
                     'review_case' => $reviewCase->toArray(),
                 ],
@@ -1642,6 +1645,16 @@ class MapReviewResultsService
             'accrual_details' => [],
             'financial_signal' => null,
             'debt_summary' => [],
+            'settlement_contract_review' => [
+                'state' => 'unknown',
+                'assessment_label' => 'Связь договора требует проверки',
+                'tone' => 'neutral',
+                'title' => 'Проверьте договор ОСВ',
+                'summary' => 'Система не смогла подготовить данные проверки договора.',
+                'next_step' => 'Откройте место и договор вручную.',
+                'after_action' => 'После уточнения связи договора обновите очередь проверки.',
+                'rows' => [],
+            ],
             'unconfirmed_link_classification' => [
                 'code' => 'unknown',
                 'label' => 'Причина не определена',
@@ -1655,6 +1668,367 @@ class MapReviewResultsService
             'duplicate_resolution_block_reason' => null,
             'review_case' => null,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function settlementContractReviewForSpace(MarketSpace $space, int $marketId): array
+    {
+        $tenantId = (int) ($space->tenant_id ?? 0);
+        if ($marketId <= 0 || $tenantId <= 0) {
+            return [
+                'state' => 'no_tenant',
+                'assessment_label' => 'Нет арендатора для проверки договора',
+                'tone' => 'neutral',
+                'title' => 'Договор ОСВ проверить нельзя',
+                'summary' => 'У места нет текущего арендатора, поэтому договоры ОСВ для него не подбираются.',
+                'next_step' => 'Сначала проверьте арендатора места.',
+                'after_action' => 'После этого система снова сможет проверить цепочку ОСВ → договор → место.',
+                'rows' => [],
+            ];
+        }
+
+        $rows = $this->latestSettlementRowsForTenant($marketId, $tenantId);
+        if ($rows->isEmpty()) {
+            return [
+                'state' => 'no_osv_rows',
+                'assessment_label' => 'Нет строк ОСВ по арендатору',
+                'tone' => 'neutral',
+                'title' => 'Нет договора ОСВ для проверки',
+                'summary' => 'По текущему арендатору места не найдены строки ОСВ в последнем загруженном периоде.',
+                'next_step' => 'Оставьте как общий статус арендатора или проверьте импорт ОСВ.',
+                'after_action' => 'Долг места не будет считаться точным, пока ОСВ не даст договор.',
+                'rows' => [],
+            ];
+        }
+
+        $exactContractExternalIds = $this->activeContractExternalIdsForTenantSpaces($marketId, $tenantId);
+        $reviewRows = $rows->values();
+
+        $positiveRows = $reviewRows->filter(static fn (object $row): bool => (float) ($row->debt_amount ?? 0) > 0.009);
+        $reviewRows = $positiveRows->isNotEmpty() ? $positiveRows->values() : $reviewRows;
+        $groups = $reviewRows
+            ->groupBy(static function (object $row): string {
+                $contractExternalId = trim((string) ($row->contract_external_id ?? ''));
+
+                return $contractExternalId !== '' ? $contractExternalId : '__no_contract__';
+            })
+            ->map(fn (Collection $contractRows, string $contractExternalId): array => $this->settlementContractReviewRow(
+                $contractRows,
+                $contractExternalId === '__no_contract__' ? '' : $contractExternalId,
+                $marketId,
+                (int) $space->id
+            ))
+            ->sortByDesc(static fn (array $row): float => abs((float) ($row['amount'] ?? 0)))
+            ->values();
+
+        $primary = $groups->first();
+        if (! is_array($primary)) {
+            return [
+                'state' => 'unknown',
+                'assessment_label' => 'Договор ОСВ не определён',
+                'tone' => 'neutral',
+                'title' => 'Нет понятного договора для проверки',
+                'summary' => 'Система не смогла выделить договор ОСВ, который нужно связать с местом.',
+                'next_step' => 'Оставьте как общий долг арендатора и проверьте ОСВ вручную.',
+                'after_action' => 'Точная связь с местом не появится, пока договор не будет определён.',
+                'rows' => [],
+            ];
+        }
+
+        $state = (string) ($primary['link_state'] ?? 'unknown');
+        $tone = match ($state) {
+            'current_space' => 'success',
+            'other_space', 'multiple_spaces' => 'danger',
+            'unlinked_contract', 'missing_local_contract', 'no_contract_in_osv' => 'warning',
+            default => 'neutral',
+        };
+        $assessmentLabel = match ($state) {
+            'current_space' => 'Договор ОСВ ведёт к текущему месту',
+            'other_space' => 'Договор ОСВ ведёт к другому месту',
+            'multiple_spaces' => 'Договор ОСВ связан с несколькими местами',
+            'unlinked_contract' => 'Договор ОСВ не привязан к месту',
+            'missing_local_contract' => 'Договор ОСВ не найден в сервисе',
+            'no_contract_in_osv' => 'ОСВ без договора',
+            default => 'Связь договора требует проверки',
+        };
+        $title = match ($state) {
+            'current_space' => 'Проверьте договор текущего места',
+            'other_space' => 'Сначала откройте место, куда ведёт договор',
+            'multiple_spaces' => 'Проверьте несколько мест договора',
+            'unlinked_contract' => 'Укажите место в договоре',
+            'missing_local_contract' => 'Сопоставьте договор из ОСВ',
+            'no_contract_in_osv' => 'Оставьте как общий долг арендатора',
+            default => 'Проверьте договор ОСВ',
+        };
+        $nextStep = match ($state) {
+            'current_space' => 'Откройте договор и проверьте, что он действительно относится к текущему месту.',
+            'other_space' => 'Откройте связанное место. Если договор относится туда, текущую карточку оставьте как общий долг арендатора.',
+            'multiple_spaces' => 'Откройте договор и оставьте только корректную связь с местом или оформите групповое/совместное правило.',
+            'unlinked_contract' => 'Откройте договор и выберите место, к которому он относится.',
+            'missing_local_contract' => 'Найдите или создайте локальный договор с этим ID 1С, затем привяжите его к месту.',
+            'no_contract_in_osv' => 'Без договора ОСВ точную связь с местом доказать нельзя.',
+            default => 'Проверьте договор и его связь с местом.',
+        };
+
+        return [
+            'state' => $state,
+            'assessment_label' => $assessmentLabel,
+            'tone' => $tone,
+            'title' => $title,
+            'summary' => 'На карте уже виден общий финансовый статус арендатора. Здесь проверяется только цепочка ОСВ → договор → место.',
+            'next_step' => $nextStep,
+            'after_action' => 'После исправления связи договора перезагрузите страницу: карточка должна уйти из этой очереди или стать точным долгом места.',
+            'amount_label' => $this->moneyLabel((float) $reviewRows->sum('debt_amount')),
+            'period_label' => $this->dateLabel((string) $reviewRows->max('period_to')),
+            'rows_count' => $reviewRows->count(),
+            'contracts_count' => $groups->count(),
+            'exact_contracts_excluded_count' => $exactContractExternalIds->count(),
+            'rows' => $groups->all(),
+        ];
+    }
+
+    private function latestSettlementRowsForTenant(int $marketId, int $tenantId): Collection
+    {
+        if ($marketId <= 0
+            || $tenantId <= 0
+            || ! Schema::hasTable('tenant_settlement_balances')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'tenant_id')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'account')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'period_to')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'closing_debit')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'closing_credit')) {
+            return collect();
+        }
+
+        $latestPerAccount = DB::table('tenant_settlement_balances as latest')
+            ->select('latest.account')
+            ->selectRaw('MAX(latest.period_to) as latest_period_to')
+            ->where('latest.market_id', $marketId)
+            ->where('latest.tenant_id', $tenantId)
+            ->groupBy('latest.account');
+
+        $this->applySettlementAccountFilter($latestPerAccount, 'latest.account');
+
+        return DB::table('tenant_settlement_balances as tsb')
+            ->joinSub($latestPerAccount, 'latest_settlements', function ($join): void {
+                $join->on('tsb.account', '=', 'latest_settlements.account')
+                    ->on('tsb.period_to', '=', 'latest_settlements.latest_period_to');
+            })
+            ->where('tsb.market_id', $marketId)
+            ->where('tsb.tenant_id', $tenantId)
+            ->tap(fn ($query) => $this->applySettlementAccountFilter($query, 'tsb.account'))
+            ->select([
+                'tsb.tenant_id',
+                'tsb.tenant_contract_id',
+                'tsb.account',
+                'tsb.period_from',
+                'tsb.period_to',
+                'tsb.contract_external_id',
+                'tsb.contract_name',
+                'tsb.settlement_document_name',
+                'tsb.imported_at',
+                'tsb.opening_debit',
+                'tsb.opening_credit',
+                'tsb.turnover_debit',
+                'tsb.turnover_credit',
+                'tsb.closing_debit',
+                'tsb.closing_credit',
+            ])
+            ->selectRaw('(COALESCE(tsb.closing_debit, 0) - COALESCE(tsb.closing_credit, 0)) as debt_amount')
+            ->get();
+    }
+
+    private function applySettlementAccountFilter(\Illuminate\Database\Query\Builder $query, string $column): void
+    {
+        $query->where(function (\Illuminate\Database\Query\Builder $accounts) use ($column): void {
+            $accounts->whereIn($column, ContractDebt::CALCULATION_ACCOUNTS);
+
+            foreach (ContractDebt::CALCULATION_ACCOUNT_PREFIXES as $prefix) {
+                $accounts->orWhere($column, 'like', $prefix.'%');
+            }
+        });
+    }
+
+    private function settlementContractReviewRow(Collection $rows, string $contractExternalId, int $marketId, int $currentSpaceId): array
+    {
+        $first = $rows->first();
+        $localContracts = $contractExternalId !== ''
+            ? DB::table('tenant_contracts')
+                ->where('market_id', $marketId)
+                ->where('external_id', $contractExternalId)
+                ->get(['id', 'number', 'status', 'is_active', 'market_space_id'])
+            : collect();
+
+        $linkedSpaces = $this->linkedSpacesForContracts(
+            $localContracts->pluck('id')->map(fn ($id): int => (int) $id)->filter()->values()->all(),
+            $localContracts->pluck('market_space_id')->map(fn ($id): int => (int) $id)->filter()->values()->all(),
+            $marketId
+        );
+
+        $linkedSpaceIds = collect($linkedSpaces)
+            ->pluck('space_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        $linkState = 'unknown';
+        if ($contractExternalId === '') {
+            $linkState = 'no_contract_in_osv';
+        } elseif ($localContracts->isEmpty()) {
+            $linkState = 'missing_local_contract';
+        } elseif ($linkedSpaceIds->isEmpty()) {
+            $linkState = 'unlinked_contract';
+        } elseif ($linkedSpaceIds->count() > 1) {
+            $linkState = 'multiple_spaces';
+        } elseif ($linkedSpaceIds->contains($currentSpaceId)) {
+            $linkState = 'current_space';
+        } else {
+            $linkState = 'other_space';
+        }
+
+        $documentName = trim((string) ($first->settlement_document_name ?? ''));
+        $contractName = trim((string) ($first->contract_name ?? ''));
+        $localContract = $localContracts->first();
+
+        return [
+            'link_state' => $linkState,
+            'contract_external_id' => $contractExternalId,
+            'contract_name' => $contractName,
+            'contract_label' => $contractName !== ''
+                ? $contractName
+                : ($contractExternalId !== '' ? 'Договор 1С '.$contractExternalId : 'ОСВ без договора'),
+            'local_contract_id' => $localContract?->id ? (int) $localContract->id : null,
+            'local_contract_number' => $localContract?->number ? (string) $localContract->number : null,
+            'local_contract_status' => $localContract?->status ? (string) $localContract->status : null,
+            'amount' => (float) $rows->sum('debt_amount'),
+            'amount_label' => $this->moneyLabel((float) $rows->sum('debt_amount')),
+            'period_label' => $this->dateLabel((string) $rows->max('period_to')),
+            'rows_count' => $rows->count(),
+            'document_name' => $documentName,
+            'linked_spaces' => array_values($linkedSpaces),
+            'link_status_label' => match ($linkState) {
+                'current_space' => 'связан с текущим местом',
+                'other_space' => 'связан с другим местом',
+                'multiple_spaces' => 'связан с несколькими местами',
+                'unlinked_contract' => 'место в договоре не указано',
+                'missing_local_contract' => 'локальный договор не найден',
+                'no_contract_in_osv' => 'в ОСВ нет договора',
+                default => 'требует проверки',
+            },
+        ];
+    }
+
+    /**
+     * @param  list<int>  $contractIds
+     * @param  list<int>  $directSpaceIds
+     * @return list<array{space_id:int,label:string,source:string}>
+     */
+    private function linkedSpacesForContracts(array $contractIds, array $directSpaceIds, int $marketId): array
+    {
+        $spaceIds = collect($directSpaceIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0);
+
+        if ($contractIds !== []
+            && Schema::hasTable('market_space_tenant_bindings')
+            && Schema::hasColumn('market_space_tenant_bindings', 'tenant_contract_id')) {
+            $now = now();
+            $bindingSpaceIds = DB::table('market_space_tenant_bindings')
+                ->where('market_id', $marketId)
+                ->whereIn('tenant_contract_id', $contractIds)
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('started_at')
+                        ->orWhere('started_at', '<=', $now);
+                })
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('ended_at')
+                        ->orWhere('ended_at', '>', $now);
+                })
+                ->pluck('market_space_id')
+                ->map(fn ($id): int => (int) $id);
+
+            $spaceIds = $spaceIds->merge($bindingSpaceIds);
+        }
+
+        $spaceIds = $spaceIds->filter(fn (int $id): bool => $id > 0)->unique()->values()->all();
+        if ($spaceIds === []) {
+            return [];
+        }
+
+        return MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->whereIn('id', $spaceIds)
+            ->get(['id', 'number', 'display_name', 'code'])
+            ->map(fn (MarketSpace $space): array => [
+                'space_id' => (int) $space->id,
+                'label' => $this->spaceLabel($space),
+                'source' => in_array((int) $space->id, array_map('intval', $directSpaceIds), true) ? 'contract' : 'binding',
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function activeContractExternalIdsForTenantSpaces(int $marketId, int $tenantId): Collection
+    {
+        if ($marketId <= 0
+            || $tenantId <= 0
+            || ! Schema::hasTable('tenant_contracts')
+            || ! Schema::hasTable('market_spaces')
+            || ! Schema::hasColumn('tenant_contracts', 'external_id')
+            || ! Schema::hasColumn('tenant_contracts', 'market_space_id')
+            || ! Schema::hasColumn('market_spaces', 'tenant_id')) {
+            return collect();
+        }
+
+        $contractIds = collect();
+        $now = now();
+
+        if (Schema::hasTable('market_space_tenant_bindings')
+            && Schema::hasColumn('market_space_tenant_bindings', 'tenant_contract_id')) {
+            $contractIds = $contractIds->merge(DB::table('market_space_tenant_bindings as mstb')
+                ->join('tenant_contracts as tc', 'tc.id', '=', 'mstb.tenant_contract_id')
+                ->join('market_spaces as ms', 'ms.id', '=', 'mstb.market_space_id')
+                ->where('mstb.market_id', $marketId)
+                ->where('mstb.tenant_id', $tenantId)
+                ->whereNotNull('mstb.tenant_contract_id')
+                ->whereNotNull('tc.external_id')
+                ->where('tc.market_id', $marketId)
+                ->where('tc.tenant_id', $tenantId)
+                ->where('tc.is_active', true)
+                ->whereNotIn('tc.status', ['terminated', 'archived'])
+                ->where('ms.market_id', $marketId)
+                ->where('ms.tenant_id', $tenantId)
+                ->where('ms.is_active', true)
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.started_at')
+                        ->orWhere('mstb.started_at', '<=', $now);
+                })
+                ->where(function ($query) use ($now): void {
+                    $query->whereNull('mstb.ended_at')
+                        ->orWhere('mstb.ended_at', '>', $now);
+                })
+                ->pluck('tc.external_id'));
+        }
+
+        $contractIds = $contractIds->merge(DB::table('tenant_contracts as tc')
+            ->join('market_spaces as ms', 'ms.id', '=', 'tc.market_space_id')
+            ->where('tc.market_id', $marketId)
+            ->where('tc.tenant_id', $tenantId)
+            ->where('tc.is_active', true)
+            ->whereNotIn('tc.status', ['terminated', 'archived'])
+            ->whereNotNull('tc.external_id')
+            ->where('ms.market_id', $marketId)
+            ->where('ms.tenant_id', $tenantId)
+            ->where('ms.is_active', true)
+            ->pluck('tc.external_id'));
+
+        return $contractIds
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->filter()
+            ->unique()
+            ->values();
     }
 
     /**
