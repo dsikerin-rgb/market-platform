@@ -32,4 +32,31 @@ class AdminSessionExpiryTest extends TestCase
             ->assertOk()
             ->assertSee('Сессия истекла, войдите снова.');
     }
+    public function test_cabinet_logout_token_mismatch_redirects_to_cabinet_login(): void
+    {
+        $middleware = new RedirectAdminTokenMismatch();
+        $request = Request::create('/cabinet/logout', 'POST');
+        $request->setLaravelSession($this->app['session']->driver());
+
+        $response = $middleware->handle($request, function (): never {
+            throw new TokenMismatchException();
+        });
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('/cabinet/login', parse_url((string) $response->headers->get('Location'), PHP_URL_PATH));
+    }
+
+    public function test_cabinet_impersonation_exit_token_mismatch_redirects_to_admin(): void
+    {
+        $middleware = new RedirectAdminTokenMismatch();
+        $request = Request::create('/cabinet/impersonation/exit', 'POST');
+        $request->setLaravelSession($this->app['session']->driver());
+
+        $response = $middleware->handle($request, function (): never {
+            throw new TokenMismatchException();
+        });
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('/admin', parse_url((string) $response->headers->get('Location'), PHP_URL_PATH));
+    }
 }
