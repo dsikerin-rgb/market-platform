@@ -19,7 +19,7 @@ class PaymentsController extends Controller
     {
         $user = $request->user();
         $tenant = $user->tenant;
-        $allowedSpaceIds = $user->allowedTenantSpaceIds();
+        $allowedSpaceIds = $this->financeAllowedSpaceIds($user);
 
         $availablePeriods = $this->availablePeriods((int) $tenant->id, (int) $tenant->market_id);
         $selectedPeriod = $this->selectedPeriod($request->string('month')->toString(), $availablePeriods);
@@ -150,6 +150,25 @@ class PaymentsController extends Controller
         return [$period->startOfMonth(), $period->endOfMonth()];
     }
 
+    /**
+     * Main tenant account sees the whole tenant financial contour. Additional cabinet users
+     * keep the existing per-space restriction.
+     *
+     * @return list<int>
+     */
+    private function financeAllowedSpaceIds(mixed $user): array
+    {
+        if (method_exists($user, 'hasRole') && $user->hasRole('merchant')) {
+            return [];
+        }
+
+        if (! method_exists($user, 'allowedTenantSpaceIds')) {
+            return [];
+        }
+
+        return $user->allowedTenantSpaceIds();
+    }
+
     private function parsePeriod(mixed $value): ?CarbonImmutable
     {
         if (! filled($value)) {
@@ -253,8 +272,7 @@ class PaymentsController extends Controller
             ->with(['tenantContract.marketSpace:id,number,display_name,code'])
             ->where('tenant_id', $tenantId)
             ->when($marketId > 0, fn ($query) => $query->where('market_id', $marketId))
-            ->whereDate('payment_date', '>=', $periodFrom->toDateString())
-            ->whereDate('payment_date', '<=', $periodTo->toDateString())
+            ->whereDate('period', $periodFrom->toDateString())
             ->when($allowedSpaceIds !== [], function ($query) use ($allowedSpaceIds): void {
                 $query->where(function ($inner) use ($allowedSpaceIds): void {
                     $inner

@@ -209,7 +209,7 @@ class CabinetLoginFeatureTest extends TestCase
         $this->assertGuest('web');
     }
 
-    public function test_authenticated_non_merchant_cannot_open_cabinet_routes(): void
+    public function test_authenticated_admin_user_is_redirected_from_cabinet_to_admin_panel(): void
     {
         $context = $this->createCabinetContext();
         $user = $this->createUser(
@@ -219,7 +219,7 @@ class CabinetLoginFeatureTest extends TestCase
 
         $this->actingAs($user, 'web');
 
-        $this->get(route('cabinet.dashboard'))->assertForbidden();
+        $this->get(route('cabinet.dashboard'))->assertRedirect('/admin');
     }
 
     public function test_merchant_cannot_access_admin_panel(): void
