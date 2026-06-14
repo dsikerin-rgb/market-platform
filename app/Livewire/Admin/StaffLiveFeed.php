@@ -174,13 +174,15 @@ class StaffLiveFeed extends Component
             return collect();
         }
 
+        $userColumns = $this->staffUserColumns();
+
         $query = $this->visiblePostsQuery()
-            ->with(['author:id,name,email']);
+            ->with(['author' => fn ($author) => $author->select($userColumns)]);
 
         if (Schema::hasTable('staff_feed_comments')) {
             $query->with([
                 'comments' => fn ($comments) => $comments
-                    ->with(['author:id,name,email'])
+                    ->with(['author' => fn ($author) => $author->select($userColumns)])
                     ->oldest(),
             ]);
         }
@@ -245,5 +247,23 @@ class StaffLiveFeed extends Component
     private function isSuperAdmin(User $user): bool
     {
         return method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function staffUserColumns(): array
+    {
+        $columns = ['id', 'name', 'email'];
+
+        if (Schema::hasColumn('users', 'staff_avatar_path')) {
+            $columns[] = 'staff_avatar_path';
+        }
+
+        if (Schema::hasColumn('users', 'staff_avatar_color')) {
+            $columns[] = 'staff_avatar_color';
+        }
+
+        return $columns;
     }
 }

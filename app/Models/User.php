@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Support\AdminPanelImpersonation;
+use App\Support\MarketplaceMediaStorage;
+use Filament\Models\Contracts\HasAvatar;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,7 +17,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements FilamentUser, HasAvatar
 {
     /**
      * @use HasFactory<\Database\Factories\UserFactory>
@@ -44,6 +46,8 @@ class User extends Authenticatable implements FilamentUser
         'telegram_profile',
         'telegram_linked_at',
         'notification_preferences',
+        'staff_avatar_path',
+        'staff_avatar_color',
     ];
 
     /**
@@ -168,6 +172,27 @@ class User extends Authenticatable implements FilamentUser
         $raw = (array) ($this->notification_preferences ?? []);
 
         return (bool) ($raw['self_manage'] ?? false);
+    }
+
+    public function getFilamentAvatarUrl(): ?string
+    {
+        return $this->staffAvatarUrl();
+    }
+
+    public function staffAvatarUrl(): ?string
+    {
+        $path = trim((string) ($this->staff_avatar_path ?? ''));
+
+        return $path !== '' ? MarketplaceMediaStorage::previewUrl($path) : null;
+    }
+
+    public function staffAvatarColor(): string
+    {
+        $color = trim((string) ($this->staff_avatar_color ?? ''));
+
+        return preg_match('/^#[0-9a-f]{6}$/i', $color) === 1
+            ? $color
+            : '#2563eb';
     }
 
     /**

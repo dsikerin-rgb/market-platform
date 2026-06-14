@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use App\Livewire\Admin\OnlineStaffRail;
 use App\Models\Market;
+use App\Models\StaffConversation;
+use App\Models\StaffConversationMessage;
 use App\Models\User;
 use App\Support\SystemAgentService;
 use Filament\Facades\Filament;
@@ -47,6 +49,46 @@ class StaffPresenceRailTest extends TestCase
         Livewire::test(OnlineStaffRail::class)
             ->assertSee('Visible Staff')
             ->assertDontSee('System Agent');
+    }
+
+    public function test_unread_staff_messages_are_visible_on_presence_rail(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+        $sender = User::factory()->create([
+            'name' => 'Message Sender',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'message-sender@example.test',
+            'last_seen_at' => now(),
+        ]);
+
+        $conversation = StaffConversation::query()->create([
+            'market_id' => (int) $market->id,
+            'created_by_user_id' => (int) $sender->id,
+            'recipient_user_id' => (int) $admin->id,
+            'subject' => 'Unread topic',
+            'last_message_at' => now(),
+        ]);
+
+        StaffConversationMessage::query()->create([
+            'staff_conversation_id' => (int) $conversation->id,
+            'user_id' => (int) $sender->id,
+            'body' => 'Unread internal message',
+            'read_at' => null,
+        ]);
+
+        Livewire::test(OnlineStaffRail::class)
+            ->assertSeeHtml('staff-presence__unread-badge')
+            ->call('openStaffModal', (int) $sender->id)
+            ->assertSee('Unread internal message')
+            ->call('markSelectedStaffMessagesRead')
+            ->assertDontSee('Unread internal message');
     }
 
     private function actingAsMarketAdmin(Market $market): User
