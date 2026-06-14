@@ -220,6 +220,44 @@ Interpretation:
   It should build a read-only preview/report using `DebtDecisionPolicy` so the
   operator can inspect which spaces would change and why.
 
+### Update: Finance Screens And Access State, 2026-06-14
+
+After the follow-up 1C UI and access work, the following should be treated as
+closed and should not be proposed again as the next task unless a new defect is
+reported:
+
+- tenant payments UI;
+- 1C document journal;
+- 1C settlement balances screen;
+- tenant/contract/space 1C finance summaries where the data is linked;
+- 1C accrual document fields and service/basis display;
+- Russian Telegram labels for 1C exchange notifications;
+- finance access via `AdminCapabilities::canViewFinance`;
+- user-facing cleanup of the general `Расчеты 1С` screen.
+
+PR #979 changed the general `Расчеты 1С` screen so that the first table is
+oriented around the business question:
+
+- tenant;
+- contract;
+- organization;
+- accrued;
+- paid;
+- final result;
+- status.
+
+The accounting control data is still available, but it is moved below the main
+workflow into `Проверка данных`. This was deployed to staging and production at
+commit `bc40be4`.
+
+Access state:
+
+- `OneCReconciliation`, `OneCSettlements`, `OneCDebtDecisionPreview`,
+  `ReportsHub`, and `TenantAccrualResource` use finance capability checks.
+- Roles/permissions include `finance.1c.view` and `finance.accruals.view`.
+- Do not use the old permissions audit note as proof that this is still open;
+  verify the current code first.
+
 ## Current 1C Entities
 
 ### Contracts
@@ -335,7 +373,8 @@ for later debt/map color decisions.
 
 ### 1C Document Journal
 
-The existing page shows imported documents for a date period:
+The existing page `/admin/1c-reconciliation` shows imported documents for a
+date period:
 
 - accrual documents;
 - payment documents;
@@ -344,6 +383,22 @@ The existing page shows imported documents for a date period:
 - pagination.
 
 This page is for document inspection, not final debt accounting.
+
+### 1C Settlement Balances
+
+The existing page `/admin/1c-settlements` is the accountant/operator-facing OSV
+screen for account settlements.
+
+It shows:
+
+- summary cards for opening debt, period movement, closing result, and row
+  composition;
+- a business table by tenant, contract, organization, accrued, paid, result,
+  and status;
+- collapsed accounting diagnostics and organization control totals.
+
+This page is already implemented and deployed. It should not be replaced by the
+reports hub or by month-only accrual-minus-payment logic.
 
 ### Tenant Card
 
@@ -364,148 +419,53 @@ too dense and belongs on a dedicated page.
 
 ## Next Plan
 
-### Step 0. Build A Debt Decision Draft Layer
+### Step 0. Do Not Rebuild Closed 1C Screens
 
-Before using OSV to color the map again, build a read-only debt decision draft
-layer. It should not change map colors by itself.
+The following are already done:
 
-The draft layer should produce one row per candidate debt decision:
+- regular settlement balance import for account `62`;
+- `/admin/1c-settlements`;
+- `/admin/1c-reconciliation`;
+- accrual document/basis fields;
+- finance capability checks.
 
-- market;
-- tenant;
-- contract;
-- market space when exact binding is proven;
-- account;
-- source table (`tenant_settlement_balances`, `contract_debts`, or both);
-- source row/document ids where available;
-- debt amount;
-- overdue date;
-- overdue days;
-- proposed status (`green`, `pending`, `orange`, `red`, `gray`);
-- proposed scope (`space`, `tenant_fallback`, `unmapped`);
-- confidence/reason.
+The next task should not be another reports hub, another transition page, or
+another rebuild of the existing 1C screens.
 
-Rules for this draft layer:
+### Step 1. Keep Regular 1C Imports Operational
 
-- `space` may be proposed only when the debt row is linked to the active
-  contract of the current market space.
-- `tenant_fallback` may be proposed when tenant debt exists but exact
-  per-space attribution is not proven.
-- `unmapped` must be used for tenant debt without active space or without a
-  safe binding.
-- Raw old OSV settlement documents must not automatically override the
-  established map color. They should be visible as evidence with a reason.
-- Account `62.*` is tenant settlement debt.
-- Account `76.06` is security deposit and must not be mixed into rent debt.
-- Account `76.07` remains a recognized calculation account, but its business
-  meaning must be verified against 1C data before using it for map colors.
+Daily production launcher should continue to run:
 
-The immediate implementation target is a read-only diagnostics command or page
-that compares:
+- regular `AutoSend_prod.epf` exchange;
+- payments for current month;
+- payments for previous month;
+- settlements/OSV for account `62` for current month;
+- settlements/OSV for account `62` for previous month.
 
-- current map status;
-- `contract_debts` status and source;
-- OSV/settlement balance status and source;
-- proposed draft status;
-- reason for any mismatch.
+Backfill is already available for specific periods. It should be used only when
+we intentionally need historical correction or comparison.
 
-Only after this comparison is reviewed on production data should the map switch
-from the old source to the new OSV-aware decision layer.
+### Step 2. Security Deposit Account Remains A Separate Open Question
 
-### Step 1. Confirm 1C Account Scope
+Security deposit is still not confirmed in the live import.
 
-In 1C, confirm the exact account(s) that must be exported:
+Known state:
 
-- rent/customer settlements: likely `62.01` or the whole `62` hierarchy;
-- security deposit: recorded in our code as `76.06`;
-- another calculation account already recognized by our model: `76.07`.
+- the app recognizes `76.06` as the security deposit account;
+- the current production import does not deliver `76`, `76.06`, or `76.07`
+  debt rows;
+- the current 1C debt export most likely filters by the customer-settlement
+  hierarchy and does not include `76.06`.
 
-Do not assume only account 62 is enough.
+Do not mix `76.06` into account `62` logic. Reconfirm the real 1C account and
+analytics before adding it to regular exports.
 
-### Step 2. Patch/Create 1C Settlement EPF
-
-Create or patch an EPF that exports OSV/settlement balances for a supplied:
-
-- period start;
-- period end;
-- account.
-
-The export must send one API call per account, with top-level `account`.
-
-Example payload shape:
-
-```json
-{
-  "calculated_at": "2026-06-11 10:00:00",
-  "period_from": "2026-06-01",
-  "period_to": "2026-06-30",
-  "account": "62.01",
-  "items": [
-    {
-      "tenant_external_id": "...",
-      "tenant_name": "...",
-      "contract_external_id": "...",
-      "contract_name": "...",
-      "settlement_document_external_id": "...",
-      "settlement_document_name": "...",
-      "organization_external_id": "...",
-      "organization_name": "...",
-      "opening_debit": 0,
-      "opening_credit": 0,
-      "turnover_debit": 0,
-      "turnover_credit": 0,
-      "closing_debit": 0,
-      "closing_credit": 0,
-      "currency": "RUB"
-    }
-  ]
-}
-```
-
-If a row has no item-level `account`, the API will use the top-level account.
-
-### Step 3. Regular Settlement Balance Imports
-
-Run the settlement export daily after the regular exchange and payment exports:
-
-- account `62`;
-- current month;
-- previous month.
-
-The previous month is included to catch late accountant corrections after month
-close.
-
-After each run, verify:
-
-- Telegram notification says `Расчеты/сальдо`;
-- `tenant_settlement_balances` row count increases;
-- `one_c_import_logs` contains account and period metadata;
-- re-running the same account/period updates the snapshot without duplicating
-  rows.
-
-### Step 4. Build The Accounting Screen
-
-After data is confirmed, build a dedicated screen:
-
-- tenant;
-- contract;
-- account;
-- settlement document;
-- opening balance;
-- debit turnover;
-- credit turnover;
-- closing balance;
-- filters by date range and account;
-- search by tenant/contract/document.
-
-This screen should be the accountant-facing "Расчеты с арендаторами 1С".
-
-### Step 5. Only Then Update Debt/Map Logic
+### Step 3. Map Logic Can Use OSV Only Through An Explicit Policy
 
 Do not use month-only accrual minus payment logic for final map colors.
 
-After settlement balances are confirmed and the debt decision draft layer is
-reviewed, decide how the map should use:
+After settlement balances are confirmed and reviewed, decide how the map should
+use:
 
 - account `62.*` debt;
 - account `76.06` security deposit;
@@ -515,6 +475,17 @@ reviewed, decide how the map should use:
 The target is not to forbid OSV from coloring the map. The target is to let OSV
 color the map only through explicit, auditable decision rows with a clear scope
 and reason.
+
+### Step 4. Product Priority Outside 1C Finance
+
+If no new 1C data defect is reported, the next product priority is not another
+finance screen. Move to the daily market-operation workflow:
+
+- occupy a space;
+- vacate a space;
+- change current tenant;
+- keep 1C history immutable;
+- preserve group episodes, contract history, and finance links.
 
 ## What Not To Do
 
