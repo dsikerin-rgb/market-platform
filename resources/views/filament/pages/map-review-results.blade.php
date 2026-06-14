@@ -2813,11 +2813,19 @@
                     <section class="aw-panel aw-panel--muted">
                         <div class="aw-panel-head">
                             <div>
-                                <h2 class="aw-panel-title">Нужно уточнить</h2>
+                                <h2 class="aw-panel-title">
+                                    {{ match ($attentionTab) {
+                                        'unconfirmed_links' => 'Финансовая связь не подтверждена',
+                                        'unconfirmed_links_rejected' => 'Отклонённые финансовые связи',
+                                        default => 'Нужно уточнить',
+                                    } }}
+                                </h2>
                                 <p class="aw-panel-copy">
-                                    {{ $attentionTab === 'unconfirmed_links'
-                                        ? 'Места на карте, где статус взят по арендатору, но финансовая связь с местом не подтверждена.'
-                                        : 'Места со спорным или незавершённым ревизионным результатом.' }}
+                                    {{ match ($attentionTab) {
+                                        'unconfirmed_links' => 'Места, где долг найден по арендатору, но связь с конкретным местом требует ручного решения.',
+                                        'unconfirmed_links_rejected' => 'Связи, которые оператор уже отклонил. Их можно вернуть в проверку, если решение было ошибочным.',
+                                        default => 'Места со спорным или незавершённым ревизионным результатом.',
+                                    } }}
                                 </p>
                                 <div class="mrr-sort-toggle">
                                     <a
@@ -2830,7 +2838,7 @@
                                         class="mrr-sort-toggle__link {{ $attentionTab === 'unconfirmed_links' ? 'is-active' : '' }}"
                                         href="{{ $attentionUnconfirmedUrl }}"
                                     >
-                                        Связь с финансами не подтверждена
+                                        Финансовая связь не подтверждена
                                     </a>
                                     <a
                                         class="mrr-sort-toggle__link {{ $attentionTab === 'unconfirmed_links_rejected' ? 'is-active' : '' }}"
@@ -2844,16 +2852,29 @@
 
                         <div class="aw-panel-body">
                             @if ($needsAttention === [])
-                                <div class="mrr-empty">Сейчас нет мест, требующих уточнения.</div>
-                            @else
-                                <div class="mrr-attention-filters" role="group" aria-label="Фильтры карточек">
-                                    <button type="button" class="mrr-attention-filter is-active" data-mrr-attention-filter="all">Все</button>
-                                    <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="occupancy_conflict">Конфликт по занятости</button>
-                                    <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="space_identity_needs_clarification">Уточнить номер / название</button>
-                                    <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="tenant_changed_on_site">Сменился арендатор</button>
-                                    <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="shape_not_found">Фигура не найдена</button>
-                                    <span class="mrr-attention-filter-count" aria-live="polite"></span>
+                                <div class="mrr-empty">
+                                    {{ match ($attentionTab) {
+                                        'unconfirmed_links' => 'Сейчас нет неподтверждённых финансовых связей.',
+                                        'unconfirmed_links_rejected' => 'Сейчас нет отклонённых финансовых связей.',
+                                        default => 'Сейчас нет мест, требующих уточнения.',
+                                    } }}
                                 </div>
+                            @else
+                                @if (in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true))
+                                    <div class="mrr-attention-filters" role="group" aria-label="Фильтры карточек">
+                                        <button type="button" class="mrr-attention-filter is-active" data-mrr-attention-filter="all">Все связи</button>
+                                        <span class="mrr-attention-filter-count" aria-live="polite"></span>
+                                    </div>
+                                @else
+                                    <div class="mrr-attention-filters" role="group" aria-label="Фильтры карточек">
+                                        <button type="button" class="mrr-attention-filter is-active" data-mrr-attention-filter="all">Все</button>
+                                        <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="occupancy_conflict">Конфликт по занятости</button>
+                                        <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="space_identity_needs_clarification">Уточнить номер / название</button>
+                                        <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="tenant_changed_on_site">Сменился арендатор</button>
+                                        <button type="button" class="mrr-attention-filter" data-mrr-attention-filter="shape_not_found">Фигура не найдена</button>
+                                        <span class="mrr-attention-filter-count" aria-live="polite"></span>
+                                    </div>
+                                @endif
                                 <div class="mrr-attention-search">
                                     <input
                                         type="search"
@@ -3461,11 +3482,11 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
 
                                                             @if (in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true))
                                                                 <div class="mrr-card-actions__group">
-                                                                    <div class="mrr-card-actions__label">Показывать долг на этом месте?</div>
+                                                                    <div class="mrr-card-actions__label">Решение по финансовой связи</div>
                                                                     <div class="mrr-card-actions__hint">
                                                                         {{ $attentionTab === 'unconfirmed_links_rejected'
-                                                                            ? 'Сейчас общий долг арендатора не применяется к этому месту.'
-                                                                            : 'Решение только про общий долг арендатора на карте. Договоры и суммы в 1С не меняются.' }}
+                                                                            ? 'Связь уже отклонена: общий долг арендатора не применяется к этому месту. Если решение ошибочное, верните карточку в проверку.'
+                                                                            : 'Подтвердите связь, если долг арендатора можно учитывать для этого места на карте. Отклоните, если долг относится к другому месту или требует отдельного разбора. Договоры, суммы и данные 1С не меняются.' }}
                                                                     </div>
                                                                     @if ($unconfirmedClassificationLabel !== '')
                                                                         <div class="mrr-card-actions__decision-summary mrr-card-actions__decision-summary--{{ $unconfirmedClassificationTone }}">
@@ -3483,7 +3504,7 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-unconfirmed-link-action
                                                                                 data-mrr-space-id="{{ $row['space_id'] }}"
                                                                                 data-mrr-decision="reopen_unconfirmed_financial_link"
-                                                                                data-mrr-confirm="Вернуть место {{ $currentSpaceLabel }} в проверку общего долга арендатора?"
+                                                                                data-mrr-confirm="Вернуть финансовую связь места {{ $currentSpaceLabel }} в проверку?"
                                                                             >
                                                                                 Вернуть в проверку
                                                                             </button>
@@ -3494,10 +3515,10 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-unconfirmed-link-action
                                                                                 data-mrr-space-id="{{ $row['space_id'] }}"
                                                                                 data-mrr-decision="confirm_unconfirmed_financial_link"
-                                                                                data-mrr-reason="Оператор разрешил показывать общий долг арендатора на этом месте."
-                                                                                data-mrr-confirm="Показывать общий долг арендатора на месте {{ $currentSpaceLabel }}?"
+                                                                                data-mrr-reason="Оператор подтвердил финансовую связь общего долга арендатора с этим местом."
+                                                                                data-mrr-confirm="Подтвердить финансовую связь места {{ $currentSpaceLabel }} с долгом арендатора?"
                                                                             >
-                                                                                Показывать долг
+                                                                                Подтвердить связь
                                                                             </button>
                                                                             <button
                                                                                 type="button"
@@ -3506,9 +3527,9 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-space-id="{{ $row['space_id'] }}"
                                                                                 data-mrr-decision="reject_unconfirmed_financial_link"
                                                                                 data-mrr-reason-required="1"
-                                                                                data-mrr-prompt="Почему общий долг арендатора нельзя показывать на месте {{ $currentSpaceLabel }}?"
+                                                                                data-mrr-prompt="Почему финансовая связь места {{ $currentSpaceLabel }} с долгом арендатора неверна?"
                                                                             >
-                                                                                Не показывать долг
+                                                                                Отклонить связь
                                                                             </button>
                                                                         @endif
                                                                     </div>
