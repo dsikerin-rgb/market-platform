@@ -7,6 +7,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login as AdminLogin;
 use App\Filament\Pages\Dashboard;
+use App\Filament\Pages\MailDiagnostics;
 use App\Filament\Pages\MapReviewResults;
 use App\Filament\Pages\MarketSettings;
 use App\Filament\Pages\MarketplaceSettings;
@@ -154,6 +155,7 @@ class AdminPanelProvider extends PanelProvider
                 OneCDebtDecisionPreview::class,
                 ReportsHub::class,
                 Requests::class,
+                MailDiagnostics::class,
                 OpsDiagnostics::class,
                 UserNotificationSettings::class,
             ])
