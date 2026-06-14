@@ -328,7 +328,7 @@
                         @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.dashboard')])
                     >Главная</a>
                     <a
-                        href="{{ route('cabinet.accruals') }}"
+                        href="{{ route('cabinet.payments') }}"
                         @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.accruals') || request()->routeIs('cabinet.payments')])
                     >Финансы</a>
                     <a
@@ -393,7 +393,7 @@
                     <span class="cabinet-bottom-nav__label">Главная</span>
                 </a>
                 <a
-                    href="{{ route('cabinet.accruals') }}"
+                    href="{{ route('cabinet.payments') }}"
                     @class([
                         'cabinet-bottom-nav__item group rounded-2xl transition-colors transition-shadow duration-200',
                         'bg-sky-600 text-white ring-1 ring-sky-700/70 shadow-[0_4px_14px_rgba(2,132,199,0.35)]' => request()->routeIs('cabinet.accruals') || request()->routeIs('cabinet.payments'),
