@@ -15,6 +15,7 @@ use App\Models\Tenant;
 use App\Services\Cabinet\TenantCabinetUserService;
 use App\Services\Debt\DebtAggregator;
 use App\Services\Debt\DebtStatusResolver;
+use App\Services\Finance\SettlementBalancePresentation;
 use App\Support\AdminCapabilities;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -3027,20 +3028,12 @@ class TenantResource extends BaseResource
             ])->render());
         }
 
-        $displayRows = $summaryRows
-            ->sort(function (object $left, object $right): int {
-                $leftNet = (float) $left->closing_debit - (float) $left->closing_credit;
-                $rightNet = (float) $right->closing_debit - (float) $right->closing_credit;
-                $netCompare = $rightNet <=> $leftNet;
-
-                return $netCompare !== 0
-                    ? $netCompare
-                    : strcmp((string) ($left->contract_name ?? ''), (string) ($right->contract_name ?? ''));
-            })
-            ->take(20)
-            ->values();
+        static::markCurrentTenantSettlementRows($summaryRows, $marketId, $tenantId);
+        $settlementPresentation = app(SettlementBalancePresentation::class);
+        $displayRows = $settlementPresentation->workRows($summaryRows, 20);
 
         $summary = static::summarizeTenantSettlementRows($summaryRows);
+        $hiddenRowsCount = $settlementPresentation->hiddenRowsCount($summaryRows);
 
         return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
             'state' => 'ready',
@@ -3052,6 +3045,7 @@ class TenantResource extends BaseResource
             'importedAt' => $snapshot->imported_at ? (string) Carbon::parse($snapshot->imported_at)->format('d.m.Y H:i') : null,
             'summary' => $summary,
             'rows' => $displayRows->map(fn (object $row): array => static::normalizeTenantSettlementRow($row))->values()->all(),
+            'hiddenRowsCount' => $hiddenRowsCount,
             'currentTenantName' => $tenantName,
             'settlementsUrl' => static::tenantSettlementsUrl($snapshot, null, $tenantId),
             ...static::tenantSettlementPeriodPickerProps($settlementSnapshots, $snapshot),
@@ -3140,6 +3134,44 @@ class TenantResource extends BaseResource
                 ? Carbon::parse((string) $firstSnapshot->period_from)->format('d.m.Y')
                 : null,
         ];
+    }
+
+    private static function markCurrentTenantSettlementRows(\Illuminate\Support\Collection $rows, int $marketId, int $tenantId): void
+    {
+        if (
+            ! DbSchema::hasTable('tenant_contracts')
+            || ! DbSchema::hasTable('market_spaces')
+            || ! DbSchema::hasColumn('tenant_contracts', 'market_space_id')
+        ) {
+            return;
+        }
+
+        $contracts = DB::table('tenant_contracts as tc')
+            ->join('market_spaces as ms', 'ms.id', '=', 'tc.market_space_id')
+            ->where('tc.market_id', $marketId)
+            ->where('tc.tenant_id', $tenantId)
+            ->whereNotNull('tc.market_space_id')
+            ->where('tc.is_active', true)
+            ->whereNotIn('tc.status', ['terminated', 'archived'])
+            ->where('ms.is_active', true)
+            ->select(['tc.id', 'tc.external_id'])
+            ->get();
+
+        $contractIds = $contracts
+            ->pluck('id')
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter()
+            ->all();
+        $externalIds = $contracts
+            ->pluck('external_id')
+            ->map(static fn (mixed $value): string => trim((string) $value))
+            ->filter()
+            ->all();
+
+        $rows->each(static function (object $row) use ($contractIds, $externalIds): void {
+            $row->is_current_contract = in_array((int) ($row->tenant_contract_id ?? 0), $contractIds, true)
+                || in_array(trim((string) ($row->contract_external_id ?? '')), $externalIds, true);
+        });
     }
 
     /**

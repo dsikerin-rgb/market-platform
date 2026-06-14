@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\TenantAccrual;
 use App\Models\TenantPayment;
 use App\Models\TenantSettlementBalance;
+use App\Services\Finance\SettlementBalancePresentation;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -47,7 +48,13 @@ class PaymentsController extends Controller
             allowedSpaceIds: $allowedSpaceIds,
         );
 
+        $settlementPresentation = app(SettlementBalancePresentation::class);
+        $settlementGroups = $settlementPresentation->contractGroups($settlementRows);
+        $visibleSettlementRows = $settlementPresentation->workRows($settlementGroups);
         $summary = $this->summary($settlementRows, $accruals, $payments);
+        $summary['settlementGroupsCount'] = $settlementGroups->count();
+        $summary['settlementHiddenRowsCount'] = $settlementPresentation->hiddenRowsCount($settlementGroups);
+        $summary['settlementHiddenGroupsCount'] = $settlementPresentation->hiddenGroupsCount($settlementGroups);
 
         return view('cabinet.payments', [
             'tenant' => $tenant,
@@ -56,7 +63,7 @@ class PaymentsController extends Controller
             'periodFrom' => $periodFrom,
             'periodTo' => $periodTo,
             'summary' => $summary,
-            'settlementRows' => $settlementRows,
+            'settlementRows' => $visibleSettlementRows,
             'accruals' => $accruals,
             'payments' => $payments,
             'firstPeriodLabel' => $availablePeriods->last()?->translatedFormat('F Y'),

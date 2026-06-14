@@ -21,6 +21,7 @@
     'sharedUseMode' => null,
     'sharedUseModeLabel' => null,
     'sharedUseParticipants' => [],
+    'hiddenRowsCount' => 0,
 ])
 
 @php
@@ -36,6 +37,7 @@
     $summary = is_array($summary) ? $summary : [];
     $periodOptions = is_array($periodOptions) ? $periodOptions : [];
     $sharedUseParticipants = is_array($sharedUseParticipants) ? $sharedUseParticipants : [];
+    $hiddenRowsCount = (int) $hiddenRowsCount;
     $currentTenantName = trim((string) $currentTenantName);
     $isSharedUse = (bool) $isSharedUse;
     $monthNames = [
@@ -817,6 +819,11 @@
 
         @if ($scopeLabel)
             <span class="space-finance__badge space-finance__badge--{{ $scopeTone }}">{{ $scopeLabel }}</span>
+        @endif
+        @if ($hiddenRowsCount > 0)
+            <div class="space-finance__note">
+                Скрыто строк ОСВ без движения: {{ $hiddenRowsCount }}. Полный список доступен в детализации 1С.
+            </div>
         @endif
 
         <div class="space-finance__summary">

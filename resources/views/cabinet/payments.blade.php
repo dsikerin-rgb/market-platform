@@ -156,10 +156,15 @@
         <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
             <div>
                 <h3 class="text-base font-semibold text-slate-900">По договорам</h3>
-                <p class="text-xs text-slate-500">Сверка по договорам и документам расчетов.</p>
+                <p class="text-xs text-slate-500">Актуальные договоры с долгом, переплатой или движением за период.</p>
+                @if(($summary['settlementHiddenRowsCount'] ?? 0) > 0)
+                    <p class="mt-1 text-xs text-slate-500">
+                        Скрыто строк ОСВ без движения: {{ (int) $summary['settlementHiddenRowsCount'] }}.
+                    </p>
+                @endif
             </div>
             <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                {{ (int) $summary['settlementRowsCount'] }}
+                {{ $settlementRows->count() }}
             </span>
         </div>
 
@@ -174,7 +179,7 @@
                     $rowNetClass = $rowNet > 0.009
                         ? 'text-rose-700'
                         : ($rowNet < -0.009 ? 'text-emerald-700' : 'text-slate-900');
-                    $contract = $row->tenantContract;
+                    $contract = $row->tenantContract ?? null;
                 @endphp
 
                 <article class="px-4 py-3 hover:bg-slate-50/70">
@@ -191,9 +196,9 @@
                             </div>
                             <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
                                 <span>{{ $spaceLabel($contract?->marketSpace) }}</span>
-                                @if($row->settlement_document_name)
+                                @if((int) ($row->rows_count ?? 0) > 0)
                                     <span class="text-slate-300">/</span>
-                                    <span class="min-w-0 truncate text-slate-600">{{ $row->settlement_document_name }}</span>
+                                    <span class="min-w-0 truncate text-slate-600">{{ (int) $row->rows_count }} строк ОСВ</span>
                                 @endif
                             </div>
                         </div>
@@ -220,7 +225,11 @@
                 </article>
             @empty
                 <div class="px-4 py-6 text-sm text-slate-500">
-                    По выбранному периоду ОСВ 1С для арендатора не найдена.
+                    @if(($summary['settlementHiddenRowsCount'] ?? 0) > 0)
+                        По выбранному периоду есть только закрытые строки ОСВ без движения. Они скрыты из основного списка.
+                    @else
+                        По выбранному периоду ОСВ 1С для арендатора не найдена.
+                    @endif
                 </div>
             @endforelse
         </div>
