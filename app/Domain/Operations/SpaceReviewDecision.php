@@ -60,7 +60,7 @@ final class SpaceReviewDecision
             self::TENANT_CHANGED_ON_SITE => 'На месте другой арендатор',
             self::SHAPE_NOT_FOUND => 'Место не найдено на карте',
             self::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => 'Связать с этим местом',
-            self::REJECT_UNCONFIRMED_FINANCIAL_LINK => 'Оставить как общий долг арендатора',
+            self::REJECT_UNCONFIRMED_FINANCIAL_LINK => 'Не связывать с этим местом',
             self::REOPEN_UNCONFIRMED_FINANCIAL_LINK => 'Вернуть финансовую связь в проверку',
         ];
     }
