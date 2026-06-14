@@ -2815,15 +2815,15 @@
                             <div>
                                 <h2 class="aw-panel-title">
                                     {{ match ($attentionTab) {
-                                        'unconfirmed_links' => 'Финансовая связь не подтверждена',
-                                        'unconfirmed_links_rejected' => 'Отклонённые финансовые связи',
+                                        'unconfirmed_links' => 'Уточнить финансовую связь',
+                                        'unconfirmed_links_rejected' => 'Общий долг арендатора',
                                         default => 'Нужно уточнить',
                                     } }}
                                 </h2>
                                 <p class="aw-panel-copy">
                                     {{ match ($attentionTab) {
-                                        'unconfirmed_links' => 'Места, где долг найден по арендатору, но связь с конкретным местом требует ручного решения.',
-                                        'unconfirmed_links_rejected' => 'Связи, которые оператор уже отклонил. Их можно вернуть в проверку, если решение было ошибочным.',
+                                        'unconfirmed_links' => 'Места, где долг арендатора виден на карте, но нужно уточнить: это долг конкретного места или общий долг арендатора.',
+                                        'unconfirmed_links_rejected' => 'Решения, где долг оставлен как общий долг арендатора без точной привязки к конкретному месту. Долг остаётся видимым на карте как статус арендатора.',
                                         default => 'Места со спорным или незавершённым ревизионным результатом.',
                                     } }}
                                 </p>
@@ -2838,13 +2838,13 @@
                                         class="mrr-sort-toggle__link {{ $attentionTab === 'unconfirmed_links' ? 'is-active' : '' }}"
                                         href="{{ $attentionUnconfirmedUrl }}"
                                     >
-                                        Финансовая связь не подтверждена
+                                        Уточнить финансовую связь
                                     </a>
                                     <a
                                         class="mrr-sort-toggle__link {{ $attentionTab === 'unconfirmed_links_rejected' ? 'is-active' : '' }}"
                                         href="{{ $attentionRejectedUnconfirmedUrl }}"
                                     >
-                                        Отклонённые связи
+                                        Общий долг арендатора
                                     </a>
                                 </div>
                             </div>
@@ -2854,8 +2854,8 @@
                             @if ($needsAttention === [])
                                 <div class="mrr-empty">
                                     {{ match ($attentionTab) {
-                                        'unconfirmed_links' => 'Сейчас нет неподтверждённых финансовых связей.',
-                                        'unconfirmed_links_rejected' => 'Сейчас нет отклонённых финансовых связей.',
+                                        'unconfirmed_links' => 'Сейчас нет финансовых связей, требующих уточнения.',
+                                        'unconfirmed_links_rejected' => 'Сейчас нет решений, где долг оставлен как общий долг арендатора.',
                                         default => 'Сейчас нет мест, требующих уточнения.',
                                     } }}
                                 </div>
@@ -3482,11 +3482,11 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
 
                                                             @if (in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true))
                                                                 <div class="mrr-card-actions__group">
-                                                                    <div class="mrr-card-actions__label">Решение по финансовой связи</div>
+                                                                    <div class="mrr-card-actions__label">Уточнение финансовой связи</div>
                                                                     <div class="mrr-card-actions__hint">
                                                                         {{ $attentionTab === 'unconfirmed_links_rejected'
-                                                                            ? 'Связь уже отклонена: общий долг арендатора не применяется к этому месту. Если решение ошибочное, верните карточку в проверку.'
-                                                                            : 'Подтвердите связь, если долг арендатора можно учитывать для этого места на карте. Отклоните, если долг относится к другому месту или требует отдельного разбора. Договоры, суммы и данные 1С не меняются.' }}
+                                                                            ? 'Долг оставлен как общий долг арендатора без точной привязки к этому месту. Он остаётся видимым на карте как статус арендатора. Если решение ошибочное, верните карточку в проверку.'
+                                                                            : 'Долг арендатора уже виден на карте. Здесь уточняется только точная связь с местом: это долг этого места или общий долг арендатора. Договоры, суммы и данные 1С не меняются.' }}
                                                                     </div>
                                                                     @if ($unconfirmedClassificationLabel !== '')
                                                                         <div class="mrr-card-actions__decision-summary mrr-card-actions__decision-summary--{{ $unconfirmedClassificationTone }}">
@@ -3515,10 +3515,10 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-unconfirmed-link-action
                                                                                 data-mrr-space-id="{{ $row['space_id'] }}"
                                                                                 data-mrr-decision="confirm_unconfirmed_financial_link"
-                                                                                data-mrr-reason="Оператор подтвердил финансовую связь общего долга арендатора с этим местом."
-                                                                                data-mrr-confirm="Подтвердить финансовую связь места {{ $currentSpaceLabel }} с долгом арендатора?"
+                                                                                data-mrr-reason="Оператор подтвердил, что долг арендатора относится к этому месту."
+                                                                                data-mrr-confirm="Подтвердить, что долг арендатора относится к месту {{ $currentSpaceLabel }}?"
                                                                             >
-                                                                                Подтвердить связь
+                                                                                Это долг этого места
                                                                             </button>
                                                                             <button
                                                                                 type="button"
@@ -3527,9 +3527,9 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-space-id="{{ $row['space_id'] }}"
                                                                                 data-mrr-decision="reject_unconfirmed_financial_link"
                                                                                 data-mrr-reason-required="1"
-                                                                                data-mrr-prompt="Почему финансовая связь места {{ $currentSpaceLabel }} с долгом арендатора неверна?"
+                                                                                data-mrr-prompt="Почему долг нужно оставить как общий долг арендатора без точной привязки к месту {{ $currentSpaceLabel }}?"
                                                                             >
-                                                                                Отклонить связь
+                                                                                Оставить как общий долг арендатора
                                                                             </button>
                                                                         @endif
                                                                     </div>

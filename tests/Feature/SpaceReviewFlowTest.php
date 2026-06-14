@@ -1189,10 +1189,10 @@ class SpaceReviewFlowTest extends TestCase
 
         Livewire::withQueryParams(['tab' => 'unconfirmed_links'])
             ->test(\App\Filament\Pages\MapReviewResults::class)
-            ->assertSee('Финансовая связь не подтверждена', false)
-            ->assertSee('Финансовая связь с местом не подтверждена', false)
-            ->assertSee('Подтвердить связь', false)
-            ->assertSee('Отклонить связь', false)
+            ->assertSee('Уточнить финансовую связь', false)
+            ->assertSee('Нужно уточнить финансовую связь', false)
+            ->assertSee('Это долг этого места', false)
+            ->assertSee('Оставить как общий долг арендатора', false)
             ->assertDontSee('Показывать долг', false)
             ->assertDontSee('Не показывать долг', false)
             ->assertDontSee('Обычный порядок', false)
@@ -1251,13 +1251,50 @@ class SpaceReviewFlowTest extends TestCase
 
         Livewire::withQueryParams(['tab' => 'unconfirmed_links_rejected'])
             ->test(\App\Filament\Pages\MapReviewResults::class)
-            ->assertSee('Отклонённые финансовые связи', false)
-            ->assertSee('Связь уже отклонена', false)
+            ->assertSee('Общий долг арендатора', false)
+            ->assertSee('Долг оставлен как общий долг арендатора', false)
             ->assertSee('Вернуть в проверку', false)
             ->assertSee('Долг относится к другому месту.', false)
-            ->assertSee('СД-4', false)
-            ->assertDontSee('Подтвердить связь', false)
-            ->assertDontSee('Отклонить связь', false);
+            ->assertSee('СД-4', false);
+    }
+
+    public function test_common_tenant_debt_decision_keeps_tenant_fallback_on_map(): void
+    {
+        $market = $this->createMarket();
+        $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Общий долг ООО',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'ОД-1',
+            'display_name' => 'Общий долг',
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+            'map_review_status' => 'unconfirmed_link_rejected',
+            'map_reviewed_at' => now(),
+        ]);
+        $this->createShape($market, (int) $space->id);
+        $this->bindTenantFallbackDebtResolver();
+
+        $response = $this->getJson(route('filament.admin.market-map.shapes', [
+            'market' => $market->id,
+            'page' => 1,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('items.0.market_space_id', (int) $space->id);
+        $response->assertJsonPath('items.0.debt_status', 'red');
+        $response->assertJsonPath('items.0.debt_status_scope', 'tenant_fallback');
+        $response->assertJsonPath('items.0.space_effective_debt_status', 'red');
+        $response->assertJsonPath('items.0.space_effective_debt_status_scope', 'tenant_fallback');
+        $response->assertJsonPath('items.0.space_review_status', 'unconfirmed_link_rejected');
     }
 
     public function test_unconfirmed_links_hide_group_child_without_direct_current_financial_activity(): void
