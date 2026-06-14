@@ -59,7 +59,7 @@ final class SpaceReviewDecision
             self::OCCUPANCY_CONFLICT => 'Конфликт по месту',
             self::TENANT_CHANGED_ON_SITE => 'На месте другой арендатор',
             self::SHAPE_NOT_FOUND => 'Место не найдено на карте',
-            self::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => 'Это долг этого места',
+            self::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => 'Связать с этим местом',
             self::REJECT_UNCONFIRMED_FINANCIAL_LINK => 'Оставить как общий долг арендатора',
             self::REOPEN_UNCONFIRMED_FINANCIAL_LINK => 'Вернуть финансовую связь в проверку',
         ];
