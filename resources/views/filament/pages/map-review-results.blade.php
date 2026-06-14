@@ -947,7 +947,7 @@
             .mrr-debt-review__title {
                 margin-top: 0.12rem;
                 color: #0f172a;
-                font-size: 1.04rem;
+                font-size: 1.1rem;
                 font-weight: 850;
                 line-height: 1.25;
             }
@@ -964,6 +964,141 @@
 
             .dark .mrr-debt-review__copy {
                 color: #cbd5e1;
+            }
+
+            .mrr-debt-review__comparison {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+                align-items: stretch;
+                gap: 0.5rem;
+            }
+
+            .mrr-debt-review__place {
+                min-width: 0;
+                border-radius: 0.9rem;
+                border: 1px solid rgba(148, 163, 184, 0.22);
+                background: rgba(255, 255, 255, 0.82);
+                padding: 0.68rem 0.75rem;
+            }
+
+            .mrr-debt-review__place--current {
+                border-color: rgba(59, 130, 246, 0.34);
+                background: rgba(239, 246, 255, 0.92);
+            }
+
+            .mrr-debt-review__place--target {
+                border-color: rgba(239, 68, 68, 0.26);
+                background: rgba(254, 242, 242, 0.82);
+            }
+
+            .dark .mrr-debt-review__place {
+                border-color: rgba(148, 163, 184, 0.18);
+                background: rgba(15, 23, 42, 0.66);
+            }
+
+            .dark .mrr-debt-review__place--current {
+                border-color: rgba(96, 165, 250, 0.3);
+                background: rgba(30, 58, 138, 0.24);
+            }
+
+            .dark .mrr-debt-review__place--target {
+                border-color: rgba(248, 113, 113, 0.28);
+                background: rgba(127, 29, 29, 0.22);
+            }
+
+            .mrr-debt-review__place-label {
+                color: #64748b;
+                font-size: 0.7rem;
+                font-weight: 820;
+                line-height: 1.2;
+            }
+
+            .dark .mrr-debt-review__place-label {
+                color: #cbd5e1;
+            }
+
+            .mrr-debt-review__place-value {
+                margin-top: 0.18rem;
+                color: #0f172a;
+                font-size: 1.08rem;
+                font-weight: 900;
+                line-height: 1.15;
+                overflow-wrap: anywhere;
+            }
+
+            .dark .mrr-debt-review__place-value {
+                color: #f8fafc;
+            }
+
+            .mrr-debt-review__comparison-mark {
+                align-self: center;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 2rem;
+                height: 2rem;
+                border-radius: 999px;
+                background: rgba(239, 68, 68, 0.1);
+                color: #b91c1c;
+                font-size: 1.05rem;
+                font-weight: 900;
+            }
+
+            .dark .mrr-debt-review__comparison-mark {
+                background: rgba(248, 113, 113, 0.16);
+                color: #fecaca;
+            }
+
+            .mrr-debt-review__verdict {
+                display: grid;
+                gap: 0.24rem;
+                border-radius: 0.9rem;
+                border: 1px solid rgba(239, 68, 68, 0.24);
+                background: rgba(254, 242, 242, 0.8);
+                padding: 0.68rem 0.75rem;
+            }
+
+            .dark .mrr-debt-review__verdict {
+                border-color: rgba(248, 113, 113, 0.26);
+                background: rgba(127, 29, 29, 0.2);
+            }
+
+            .mrr-debt-review__verdict-title {
+                color: #991b1b;
+                font-size: 0.92rem;
+                font-weight: 900;
+                line-height: 1.25;
+            }
+
+            .dark .mrr-debt-review__verdict-title {
+                color: #fecaca;
+            }
+
+            .mrr-debt-review__primary-action {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                align-items: center;
+            }
+
+            .mrr-debt-review__checks {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.42rem;
+                align-items: center;
+            }
+
+            .mrr-debt-review__checks-label,
+            .mrr-debt-review__details-label {
+                color: #64748b;
+                font-size: 0.7rem;
+                font-weight: 820;
+                line-height: 1.2;
+            }
+
+            .dark .mrr-debt-review__checks-label,
+            .dark .mrr-debt-review__details-label {
+                color: #94a3b8;
             }
 
             .mrr-debt-review__metrics {
@@ -1053,6 +1188,15 @@
             }
 
             @media (max-width: 720px) {
+                .mrr-debt-review__comparison {
+                    grid-template-columns: 1fr;
+                }
+
+                .mrr-debt-review__comparison-mark {
+                    justify-self: center;
+                    transform: rotate(90deg);
+                }
+
                 .mrr-debt-review__metrics {
                     grid-template-columns: 1fr;
                 }
@@ -1133,6 +1277,13 @@
                 border-color: rgba(74, 222, 128, 0.28);
                 background: #22c55e;
                 color: #052e16;
+            }
+
+            .mrr-link--decision {
+                min-height: 2.25rem;
+                padding: 0.58rem 0.85rem;
+                font-size: 0.86rem;
+                font-weight: 900;
             }
 
             .mrr-link--disabled,
@@ -3649,56 +3800,83 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                         @if ($isUnconfirmedWorkflowTab)
                                                             <div class="mrr-debt-review">
                                                                 <div>
-                                                                    <div class="mrr-debt-review__eyebrow">Что делать</div>
-                                                                    <div class="mrr-debt-review__title">{{ $settlementReviewTitle }}</div>
+                                                                    <div class="mrr-debt-review__eyebrow">Что решить</div>
+                                                                    <div class="mrr-debt-review__title">
+                                                                        @if ($settlementLinkedSpaceLabel !== '')
+                                                                            Договор ОСВ ведёт к другому месту
+                                                                        @else
+                                                                            {{ $settlementReviewTitle }}
+                                                                        @endif
+                                                                    </div>
                                                                 </div>
 
-                                                                @if ($settlementLinkedSpaceLabel !== '' || $settlementLocalContractNumber !== '' || $settlementDocumentName !== '')
-                                                                    <div class="mrr-debt-review__candidate">
-                                                                        <div class="mrr-debt-review__candidate-label">Вывод системы</div>
+                                                                <div class="mrr-debt-review__comparison">
+                                                                    <div class="mrr-debt-review__place mrr-debt-review__place--current">
+                                                                        <div class="mrr-debt-review__place-label">Разбираем место</div>
+                                                                        <div class="mrr-debt-review__place-value">{{ $currentSpaceLabel }}</div>
+                                                                    </div>
+                                                                    <div class="mrr-debt-review__comparison-mark" aria-hidden="true">≠</div>
+                                                                    <div class="mrr-debt-review__place mrr-debt-review__place--target">
+                                                                        <div class="mrr-debt-review__place-label">Место договора ОСВ</div>
+                                                                        <div class="mrr-debt-review__place-value">
+                                                                            {{ $settlementLinkedSpaceLabel !== '' ? $settlementLinkedSpaceLabel : 'не подтверждено' }}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="mrr-debt-review__verdict">
+                                                                    <div class="mrr-debt-review__verdict-title">
                                                                         @if ($settlementLinkedSpaceLabel !== '')
-                                                                            <div class="mrr-debt-review__candidate-title">Место договора: {{ $settlementLinkedSpaceLabel }}</div>
+                                                                            Договор ОСВ не относится к {{ $currentSpaceLabel }}
                                                                         @elseif ($settlementLocalContractNumber !== '')
-                                                                            <div class="mrr-debt-review__candidate-title">Договор найден, место не указано</div>
+                                                                            У договора ОСВ нет подтверждённого места
                                                                         @else
-                                                                            <div class="mrr-debt-review__candidate-title">Нужна ручная проверка договора</div>
+                                                                            Нужна ручная проверка договора
                                                                         @endif
-                                                                        <div class="mrr-debt-review__copy">
-                                                                            @if ($settlementLinkedSpaceLabel !== '')
-                                                                                По ОСВ долг найден по договору, который уже связан с этим местом. Проверьте его первым.
-                                                                            @elseif ($settlementLocalContractNumber !== '')
-                                                                                Договор есть в сервисе, но связь с местом не выглядит подтверждённой.
-                                                                            @else
-                                                                                {{ $settlementReviewNextStep }}
-                                                                            @endif
-                                                                        </div>
-                                                                        <div class="mrr-debt-review__actions">
-                                                                            @if ($settlementLinkedSpaceUrl !== '')
-                                                                                <a class="mrr-link mrr-link--primary" href="{{ $settlementLinkedSpaceUrl }}" target="_blank" rel="noopener">Открыть {{ $settlementLinkedSpaceLabel }}</a>
-                                                                            @endif
-                                                                            @if ($settlementContractUrl !== '')
-                                                                                <a class="mrr-link" href="{{ $settlementContractUrl }}" target="_blank" rel="noopener">Открыть договор</a>
-                                                                            @endif
-                                                                            @if ($settlementLinkedMapUrl !== '')
-                                                                                <a class="mrr-link" href="{{ $settlementLinkedMapUrl }}" target="_blank" rel="noopener">Показать на карте</a>
-                                                                            @endif
-                                                                            @if ($attentionTab !== 'unconfirmed_links_rejected')
-                                                                                <button
-                                                                                    type="button"
-                                                                                    class="mrr-link mrr-link--button mrr-link--success"
-                                                                                    data-mrr-unconfirmed-link-action
-                                                                                    data-mrr-space-id="{{ $row['space_id'] }}"
-                                                                                    data-mrr-decision="reject_unconfirmed_financial_link"
-                                                                                    data-mrr-reason-required="1"
-                                                                                    data-mrr-prompt="Почему договор ОСВ не нужно связывать с местом {{ $currentSpaceLabel }}?"
-                                                                                >
-                                                                                    Подтвердить: договор не от {{ $currentSpaceLabel }}
-                                                                                </button>
-                                                                            @endif
-                                                                        </div>
+                                                                    </div>
+                                                                    <div class="mrr-debt-review__copy">
+                                                                        @if ($settlementLinkedSpaceLabel !== '')
+                                                                            Если договор действительно ведёт в {{ $settlementLinkedSpaceLabel }}, не связывайте его с {{ $currentSpaceLabel }}.
+                                                                        @elseif ($settlementLocalContractNumber !== '')
+                                                                            Проверьте договор перед привязкой: в сервисе нет надёжной связи с этим местом.
+                                                                        @else
+                                                                            {{ $settlementReviewNextStep }}
+                                                                        @endif
+                                                                    </div>
+                                                                </div>
+
+                                                                @if ($attentionTab !== 'unconfirmed_links_rejected')
+                                                                    <div class="mrr-debt-review__primary-action">
+                                                                        <button
+                                                                            type="button"
+                                                                            class="mrr-link mrr-link--button mrr-link--success mrr-link--decision"
+                                                                            data-mrr-unconfirmed-link-action
+                                                                            data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                            data-mrr-decision="reject_unconfirmed_financial_link"
+                                                                            data-mrr-reason-required="1"
+                                                                            data-mrr-prompt="Почему договор ОСВ не нужно связывать с местом {{ $currentSpaceLabel }}?"
+                                                                        >
+                                                                            Не связывать с {{ $currentSpaceLabel }}
+                                                                        </button>
                                                                     </div>
                                                                 @endif
 
+                                                                @if ($settlementLinkedSpaceUrl !== '' || $settlementContractUrl !== '' || $settlementLinkedMapUrl !== '')
+                                                                    <div class="mrr-debt-review__checks">
+                                                                        <div class="mrr-debt-review__checks-label">Проверить:</div>
+                                                                        @if ($settlementLinkedSpaceUrl !== '')
+                                                                            <a class="mrr-link" href="{{ $settlementLinkedSpaceUrl }}" target="_blank" rel="noopener">Открыть {{ $settlementLinkedSpaceLabel }}</a>
+                                                                        @endif
+                                                                        @if ($settlementContractUrl !== '')
+                                                                            <a class="mrr-link" href="{{ $settlementContractUrl }}" target="_blank" rel="noopener">Открыть договор</a>
+                                                                        @endif
+                                                                        @if ($settlementLinkedMapUrl !== '')
+                                                                            <a class="mrr-link" href="{{ $settlementLinkedMapUrl }}" target="_blank" rel="noopener">Показать на карте</a>
+                                                                        @endif
+                                                                    </div>
+                                                                @endif
+
+                                                                <div class="mrr-debt-review__details-label">Подтверждающие данные ОСВ</div>
                                                                 <div class="mrr-debt-review__metrics">
                                                                     <div class="mrr-debt-review__metric">
                                                                         <div class="mrr-debt-review__metric-label">Договор ОСВ</div>
