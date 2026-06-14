@@ -21,6 +21,7 @@ use App\Models\Market;
 use App\Models\Task;
 use App\Models\TenantRequest;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
+use App\Support\OneC\OneCDailyExchangeWarning;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -386,6 +387,36 @@ class Dashboard extends BaseDashboard
                 ],
             ],
         ];
+    }
+
+    /**
+     * @return array{
+     *     title: string,
+     *     description: string,
+     *     instruction: string,
+     *     checked_at: string,
+     *     window_label: string,
+     *     action_url: string,
+     *     modal_key: string,
+     *     issues: list<array<string, mixed>>
+     * }|null
+     */
+    public function getOneCDailyExchangeWarning(): ?array
+    {
+        $this->syncDashboardMarketId();
+
+        $marketId = $this->resolveMarketId();
+
+        if ($marketId <= 0) {
+            return null;
+        }
+
+        $market = Market::query()
+            ->select(['id', 'timezone'])
+            ->find($marketId);
+
+        $tz = $this->resolveMarketTimezone($marketId);
+        return app(OneCDailyExchangeWarning::class)->build($marketId, $market?->timezone ?? $tz);
     }
 
     /**

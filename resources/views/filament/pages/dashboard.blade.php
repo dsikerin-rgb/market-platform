@@ -4,6 +4,7 @@
     @else
         @php
             $hero = $this->getWorkspaceHeroData();
+            $oneCExchangeWarning = $this->getOneCDailyExchangeWarning();
             $sections = $this->getWorkspaceDashboardSections();
             $attentionSection = collect($sections)->firstWhere('key', 'attention');
             $contentSections = array_values(array_filter(
@@ -290,6 +291,258 @@
                 overflow: hidden;
             }
 
+            .dashboard-workspace__onec-warning {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 1.15rem;
+                align-items: start;
+                position: relative;
+                overflow: hidden;
+                border-radius: 1.35rem;
+                border: 2px solid rgba(220, 38, 38, 0.55);
+                background:
+                    radial-gradient(circle at top left, rgba(239, 68, 68, 0.24), transparent 28%),
+                    radial-gradient(circle at top right, rgba(245, 158, 11, 0.32), transparent 32%),
+                    linear-gradient(135deg, #fff7ed, #fef3c7 62%, #fee2e2);
+                padding: 1.2rem 1.3rem;
+                box-shadow: 0 22px 46px rgba(220, 38, 38, 0.18);
+            }
+
+            .dashboard-workspace__onec-warning::before {
+                content: '';
+                position: absolute;
+                inset: 0 auto 0 0;
+                width: 0.45rem;
+                background: linear-gradient(180deg, #dc2626, #f59e0b);
+            }
+
+            .dark .dashboard-workspace__onec-warning {
+                border-color: rgba(248, 113, 113, 0.58);
+                background:
+                    radial-gradient(circle at top left, rgba(248, 113, 113, 0.18), transparent 28%),
+                    radial-gradient(circle at top right, rgba(251, 191, 36, 0.18), transparent 32%),
+                    linear-gradient(135deg, rgba(69, 26, 3, 0.94), rgba(127, 29, 29, 0.72) 58%, rgba(15, 23, 42, 0.95));
+            }
+
+            .dashboard-workspace__onec-warning-main {
+                display: flex;
+                gap: 1rem;
+                min-width: 0;
+                position: relative;
+                z-index: 1;
+            }
+
+            .dashboard-workspace__onec-warning-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 3.25rem;
+                height: 3.25rem;
+                border-radius: 1rem;
+                background: #dc2626;
+                color: #fff;
+                box-shadow: 0 12px 28px rgba(220, 38, 38, 0.28);
+                flex-shrink: 0;
+            }
+
+            .dark .dashboard-workspace__onec-warning-icon {
+                background: #ef4444;
+                color: #fff;
+            }
+
+            .dashboard-workspace__onec-warning h3 {
+                margin: 0;
+                color: #7f1d1d;
+                font-size: 1.08rem;
+                line-height: 1.35;
+                font-weight: 800;
+            }
+
+            .dark .dashboard-workspace__onec-warning h3 {
+                color: #fee2e2;
+            }
+
+            .dashboard-workspace__onec-warning p {
+                margin: 0.25rem 0 0;
+                color: #78350f;
+                font-size: 0.9rem;
+                line-height: 1.55;
+            }
+
+            .dark .dashboard-workspace__onec-warning p {
+                color: #fed7aa;
+            }
+
+            .dashboard-workspace__onec-warning-instruction {
+                margin-top: 0.35rem !important;
+                color: #991b1b !important;
+                font-weight: 700;
+            }
+
+            .dark .dashboard-workspace__onec-warning-instruction {
+                color: #fecaca !important;
+            }
+
+            .dashboard-workspace__onec-warning-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                margin-top: 0.75rem;
+            }
+
+            .dashboard-workspace__onec-warning-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.4rem;
+                max-width: 100%;
+                border-radius: 999px;
+                border: 1px solid rgba(220, 38, 38, 0.25);
+                background: rgba(255, 255, 255, 0.78);
+                padding: 0.42rem 0.7rem;
+                color: #7f1d1d;
+                font-size: 0.78rem;
+                font-weight: 700;
+            }
+
+            .dark .dashboard-workspace__onec-warning-chip {
+                border-color: rgba(251, 191, 36, 0.24);
+                background: rgba(15, 23, 42, 0.44);
+                color: #fde68a;
+            }
+
+            .dashboard-workspace__onec-warning-action {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.45rem;
+                position: relative;
+                z-index: 1;
+                white-space: nowrap;
+                border-radius: 999px;
+                background: #dc2626;
+                padding: 0.58rem 0.9rem;
+                color: #fff;
+                font-size: 0.84rem;
+                font-weight: 700;
+                text-decoration: none;
+                box-shadow: 0 12px 24px rgba(220, 38, 38, 0.24);
+                transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+            }
+
+            .dashboard-workspace__onec-warning-action:hover {
+                transform: translateY(-1px);
+                background: #b91c1c;
+                box-shadow: 0 16px 30px rgba(220, 38, 38, 0.30);
+            }
+
+            .dashboard-workspace__onec-modal {
+                position: fixed;
+                inset: 0;
+                z-index: 80;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                padding: 1.25rem;
+                background: rgba(15, 23, 42, 0.50);
+                backdrop-filter: blur(7px);
+            }
+
+            .dashboard-workspace__onec-modal.is-open {
+                display: flex;
+            }
+
+            .dashboard-workspace__onec-modal-card {
+                width: min(100%, 34rem);
+                border-radius: 1.35rem;
+                border: 2px solid rgba(220, 38, 38, 0.52);
+                background:
+                    radial-gradient(circle at top left, rgba(239, 68, 68, 0.18), transparent 30%),
+                    linear-gradient(135deg, #fff7ed, #fff 56%, #fee2e2);
+                box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+                padding: 1.35rem;
+            }
+
+            .dark .dashboard-workspace__onec-modal-card {
+                background:
+                    radial-gradient(circle at top left, rgba(248, 113, 113, 0.16), transparent 30%),
+                    linear-gradient(135deg, rgba(69, 26, 3, 0.98), rgba(127, 29, 29, 0.76) 60%, rgba(15, 23, 42, 0.98));
+            }
+
+            .dashboard-workspace__onec-modal-head {
+                display: flex;
+                gap: 0.9rem;
+                align-items: flex-start;
+            }
+
+            .dashboard-workspace__onec-modal-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 3rem;
+                height: 3rem;
+                border-radius: 1rem;
+                background: #dc2626;
+                color: #fff;
+                flex-shrink: 0;
+                box-shadow: 0 12px 26px rgba(220, 38, 38, 0.28);
+            }
+
+            .dashboard-workspace__onec-modal-title {
+                margin: 0;
+                color: #7f1d1d;
+                font-size: 1.25rem;
+                line-height: 1.25;
+                font-weight: 800;
+            }
+
+            .dark .dashboard-workspace__onec-modal-title {
+                color: #fee2e2;
+            }
+
+            .dashboard-workspace__onec-modal-copy {
+                margin: 0.45rem 0 0;
+                color: #78350f;
+                font-size: 0.92rem;
+                line-height: 1.6;
+            }
+
+            .dark .dashboard-workspace__onec-modal-copy {
+                color: #fed7aa;
+            }
+
+            .dashboard-workspace__onec-modal-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.65rem;
+                justify-content: flex-end;
+                margin-top: 1.2rem;
+            }
+
+            .dashboard-workspace__onec-modal-button,
+            .dashboard-workspace__onec-modal-link {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 0.45rem;
+                border-radius: 999px;
+                padding: 0.65rem 0.95rem;
+                font-size: 0.86rem;
+                font-weight: 800;
+                text-decoration: none;
+            }
+
+            .dashboard-workspace__onec-modal-button {
+                border: 1px solid rgba(120, 53, 15, 0.24);
+                background: rgba(255, 255, 255, 0.74);
+                color: #78350f;
+            }
+
+            .dashboard-workspace__onec-modal-link {
+                border: 1px solid #dc2626;
+                background: #dc2626;
+                color: #fff;
+                box-shadow: 0 12px 24px rgba(220, 38, 38, 0.22);
+            }
+
             .dashboard-workspace__panel-head {
                 display: flex;
                 align-items: flex-start;
@@ -505,6 +758,10 @@
                     grid-template-columns: minmax(0, 1fr);
                 }
 
+                .dashboard-workspace__onec-warning {
+                    grid-template-columns: minmax(0, 1fr);
+                }
+
                 .dashboard-workspace__attention-overlay {
                     top: auto;
                     right: 0.75rem;
@@ -583,6 +840,121 @@
                     @endforeach
                 </div>
             </section>
+
+            @if ($oneCExchangeWarning)
+                <section class="dashboard-workspace__onec-warning">
+                    <div class="dashboard-workspace__onec-warning-main">
+                        <div class="dashboard-workspace__onec-warning-icon">
+                            <x-filament::icon icon="heroicon-o-exclamation-triangle" class="h-6 w-6" />
+                        </div>
+
+                        <div>
+                            <h3>{{ $oneCExchangeWarning['title'] }}</h3>
+                            <p>
+                                {{ $oneCExchangeWarning['description'] }}
+                                Проверено: {{ $oneCExchangeWarning['checked_at'] }} · окно: {{ $oneCExchangeWarning['window_label'] }}.
+                            </p>
+                            <p class="dashboard-workspace__onec-warning-instruction">
+                                {{ $oneCExchangeWarning['instruction'] }}
+                            </p>
+
+                            <div class="dashboard-workspace__onec-warning-list">
+                                @foreach ($oneCExchangeWarning['issues'] as $issue)
+                                    <span class="dashboard-workspace__onec-warning-chip" title="{{ $issue['message'] }}">
+                                        {{ $issue['label'] }}:
+                                        {{ $issue['recent_success_count'] }}/{{ $issue['required_success_count'] }}
+                                        @if (filled($issue['latest_ok_label'] ?? null))
+                                            · посл. {{ $issue['latest_ok_label'] }}
+                                        @endif
+                                    </span>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+
+                    <a href="{{ $oneCExchangeWarning['action_url'] }}" class="dashboard-workspace__onec-warning-action">
+                        <x-filament::icon icon="heroicon-o-arrow-up-right" class="h-4 w-4" />
+                        Журнал обменов
+                    </a>
+                </section>
+
+                <div
+                    id="dashboardOneCWarningModal"
+                    class="dashboard-workspace__onec-modal"
+                    data-storage-key="{{ $oneCExchangeWarning['modal_key'] }}:dashboard"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="dashboardOneCWarningModalTitle"
+                >
+                    <div class="dashboard-workspace__onec-modal-card">
+                        <div class="dashboard-workspace__onec-modal-head">
+                            <div class="dashboard-workspace__onec-modal-icon">
+                                <x-filament::icon icon="heroicon-o-exclamation-triangle" class="h-6 w-6" />
+                            </div>
+
+                            <div>
+                                <h2 id="dashboardOneCWarningModalTitle" class="dashboard-workspace__onec-modal-title">
+                                    Данные 1С могут быть устаревшими
+                                </h2>
+                                <p class="dashboard-workspace__onec-modal-copy">
+                                    {{ $oneCExchangeWarning['description'] }}
+                                    Проверено: {{ $oneCExchangeWarning['checked_at'] }} · окно: {{ $oneCExchangeWarning['window_label'] }}.
+                                </p>
+                                <p class="dashboard-workspace__onec-modal-copy">
+                                    {{ $oneCExchangeWarning['instruction'] }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-workspace__onec-modal-actions">
+                            <button type="button" class="dashboard-workspace__onec-modal-button" data-onec-warning-close>
+                                Понятно
+                            </button>
+                            <a href="{{ $oneCExchangeWarning['action_url'] }}" class="dashboard-workspace__onec-modal-link">
+                                <x-filament::icon icon="heroicon-o-arrow-up-right" class="h-4 w-4" />
+                                Открыть журнал
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    document.addEventListener('DOMContentLoaded', function () {
+                        const modal = document.getElementById('dashboardOneCWarningModal');
+
+                        if (! modal) {
+                            return;
+                        }
+
+                        const storageKey = modal.dataset.storageKey || '';
+                        let dismissed = false;
+
+                        try {
+                            dismissed = storageKey !== '' && window.localStorage.getItem(storageKey) === 'dismissed';
+                        } catch (e) {
+                            dismissed = false;
+                        }
+
+                        if (! dismissed) {
+                            modal.classList.add('is-open');
+                        }
+
+                        modal.querySelectorAll('[data-onec-warning-close]').forEach(function (button) {
+                            button.addEventListener('click', function () {
+                                modal.classList.remove('is-open');
+
+                                try {
+                                    if (storageKey !== '') {
+                                        window.localStorage.setItem(storageKey, 'dismissed');
+                                    }
+                                } catch (e) {
+                                    // ignore
+                                }
+                            });
+                        });
+                    });
+                </script>
+            @endif
 
             @if ($workspaceHeaderWidgets !== [])
                 <div>

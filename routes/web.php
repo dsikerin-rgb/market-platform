@@ -53,6 +53,7 @@ use App\Services\MarketMap\SpaceReviewActionService;
 use App\Services\Marketplace\MarketplaceContextService;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use App\Support\MarketSpaces\MarketSpaceShapePolicy;
+use App\Support\OneC\OneCDailyExchangeWarning;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -4674,6 +4675,11 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             && method_exists($viewerUser, 'isSuperAdmin')
             && $viewerUser->isSuperAdmin());
 
+        $oneCExchangeWarning = app(OneCDailyExchangeWarning::class)->build(
+            (int) ($market->id ?? 0),
+            is_string($market->timezone ?? null) ? $market->timezone : null,
+        );
+
         $payload = [
             'market' => $market,
             'marketId' => (int) ($market->id ?? 0),
@@ -4694,6 +4700,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ?? 1),
             'debtRedAfterDays' => (int) ($market->settings['debt_monitoring']['red_after_days'] ?? 30),
             'returnUrl' => $returnUrl,
+            'oneCExchangeWarning' => $oneCExchangeWarning,
 
             'settingsUrl' => url('/admin/market-settings'),
 
