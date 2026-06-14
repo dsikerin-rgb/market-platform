@@ -6,6 +6,9 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Notifications\TaskAssignedNotification;
+use App\Notifications\TaskCommentAddedNotification;
+use App\Notifications\TaskStatusChangedNotification;
+use App\Notifications\TaskUpdatedNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -132,6 +135,14 @@ class Task extends Model
         static::updated(function (self $task): void {
             if ($task->wasChanged('assignee_id')) {
                 $task->notifyAssignee();
+            }
+
+            if ($task->wasChanged('status')) {
+                $task->notifyStatusChanged();
+            }
+
+            if ($task->hasNotifiableDataChanges()) {
+                $task->notifyDataChanged();
             }
         });
 
@@ -471,5 +482,128 @@ class Task extends Model
         }
 
         $assignee->notify(new TaskAssignedNotification($this));
+    }
+
+    private function notifyStatusChanged(): void
+    {
+        $oldStatus = (string) $this->getOriginal('status');
+        $newStatus = (string) $this->status;
+
+        if ($oldStatus === $newStatus) {
+            return;
+        }
+
+        $actorId = auth()->check() ? (int) auth()->id() : 0;
+
+        foreach ($this->notificationRecipients($actorId) as $recipient) {
+            $recipient->notify(new TaskStatusChangedNotification($this, $oldStatus, $newStatus));
+        }
+    }
+
+    public function notifyCommentAdded(TaskComment $comment): void
+    {
+        $authorId = (int) ($comment->author_user_id ?? $comment->user_id ?? 0);
+        $comment->loadMissing('author');
+
+        foreach ($this->notificationRecipients($authorId) as $recipient) {
+            $recipient->notify(new TaskCommentAddedNotification($this, $comment));
+        }
+    }
+
+    private function hasNotifiableDataChanges(): bool
+    {
+        foreach ($this->notifiableDataFields() as $field) {
+            if ($this->wasChanged($field)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function notifyDataChanged(): void
+    {
+        $changes = [];
+
+        foreach ($this->notifiableDataFields() as $field) {
+            if (! $this->wasChanged($field)) {
+                continue;
+            }
+
+            $changes[$field] = [
+                'old' => $this->getOriginal($field),
+                'new' => $this->{$field},
+            ];
+        }
+
+        if ($changes === []) {
+            return;
+        }
+
+        $actorId = auth()->check() ? (int) auth()->id() : 0;
+
+        foreach ($this->notificationRecipients($actorId) as $recipient) {
+            $recipient->notify(new TaskUpdatedNotification($this, $changes));
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function notifiableDataFields(): array
+    {
+        return ['title', 'description', 'priority', 'due_at'];
+    }
+
+    /**
+     * @return list<User>
+     */
+    private function notificationRecipients(int $excludeUserId = 0): array
+    {
+        $ids = [];
+
+        foreach ([
+            $this->created_by_user_id,
+            $this->created_by,
+            $this->assignee_id,
+        ] as $id) {
+            if (is_numeric($id) && (int) $id > 0) {
+                $ids[] = (int) $id;
+            }
+        }
+
+        try {
+            $ids = [
+                ...$ids,
+                ...$this->participantEntries()->pluck('user_id')->map(fn ($id): int => (int) $id)->all(),
+            ];
+        } catch (\Throwable) {
+            // ignore
+        }
+
+        if (self::supportsWatchers()) {
+            try {
+                $ids = [
+                    ...$ids,
+                    ...$this->watchers()->pluck('users.id')->map(fn ($id): int => (int) $id)->all(),
+                ];
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        $ids = array_values(array_unique(array_filter(
+            $ids,
+            static fn (int $id): bool => $id > 0 && $id !== $excludeUserId,
+        )));
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return User::query()
+            ->whereIn('id', $ids)
+            ->get()
+            ->all();
     }
 }

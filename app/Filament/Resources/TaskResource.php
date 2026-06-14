@@ -1382,19 +1382,21 @@ $assigneeColumn = TextColumn::make('assignee.name')
 
             if (array_key_exists($userId, $existing)) {
                 if ((string) $existing[$userId] !== (string) $role) {
-                    TaskParticipant::query()
+                    $participant = TaskParticipant::query()
                         ->where('task_id', $task->id)
                         ->where('user_id', $userId)
-                        ->update([
+                        ->first();
+
+                    $participant?->forceFill([
                             'role' => $role,
                             'updated_at' => $now,
-                        ]);
+                        ])->save();
                 }
 
                 continue;
             }
 
-            TaskParticipant::query()->insert([
+            TaskParticipant::query()->create([
                 'task_id' => $task->id,
                 'user_id' => $userId,
                 'role' => $role,
