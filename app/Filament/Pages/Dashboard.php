@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\IntegrationExchangeResource;
 use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketAttentionWidget;
 use App\Filament\Widgets\MarketAverageRentRateWidget;
@@ -21,6 +22,7 @@ use App\Models\Market;
 use App\Models\Task;
 use App\Models\TenantRequest;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
+use App\Support\OneC\OneCDailyExchangeHealthReport;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -385,6 +387,49 @@ class Dashboard extends BaseDashboard
                     'icon' => 'heroicon-o-home-modern',
                 ],
             ],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     title: string,
+     *     description: string,
+     *     instruction: string,
+     *     checked_at: string,
+     *     window_label: string,
+     *     action_url: string,
+     *     issues: list<array<string, mixed>>
+     * }|null
+     */
+    public function getOneCDailyExchangeWarning(): ?array
+    {
+        $this->syncDashboardMarketId();
+
+        $marketId = $this->resolveMarketId();
+
+        if ($marketId <= 0) {
+            return null;
+        }
+
+        $market = Market::query()
+            ->select(['id', 'timezone'])
+            ->find($marketId);
+
+        $tz = $this->resolveMarketTimezone($marketId);
+        $report = app(OneCDailyExchangeHealthReport::class)->build($marketId, $market?->timezone ?? $tz);
+
+        if ($report['ok']) {
+            return null;
+        }
+
+        return [
+            'title' => 'Пропущена ежедневная выгрузка 1С',
+            'description' => 'Система не получила полный ежедневный набор данных из 1С. Данные на дашборде, карте задолженности и в отчетах могут быть устаревшими.',
+            'instruction' => 'Проверьте запуск run_prod.bat на сервере 1С и журнал обменов.',
+            'checked_at' => $report['checked_at']->format('d.m.Y H:i'),
+            'window_label' => (string) $report['window_hours'] . ' ч',
+            'action_url' => IntegrationExchangeResource::getUrl('index'),
+            'issues' => $report['issues'],
         ];
     }
 
