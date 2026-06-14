@@ -6,7 +6,7 @@
     <section class="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm space-y-4">
         <div class="flex items-center justify-between gap-3">
             <h2 class="text-base font-semibold text-slate-900">Фильтр начислений</h2>
-            <a class="text-sm font-medium text-slate-600" href="{{ route('cabinet.payments') }}">К оплате</a>
+            <a class="text-sm font-medium text-slate-600" href="{{ route('cabinet.payments') }}">К финансам</a>
         </div>
 
         <form method="GET" class="space-y-3">
