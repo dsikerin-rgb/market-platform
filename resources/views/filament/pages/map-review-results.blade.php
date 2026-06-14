@@ -3682,6 +3682,19 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                             @if ($settlementLinkedMapUrl !== '')
                                                                                 <a class="mrr-link" href="{{ $settlementLinkedMapUrl }}" target="_blank" rel="noopener">Показать на карте</a>
                                                                             @endif
+                                                                            @if ($attentionTab !== 'unconfirmed_links_rejected')
+                                                                                <button
+                                                                                    type="button"
+                                                                                    class="mrr-link mrr-link--button mrr-link--success"
+                                                                                    data-mrr-unconfirmed-link-action
+                                                                                    data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                                    data-mrr-decision="reject_unconfirmed_financial_link"
+                                                                                    data-mrr-reason-required="1"
+                                                                                    data-mrr-prompt="Почему договор ОСВ не нужно связывать с местом {{ $currentSpaceLabel }}?"
+                                                                                >
+                                                                                    Подтвердить: договор не от {{ $currentSpaceLabel }}
+                                                                                </button>
+                                                                            @endif
                                                                         </div>
                                                                     </div>
                                                                 @endif
@@ -3848,39 +3861,23 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                 </div>
                                                             @endif
 
-                                                            @if (in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true))
+                                                            @if ($attentionTab === 'unconfirmed_links_rejected')
                                                                 <div class="mrr-card-actions__group">
                                                                     <div class="mrr-card-actions__label">Решение по договору ОСВ</div>
                                                                     <div class="mrr-card-actions__hint">
-                                                                        {{ $attentionTab === 'unconfirmed_links_rejected'
-                                                                            ? 'Связь с этим местом уже отклонена. Долг арендатора остаётся видимым на карте как общий статус арендатора.'
-                                                                            : 'Нажмите, если договор ОСВ не относится к текущему месту. Долг арендатора на карте останется видимым.' }}
+                                                                        Связь с этим местом уже отклонена. Долг арендатора остаётся видимым на карте как общий статус арендатора.
                                                                     </div>
                                                                     <div class="mrr-card-actions__row">
-                                                                        @if ($attentionTab === 'unconfirmed_links_rejected')
-                                                                            <button
-                                                                                type="button"
-                                                                                class="mrr-link mrr-link--button mrr-link--primary"
-                                                                                data-mrr-unconfirmed-link-action
-                                                                                data-mrr-space-id="{{ $row['space_id'] }}"
-                                                                                data-mrr-decision="reopen_unconfirmed_financial_link"
-                                                                                data-mrr-confirm="Вернуть финансовую связь места {{ $currentSpaceLabel }} в проверку?"
-                                                                            >
-                                                                                Вернуть в проверку
-                                                                            </button>
-                                                                        @else
-                                                                            <button
-                                                                                type="button"
-                                                                                class="mrr-link mrr-link--button"
-                                                                                data-mrr-unconfirmed-link-action
-                                                                                data-mrr-space-id="{{ $row['space_id'] }}"
-                                                                                data-mrr-decision="reject_unconfirmed_financial_link"
-                                                                                data-mrr-reason-required="1"
-                                                                                data-mrr-prompt="Почему договор ОСВ не нужно связывать с местом {{ $currentSpaceLabel }}?"
-                                                                            >
-                                                                                Не связывать с {{ $currentSpaceLabel }}
-                                                                            </button>
-                                                                        @endif
+                                                                        <button
+                                                                            type="button"
+                                                                            class="mrr-link mrr-link--button mrr-link--primary"
+                                                                            data-mrr-unconfirmed-link-action
+                                                                            data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                            data-mrr-decision="reopen_unconfirmed_financial_link"
+                                                                            data-mrr-confirm="Вернуть финансовую связь места {{ $currentSpaceLabel }} в проверку?"
+                                                                        >
+                                                                            Вернуть в проверку
+                                                                        </button>
                                                                     </div>
                                                                 </div>
                                                             @endif
