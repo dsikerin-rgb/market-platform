@@ -13,6 +13,7 @@ use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceType;
 use App\Models\Tenant;
 use App\Services\Debt\DebtStatusResolver;
+use App\Services\Finance\SettlementBalancePresentation;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationsStateService;
 use App\Support\AdminCapabilities;
@@ -2187,6 +2188,7 @@ class MarketSpaceResource extends BaseResource
         $sharedUseParticipants = static::sharedUseFinanceParticipants($record);
         $sharedUseMode = (string) ($record->shared_use_financial_mode ?? MarketSpace::SHARED_USE_FINANCIAL_MODE_SEPARATE_CONTRACT);
         $sharedUseModeLabel = static::sharedUseFinancialModeLabel($sharedUseMode);
+        $settlementPresentation = app(SettlementBalancePresentation::class);
 
         if (! $snapshot) {
             return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
@@ -2242,9 +2244,12 @@ class MarketSpaceResource extends BaseResource
                     (int) $record->id,
                 );
 
-                $rows = $contractExternalIds->isNotEmpty()
-                    ? static::spaceSettlementRows((int) $record->market_id, $participantTenantId, $snapshot, $contractExternalIds)
-                    : collect();
+                $rows = collect();
+
+                if ($contractExternalIds->isNotEmpty()) {
+                    $rows = static::spaceSettlementRows((int) $record->market_id, $participantTenantId, $snapshot, $contractExternalIds);
+                    $settlementPresentation->markCurrentContracts($rows, $contractExternalIds);
+                }
 
                 if ($rows->isEmpty()) {
                     $rows = static::spaceSettlementRows((int) $record->market_id, $participantTenantId, $snapshot, null);
@@ -2268,6 +2273,8 @@ class MarketSpaceResource extends BaseResource
                 ])->render());
             }
 
+            $displayRows = $settlementPresentation->workRows($participantRows);
+
             return new HtmlString(view('filament.market-spaces.space-settlement-balances', [
                 'state' => 'ready',
                 'scope' => 'shared_use',
@@ -2277,7 +2284,8 @@ class MarketSpaceResource extends BaseResource
                 'account' => (string) $snapshot->account,
                 'importedAt' => $snapshot->imported_at ? (string) \Carbon\Carbon::parse($snapshot->imported_at)->format('d.m.Y H:i') : null,
                 'summary' => static::summarizeSpaceSettlementRows($participantRows),
-                'rows' => $participantRows->map(fn (object $row): array => static::normalizeSpaceSettlementRow($row))->values()->all(),
+                'rows' => $displayRows->map(fn (object $row): array => static::normalizeSpaceSettlementRow($row))->values()->all(),
+                'hiddenRowsCount' => $settlementPresentation->hiddenRowsCount($participantRows),
                 'currentTenantName' => '',
                 'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $record->number),
                 'isSharedUse' => true,
@@ -2304,9 +2312,12 @@ class MarketSpaceResource extends BaseResource
             (int) $record->id,
         );
 
-        $rows = $contractExternalIds->isNotEmpty()
-            ? static::spaceSettlementRows((int) $record->market_id, (int) $tenantId, $snapshot, $contractExternalIds)
-            : collect();
+        $rows = collect();
+
+        if ($contractExternalIds->isNotEmpty()) {
+            $rows = static::spaceSettlementRows((int) $record->market_id, (int) $tenantId, $snapshot, $contractExternalIds);
+            $settlementPresentation->markCurrentContracts($rows, $contractExternalIds);
+        }
 
         $scope = 'exact';
 
@@ -2327,6 +2338,7 @@ class MarketSpaceResource extends BaseResource
         }
 
         $summary = static::summarizeSpaceSettlementRows($rows);
+        $displayRows = $settlementPresentation->workRows($rows, 10);
         $search = $scope === 'exact' && $contractExternalIds->isNotEmpty()
             ? (string) $contractExternalIds->first()
             : (string) ($record->effectiveTenantName() ?? $record->number);
@@ -2342,7 +2354,8 @@ class MarketSpaceResource extends BaseResource
             'account' => (string) $snapshot->account,
             'importedAt' => $snapshot->imported_at ? (string) \Carbon\Carbon::parse($snapshot->imported_at)->format('d.m.Y H:i') : null,
             'summary' => $summary,
-            'rows' => $rows->map(fn (object $row): array => static::normalizeSpaceSettlementRow($row))->values()->all(),
+            'rows' => $displayRows->map(fn (object $row): array => static::normalizeSpaceSettlementRow($row))->values()->all(),
+            'hiddenRowsCount' => $settlementPresentation->hiddenRowsCount($rows),
             'currentTenantName' => (string) ($record->effectiveTenantName() ?? ''),
             'contractExternalIds' => $contractExternalIds->all(),
             'settlementsUrl' => static::spaceSettlementsUrl($snapshot, $search),

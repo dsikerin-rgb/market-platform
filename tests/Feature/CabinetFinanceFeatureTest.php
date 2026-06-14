@@ -94,6 +94,64 @@ class CabinetFinanceFeatureTest extends TestCase
             ->assertSee('Оплата аренды за июнь');
     }
 
+    public function test_cabinet_hides_closed_settlement_contracts_without_period_movement(): void
+    {
+        [$market, $tenant, $space, $contract] = $this->createTenantContext();
+        $merchant = $this->createCabinetUser((int) $market->id, (int) $tenant->id, 'merchant');
+
+        TenantSettlementBalance::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'tenant_contract_id' => (int) $contract->id,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => 'tenant-1c',
+            'tenant_name' => (string) $tenant->name,
+            'contract_external_id' => 'current-contract-1c',
+            'contract_name' => 'Договор аренды П1',
+            'settlement_document_name' => 'Реализация за июнь',
+            'organization_name' => 'Эко Ярмарка',
+            'account' => '62',
+            'turnover_debit' => 10000,
+            'turnover_credit' => 0,
+            'closing_debit' => 10000,
+            'closing_credit' => 0,
+            'imported_at' => '2026-07-01 08:30:00',
+            'source_row_hash' => hash('sha256', 'current-visible-settlement-row'),
+        ]);
+
+        TenantSettlementBalance::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'tenant_contract_id' => null,
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'tenant_external_id' => 'tenant-1c',
+            'tenant_name' => (string) $tenant->name,
+            'contract_external_id' => 'old-contract-1c',
+            'contract_name' => 'П/Э старый',
+            'settlement_document_name' => 'Старый закрытый документ',
+            'organization_name' => 'Эко Ярмарка',
+            'account' => '62',
+            'turnover_debit' => 0,
+            'turnover_credit' => 0,
+            'closing_debit' => 0,
+            'closing_credit' => 0,
+            'imported_at' => '2026-07-01 08:30:00',
+            'source_row_hash' => hash('sha256', 'old-hidden-settlement-row'),
+        ]);
+
+        $this->actingAs($merchant, 'web');
+
+        $this->get(route('cabinet.payments', ['month' => '2026-06']))
+            ->assertOk()
+            ->assertSee('П1/2026')
+            ->assertSee('10 000,00 ₽')
+            ->assertSee('Скрыто строк ОСВ без движения: 1.')
+            ->assertDontSee('П/Э старый')
+            ->assertDontSee('Старый закрытый документ');
+    }
+
     private function createTenantContext(): array
     {
         $market = Market::query()->create([
