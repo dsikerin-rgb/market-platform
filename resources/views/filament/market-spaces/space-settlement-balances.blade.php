@@ -479,6 +479,68 @@
             color: #cbd5e1;
         }
 
+        .space-finance__section {
+            display: grid;
+            gap: 10px;
+        }
+
+        .space-finance__section-head {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .space-finance__section-title {
+            color: #0f172a;
+            font-size: 15px;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .dark .space-finance__section-title {
+            color: #f8fafc;
+        }
+
+        .space-finance__details {
+            border: 1px solid #dbe4f0;
+            border-radius: 10px;
+            background: rgba(248, 250, 252, 0.72);
+            overflow: hidden;
+        }
+
+        .dark .space-finance__details {
+            border-color: rgba(148, 163, 184, 0.3);
+            background: rgba(15, 23, 42, 0.3);
+        }
+
+        .space-finance__details summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 11px 12px;
+            cursor: pointer;
+            color: #334155;
+            font-size: 14px;
+            font-weight: 800;
+            list-style: none;
+        }
+
+        .space-finance__details summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .dark .space-finance__details summary {
+            color: #e2e8f0;
+        }
+
+        .space-finance__details-body {
+            display: grid;
+            gap: 10px;
+            padding: 0 12px 12px;
+        }
+
         .space-finance__table-wrap {
             overflow-x: auto;
             border: 1px solid #dbe4f0;
@@ -826,54 +888,68 @@
             </div>
         @endif
 
-        <div class="space-finance__summary">
-            <div class="space-finance__card">
-                <div class="space-finance__label">Начислено за период</div>
-                <div class="space-finance__value">{{ $money($summary['turnover_debit'] ?? null) }}</div>
+        <div class="space-finance__section">
+            <div class="space-finance__section-head">
+                <div class="space-finance__section-title">Начисления и оплаты</div>
+                <div class="space-finance__muted">Движение за выбранный период ОСВ</div>
             </div>
-            <div class="space-finance__card">
-                <div class="space-finance__label">Оплачено за период</div>
-                <div class="space-finance__value">{{ $money($summary['turnover_credit'] ?? null) }}</div>
-            </div>
-            <div class="space-finance__card">
-                <div class="space-finance__label">Итог</div>
-                <div class="space-finance__value space-finance__value--{{ $statusTone }}">{{ $money($closingNet) }}</div>
+            <div class="space-finance__summary">
+                <div class="space-finance__card">
+                    <div class="space-finance__label">Начислено за период</div>
+                    <div class="space-finance__value">{{ $money($summary['turnover_debit'] ?? null) }}</div>
+                </div>
+                <div class="space-finance__card">
+                    <div class="space-finance__label">Оплачено за период</div>
+                    <div class="space-finance__value">{{ $money($summary['turnover_credit'] ?? null) }}</div>
+                </div>
+                <div class="space-finance__card">
+                    <div class="space-finance__label">Итог</div>
+                    <div class="space-finance__value space-finance__value--{{ $statusTone }}">{{ $money($closingNet) }}</div>
+                </div>
             </div>
         </div>
 
-        <div class="space-finance__table-wrap">
-            <table class="space-finance__table">
-                <thead>
-                    <tr>
-                        <th>Договор</th>
-                        <th>Организация</th>
-                        <th>Начислено</th>
-                        <th>Оплачено</th>
-                        <th>Итог</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($rows as $row)
-                        @php
-                            $tenantName = trim((string) ($row['tenant_name'] ?? ''));
-                            $showTenant = $tenantName !== '' && ($isSharedUse || $scope === 'tenant_fallback' || $tenantName !== $currentTenantName);
-                        @endphp
-                        <tr>
-                            <td title="{{ $row['contract_external_id'] ?? '' }}">
-                                {{ $row['contract_name'] ?: 'Без названия договора' }}
-                                @if ($showTenant)
-                                    <div class="space-finance__muted">{{ $tenantName }}</div>
-                                @endif
-                            </td>
-                            <td>{{ $row['organization_name'] ?: '—' }}</td>
-                            <td>{{ $money($row['turnover_debit'] ?? null) }}</td>
-                            <td>{{ $money($row['turnover_credit'] ?? null) }}</td>
-                            <td><strong>{{ $money($row['closing_net'] ?? null) }}</strong></td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
+        <details class="space-finance__details">
+            <summary>
+                <span>Детали 1С</span>
+                <span class="space-finance__muted">{{ count($rows) }} строк ОСВ</span>
+            </summary>
+            <div class="space-finance__details-body">
+                <div class="space-finance__table-wrap">
+                    <table class="space-finance__table">
+                        <thead>
+                            <tr>
+                                <th>Договор</th>
+                                <th>Организация</th>
+                                <th>Начислено</th>
+                                <th>Оплачено</th>
+                                <th>Итог</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($rows as $row)
+                                @php
+                                    $tenantName = trim((string) ($row['tenant_name'] ?? ''));
+                                    $showTenant = $tenantName !== '' && ($isSharedUse || $scope === 'tenant_fallback' || $tenantName !== $currentTenantName);
+                                @endphp
+                                <tr>
+                                    <td title="{{ $row['contract_external_id'] ?? '' }}">
+                                        {{ $row['contract_name'] ?: 'Без названия договора' }}
+                                        @if ($showTenant)
+                                            <div class="space-finance__muted">{{ $tenantName }}</div>
+                                        @endif
+                                    </td>
+                                    <td>{{ $row['organization_name'] ?: '—' }}</td>
+                                    <td>{{ $money($row['turnover_debit'] ?? null) }}</td>
+                                    <td>{{ $money($row['turnover_credit'] ?? null) }}</td>
+                                    <td><strong>{{ $money($row['closing_net'] ?? null) }}</strong></td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
     @else
         @if ($periodLabel || $account)
             <div class="space-finance__hero">

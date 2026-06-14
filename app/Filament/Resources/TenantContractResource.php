@@ -204,8 +204,8 @@ class TenantContractResource extends BaseResource
                             ->columns(1)
                             ->columnSpanFull(),
 
-                        Section::make('Реквизиты из 1С')
-                            ->description('Поля ниже приходят из 1С и доступны только для просмотра.')
+                        Section::make('Детали 1С')
+                            ->description('Служебные реквизиты договора из 1С. Обычно нужны только для проверки привязки.')
                             ->schema([
                                 Forms\Components\TextInput::make('tenant_display')
                                     ->label('Арендатор')
@@ -920,8 +920,8 @@ class TenantContractResource extends BaseResource
                 </div>
                 <details class="contract-finance-1c__details">
                     <summary>
-                        <span>Бухгалтерская сводка ОСВ</span>
-                        <span class="contract-finance-1c__section-meta">' . e($settlement['count'] > 0 ? (string) $settlement['count'] . ' строк' : 'строк нет') . '</span>
+                        <span>Детали 1С</span>
+                        <span class="contract-finance-1c__section-meta">ОСВ: ' . e($settlement['count'] > 0 ? (string) $settlement['count'] . ' строк' : 'строк нет') . '</span>
                     </summary>
                     <div class="contract-finance-1c__details-body">
                         <div class="contract-finance-1c__table-wrap">

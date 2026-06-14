@@ -216,15 +216,37 @@ class TenantResource extends BaseResource
                             ])
                             ->columns(1),
 
-                        Section::make('Движение')
-                            ->description('Расшифровка начислений и оплат. Итоговый ответ по долгу смотрите в сводке выше.')
+                        Section::make('Начисления')
+                            ->description('За что 1С выставила начисления этому арендатору.')
+                            ->schema([
+                                Forms\Components\Placeholder::make('tenant_accruals_registry')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderAccrualsRegistry($record))
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Section::make('Оплаты')
+                            ->description('Какие платежи 1С передала по этому арендатору.')
+                            ->schema([
+                                Forms\Components\Placeholder::make('tenant_payments_registry')
+                                    ->hiddenLabel()
+                                    ->dehydrated(false)
+                                    ->content(fn (?Tenant $record): HtmlString => static::renderTenantPaymentsRegistry($record))
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Section::make('Детали 1С')
+                            ->description('Служебная детализация и переход к расчетам 1С.')
                             ->schema([
                                 Forms\Components\Placeholder::make('finance_detail_links')
                                     ->hiddenLabel()
                                     ->dehydrated(false)
                                     ->content(fn (?Tenant $record): HtmlString => static::renderFinanceDetailLinks($record))
                                     ->columnSpanFull(),
-                            ]),
+                            ])
+                            ->collapsible()
+                            ->collapsed(),
                     ]),
 
                 Tab::make('Торговые места')
