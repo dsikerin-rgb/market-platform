@@ -1191,6 +1191,10 @@ class SpaceReviewFlowTest extends TestCase
             ->test(\App\Filament\Pages\MapReviewResults::class)
             ->assertSee('Финансовая связь не подтверждена', false)
             ->assertSee('Финансовая связь с местом не подтверждена', false)
+            ->assertSee('Подтвердить связь', false)
+            ->assertSee('Отклонить связь', false)
+            ->assertDontSee('Показывать долг', false)
+            ->assertDontSee('Не показывать долг', false)
             ->assertDontSee('Обычный порядок', false)
             ->assertDontSee('AI-приоритет', false)
             ->assertDontSee('Последнее решение', false)
@@ -1203,6 +1207,57 @@ class SpaceReviewFlowTest extends TestCase
             ->test(\App\Filament\Pages\MapReviewResults::class)
             ->assertSee('Сейчас нет мест, требующих уточнения.', false)
             ->assertDontSee('Системно найдено', false);
+    }
+
+    public function test_map_review_results_shows_rejected_unconfirmed_links_workflow(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->actingAsSuperAdmin((int) $market->id);
+        $this->withSession([
+            'filament.admin.selected_market_id' => (int) $market->id,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Сырный двор ООО',
+            'debt_status' => 'orange',
+            'is_active' => true,
+        ]);
+
+        $space = $this->createSpace($market, [
+            'number' => 'СД-4',
+            'display_name' => 'Сырный двор',
+            'status' => 'occupied',
+            'tenant_id' => $tenant->id,
+            'map_review_status' => 'unconfirmed_link_rejected',
+            'map_reviewed_at' => now(),
+            'map_reviewed_by' => $user->id,
+        ]);
+        $this->createShape($market, (int) $space->id);
+
+        Operation::create([
+            'market_id' => $market->id,
+            'entity_type' => 'market_space',
+            'entity_id' => $space->id,
+            'type' => OperationType::SPACE_REVIEW,
+            'effective_at' => now(),
+            'payload' => [
+                'market_space_id' => $space->id,
+                'decision' => SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK,
+                'reason' => 'Долг относится к другому месту.',
+            ],
+            'created_by' => $user->id,
+        ]);
+
+        Livewire::withQueryParams(['tab' => 'unconfirmed_links_rejected'])
+            ->test(\App\Filament\Pages\MapReviewResults::class)
+            ->assertSee('Отклонённые финансовые связи', false)
+            ->assertSee('Связь уже отклонена', false)
+            ->assertSee('Вернуть в проверку', false)
+            ->assertSee('Долг относится к другому месту.', false)
+            ->assertSee('СД-4', false)
+            ->assertDontSee('Подтвердить связь', false)
+            ->assertDontSee('Отклонить связь', false);
     }
 
     public function test_unconfirmed_links_hide_group_child_without_direct_current_financial_activity(): void
