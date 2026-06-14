@@ -956,6 +956,8 @@
                 </script>
             @endif
 
+            @livewire('admin.staff-live-feed')
+
             @if ($workspaceHeaderWidgets !== [])
                 <div>
                     <x-filament-widgets::widgets
