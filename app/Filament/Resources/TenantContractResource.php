@@ -852,13 +852,6 @@ class TenantContractResource extends BaseResource
         $accrualRowsHtml = static::renderContractFinanceAccrualRows($accruals['rows']);
         $paymentRowsHtml = static::renderContractFinancePaymentRows($payments['rows']);
 
-        $accrualLimitNote = $accruals['count'] > count($accruals['rows'])
-            ? '<div class="contract-finance-1c__note">Показаны последние ' . e((string) count($accruals['rows'])) . ' начислений из ' . e((string) $accruals['count']) . '.</div>'
-            : '';
-        $paymentLimitNote = $payments['count'] > count($payments['rows'])
-            ? '<div class="contract-finance-1c__note">Показаны последние ' . e((string) count($payments['rows'])) . ' оплат из ' . e((string) $payments['count']) . '.</div>'
-            : '';
-
         $emptyHint = $settlement['count'] === 0 && $accruals['count'] === 0 && $payments['count'] === 0
             ? '<div class="contract-finance-1c__empty">По этому договору пока нет строк ОСВ, начислений или оплат из 1С.</div>'
             : '';
@@ -917,7 +910,6 @@ class TenantContractResource extends BaseResource
                         <div class="contract-finance-1c__section-title">Начисления</div>
                         <div class="contract-finance-1c__section-meta">Всего: ' . e((string) $accruals['count']) . ' · сумма: ' . e(static::formatRubForContractCard((float) $accruals['sum'])) . '</div>
                     </div>
-                    ' . $accrualLimitNote . '
                     <div class="contract-finance-1c__table-wrap">
                         <table>
                             <thead><tr><th>Период</th><th>Документ</th><th>За что</th><th>Место из 1С</th><th class="contract-finance-1c__amount">Сумма</th><th>Импорт</th></tr></thead>
@@ -930,7 +922,6 @@ class TenantContractResource extends BaseResource
                         <div class="contract-finance-1c__section-title">Оплаты</div>
                         <div class="contract-finance-1c__section-meta">Всего: ' . e((string) $payments['count']) . ' · сумма: ' . e(static::formatRubForContractCard((float) $payments['sum'])) . '</div>
                     </div>
-                    ' . $paymentLimitNote . '
                     <div class="contract-finance-1c__table-wrap">
                         <table>
                             <thead><tr><th>Период</th><th>Дата</th><th>Документ</th><th>Назначение</th><th class="contract-finance-1c__amount">Сумма</th><th>Импорт</th></tr></thead>
@@ -1043,7 +1034,6 @@ class TenantContractResource extends BaseResource
             ->orderByDesc('ta.period')
             ->orderByDesc(static::hasTableColumn('tenant_accruals', 'document_date') ? 'ta.document_date' : 'ta.id')
             ->orderByDesc('ta.id')
-            ->limit(300)
             ->get();
 
         return ['count' => $count, 'sum' => $sum, 'rows' => $rows];
@@ -1076,7 +1066,6 @@ class TenantContractResource extends BaseResource
             ])
             ->orderByDesc('tp.payment_date')
             ->orderByDesc('tp.id')
-            ->limit(300)
             ->get();
 
         return ['count' => $count, 'sum' => $sum, 'rows' => $rows];
