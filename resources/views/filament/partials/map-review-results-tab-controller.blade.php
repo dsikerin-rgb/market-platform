@@ -270,8 +270,8 @@
         const activeTab = @json($activeReviewResultsTab);
         const tabItems = [
             { key: 'review', label: 'Ревизионные решения', url: @json(request()->fullUrlWithQuery(['tab' => 'review'])) },
-            { key: 'unconfirmed_links', label: 'Финансовая связь не подтверждена', url: @json(request()->fullUrlWithQuery(['tab' => 'unconfirmed_links'])) },
-            { key: 'unconfirmed_links_rejected', label: 'Отклонённые связи', url: @json(request()->fullUrlWithQuery(['tab' => 'unconfirmed_links_rejected'])) },
+            { key: 'unconfirmed_links', label: 'Уточнить финансовую связь', url: @json(request()->fullUrlWithQuery(['tab' => 'unconfirmed_links'])) },
+            { key: 'unconfirmed_links_rejected', label: 'Общий долг арендатора', url: @json(request()->fullUrlWithQuery(['tab' => 'unconfirmed_links_rejected'])) },
             { key: 'data_quality', label: 'Дубли арендаторов', url: @json(request()->fullUrlWithQuery(['tab' => 'data_quality'])) },
             { key: 'applied', label: 'Применено', url: @json(request()->fullUrlWithQuery(['tab' => 'applied'])) },
         ];
@@ -282,12 +282,12 @@
                 copy: 'Места со спорным или незавершённым ревизионным результатом.',
             },
             unconfirmed_links: {
-                title: 'Финансовая связь не подтверждена',
-                copy: 'Места, где долг найден по арендатору, но связь с конкретным местом требует ручного решения.',
+                title: 'Уточнить финансовую связь',
+                copy: 'Места, где долг арендатора виден на карте, но нужно уточнить: это долг конкретного места или общий долг арендатора.',
             },
             unconfirmed_links_rejected: {
-                title: 'Отклонённые финансовые связи',
-                copy: 'Решения, где оператор запретил применять общий долг арендатора к конкретному месту. Ошибочное решение можно вернуть в проверку.',
+                title: 'Общий долг арендатора',
+                copy: 'Решения, где долг оставлен как общий долг арендатора без точной привязки к конкретному месту. Долг остаётся видимым на карте как статус арендатора.',
             },
             data_quality: {
                 title: 'Возможные дубли арендаторов',

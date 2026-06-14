@@ -36,8 +36,8 @@ class MapReviewResultsService
             'changed_tenant' => 'Сменился арендатор',
             'conflict' => 'Конфликт',
             'not_found' => 'Не найдено на карте',
-            'unconfirmed_link' => 'Финансовая связь с местом не подтверждена',
-            'unconfirmed_link_rejected' => 'Финансовая связь отклонена',
+            'unconfirmed_link' => 'Нужно уточнить финансовую связь',
+            'unconfirmed_link_rejected' => 'Общий долг арендатора',
         ];
     }
 
@@ -406,7 +406,7 @@ class MapReviewResultsService
                 'created_at' => null,
                 'created_by_name' => 'Система',
                 'review_status' => 'unconfirmed_link',
-                'review_status_label' => $this->reviewStatusLabel('unconfirmed_link') ?? 'Финансовая связь с местом не подтверждена',
+                'review_status_label' => $this->reviewStatusLabel('unconfirmed_link') ?? 'Нужно уточнить финансовую связь',
                 'reviewed_at' => null,
                 'reviewed_by_name' => 'Система',
                 'decision' => null,
@@ -592,11 +592,11 @@ class MapReviewResultsService
                 'created_at' => $operation?->created_at?->format('d.m.Y H:i') ?? $reviewedAt,
                 'created_by_name' => $operation?->created_by ? (string) ($reviewers[(int) $operation->created_by] ?? '-') : ($reviewedByName ?? 'Система'),
                 'review_status' => 'unconfirmed_link_rejected',
-                'review_status_label' => $this->reviewStatusLabel('unconfirmed_link_rejected') ?? 'Финансовая связь отклонена',
+                'review_status_label' => $this->reviewStatusLabel('unconfirmed_link_rejected') ?? 'Общий долг арендатора',
                 'reviewed_at' => $reviewedAt,
                 'reviewed_by_name' => $reviewedByName,
                 'decision' => SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK,
-                'decision_label' => 'Отклонена оператором',
+                'decision_label' => 'Оставлено как общий долг арендатора',
                 'reason' => $reason,
                 'review_operation_id' => $operation?->id ? (int) $operation->id : null,
                 'review_created_by' => $operation?->created_by ? (int) $operation->created_by : null,
