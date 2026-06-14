@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\RestoreAdminFromImpersonation;
 use App\Models\CabinetImpersonationAudit;
 use App\Models\Market;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Cabinet\TenantImpersonationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Session\Store;
 use Spatie\Permission\Models\Role;
+use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Tests\TestCase;
 
 class CabinetImpersonationFeatureTest extends TestCase
@@ -94,6 +99,76 @@ class CabinetImpersonationFeatureTest extends TestCase
         $primary = User::query()->where('tenant_id', (int) $tenant->id)->orderBy('id')->first();
         $this->assertNotNull($primary);
         $this->assertTrue((bool) $primary?->hasAnyRole(['merchant', 'merchant-user']));
+    }
+
+    public function test_admin_livewire_request_restores_impersonator_during_tenant_impersonation(): void
+    {
+        $context = $this->createTenantWithCabinetUser();
+        $admin = $this->createUser(
+            marketId: (int) $context['market']->id,
+            role: 'super-admin',
+        );
+
+        $this->actingAs($context['cabinetUser'], 'web');
+
+        $request = Request::create('/livewire/update', 'POST', server: [
+            'HTTP_REFERER' => url('/admin/tenants/' . (int) $context['tenant']->id . '/edit'),
+        ]);
+        $session = new Store('test-session', new MockArraySessionStorage());
+        $session->start();
+        $session->put(TenantImpersonationService::SESSION_KEY, [
+            'impersonator_user_id' => (int) $admin->id,
+            'tenant_id' => (int) $context['tenant']->id,
+            'audit_id' => 1,
+            'admin_return_url' => url('/admin'),
+        ]);
+        $request->setLaravelSession($session);
+
+        $response = app(RestoreAdminFromImpersonation::class)->handle(
+            $request,
+            static fn (Request $request) => response()->json([
+                'user_id' => (int) $request->user()->id,
+                'email' => (string) $request->user()->email,
+            ]),
+        );
+
+        $payload = json_decode((string) $response->getContent(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertSame((int) $admin->id, (int) $payload['user_id']);
+        $this->assertSame((string) $admin->email, (string) $payload['email']);
+    }
+
+    public function test_admin_can_open_another_tenant_cabinet_while_already_impersonating(): void
+    {
+        $first = $this->createTenantWithCabinetUser();
+        $secondTenant = $this->createTenant($first['market'], 'Второй арендатор');
+        $secondCabinetUser = $this->createCabinetUserForTenant($secondTenant);
+        $admin = $this->createUser(
+            marketId: (int) $first['market']->id,
+            role: 'super-admin',
+        );
+
+        $this->actingAs($first['cabinetUser'], 'web');
+        $this->withSession([
+            TenantImpersonationService::SESSION_KEY => [
+                'impersonator_user_id' => (int) $admin->id,
+                'tenant_id' => (int) $first['tenant']->id,
+                'audit_id' => 1,
+                'admin_return_url' => url('/admin/tenants/' . (int) $first['tenant']->id . '/edit'),
+            ],
+        ]);
+
+        $response = $this->post(route('filament.admin.tenants.cabinet-impersonate', [
+            'tenant' => (int) $secondTenant->id,
+        ]));
+
+        $response->assertRedirect();
+        $impersonationUrl = (string) $response->headers->get('Location');
+
+        $this->get($impersonationUrl)
+            ->assertRedirect(route('cabinet.dashboard'));
+
+        $this->assertAuthenticatedAs($secondCabinetUser, 'web');
     }
 
     public function test_market_admin_cannot_impersonate_tenant_from_other_market(): void

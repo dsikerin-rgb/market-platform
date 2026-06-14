@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Cabinet\TenantImpersonationService;
+use App\Support\AdminPanelImpersonation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,8 +20,12 @@ class CabinetImpersonationController extends Controller
         string $token,
         TenantImpersonationService $service,
     ): RedirectResponse {
-        $impersonator = Auth::user();
-        abort_unless($impersonator instanceof User, 403, 'Для входа по ссылке требуется авторизация в админке.');
+        $impersonator = AdminPanelImpersonation::resolveAdminUser(Auth::user(), $request);
+        abort_unless(
+            $impersonator instanceof User && AdminPanelImpersonation::hasAdminPanelRole($impersonator),
+            403,
+            'Для входа по ссылке требуется авторизация в админке.'
+        );
 
         if (! $request->hasValidSignature()) {
             abort(403, 'Ссылка для входа недействительна или устарела.');
@@ -107,7 +112,7 @@ class CabinetImpersonationController extends Controller
 
         if (
             ! $impersonator
-            || ! $impersonator->hasAnyRole(['super-admin', 'market-admin'])
+            || ! AdminPanelImpersonation::hasAdminPanelRole($impersonator)
         ) {
             Auth::logout();
             $request->session()->invalidate();
@@ -130,4 +135,3 @@ class CabinetImpersonationController extends Controller
         return redirect()->to(url('/admin/tenants'));
     }
 }
-
