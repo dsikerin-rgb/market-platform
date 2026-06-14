@@ -191,7 +191,7 @@ class TenantContractResource extends BaseResource
                             ->columnSpanFull(),
                     ]),
 
-                Tab::make('Финансы 1С')
+                Tab::make('1С')
                     ->schema([
                         Section::make('Финансы по договору')
                             ->description('ОСВ, начисления и оплаты, которые 1С передала по этому договору.')
@@ -203,10 +203,7 @@ class TenantContractResource extends BaseResource
                             ])
                             ->columns(1)
                             ->columnSpanFull(),
-                    ]),
 
-                Tab::make('1С')
-                    ->schema([
                         Section::make('Документ из 1С')
                             ->description('Поля ниже приходят из 1С и доступны только для просмотра.')
                             ->schema([
