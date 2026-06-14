@@ -191,10 +191,10 @@ class TenantContractResource extends BaseResource
                             ->columnSpanFull(),
                     ]),
 
-                Tab::make('1С')
+                Tab::make('Финансы')
                     ->schema([
-                        Section::make('Финансы и движение')
-                            ->description('Сводка, начисления и оплаты, которые 1С передала по этому договору.')
+                        Section::make('Сводка')
+                            ->description('Итог по ОСВ, начисления и оплаты, которые 1С передала по этому договору.')
                             ->schema([
                                 Placeholder::make('contract_finance_1c')
                                     ->hiddenLabel()
@@ -623,7 +623,7 @@ class TenantContractResource extends BaseResource
                         </div>
                     </div>
                     <div>
-                        <div class="tenant-contract-card__eyebrow">Финансы и движение 1С</div>
+                        <div class="tenant-contract-card__eyebrow">Финансы</div>
                         <div class="tenant-contract-card__metrics">'.$metricsHtml.'</div>
                     </div>
                 </div>

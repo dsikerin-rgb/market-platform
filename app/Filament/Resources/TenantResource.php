@@ -205,8 +205,8 @@ class TenantResource extends BaseResource
 
                 Tab::make('Финансы')
                     ->schema([
-                        Section::make('Финансы 1С')
-                            ->description('Главный финансовый статус арендатора по ОСВ за выбранный период.')
+                        Section::make('Сводка')
+                            ->description('Итог по ОСВ, начисления и оплаты по арендатору за выбранный период.')
                             ->schema([
                                 Forms\Components\Placeholder::make('tenant_settlement_balances')
                                     ->hiddenLabel()
@@ -216,8 +216,8 @@ class TenantResource extends BaseResource
                             ])
                             ->columns(1),
 
-                        Section::make('Детализация движения')
-                            ->description('Начисления и оплаты остаются расшифровкой движения. Итоговый ответ по долгу смотрите в сводке выше.')
+                        Section::make('Движение')
+                            ->description('Расшифровка начислений и оплат. Итоговый ответ по долгу смотрите в сводке выше.')
                             ->schema([
                                 Forms\Components\Placeholder::make('finance_detail_links')
                                     ->hiddenLabel()
