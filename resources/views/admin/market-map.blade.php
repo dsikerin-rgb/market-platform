@@ -39,7 +39,9 @@
       background: #f8fafc;
     }
     .wrap {
-      padding: clamp(8px, 1vw, 16px);
+      --map-page-pad: clamp(8px, 1vw, 16px);
+      --map-layout-offset-top: clamp(8px, 0.8vw, 14px);
+      padding: var(--map-page-pad);
       width: 100%;
       max-width: none;
       margin: 0 auto;
@@ -49,11 +51,11 @@
       flex-direction: column;
     }
     .map-layout {
-      margin-top: clamp(8px, 0.8vw, 14px);
+      margin-top: var(--map-layout-offset-top);
       flex: 1 1 auto;
       min-height: 0;
-      height: calc(100dvh - clamp(24px, 2vw, 46px));
-      max-height: calc(100dvh - clamp(24px, 2vw, 46px));
+      height: calc(100dvh - var(--map-page-pad) - var(--map-page-pad) - var(--map-layout-offset-top));
+      max-height: calc(100dvh - var(--map-page-pad) - var(--map-page-pad) - var(--map-layout-offset-top));
       display: flex;
       flex-direction: column;
       gap: 8px;
