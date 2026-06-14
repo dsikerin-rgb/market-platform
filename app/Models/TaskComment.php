@@ -56,6 +56,14 @@ class TaskComment extends Model
                 $comment->body = trim($comment->body);
             }
         });
+
+        static::created(function (self $comment): void {
+            $task = $comment->task;
+
+            if ($task instanceof Task) {
+                $task->notifyCommentAdded($comment);
+            }
+        });
     }
 
     public function task(): BelongsTo

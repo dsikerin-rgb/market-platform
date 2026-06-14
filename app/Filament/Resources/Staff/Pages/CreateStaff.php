@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Staff\Pages;
 
 use App\Filament\Resources\Staff\StaffResource;
+use App\Notifications\StaffAddedNotification;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use App\Filament\Resources\Pages\BaseCreateRecord;
@@ -64,6 +65,14 @@ class CreateStaff extends BaseCreateRecord
         }
 
         return $data;
+    }
+
+    protected function afterCreate(): void
+    {
+        $actor = Filament::auth()->user();
+
+        $this->record->loadMissing('market');
+        $this->record->notify(new StaffAddedNotification($this->record, $actor));
     }
 
     private function normalizeNotificationPreferences(array $data): array

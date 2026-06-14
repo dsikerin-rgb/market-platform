@@ -7,8 +7,7 @@ namespace App\Support;
 use App\Models\StaffConversation;
 use App\Models\StaffConversationMessage;
 use App\Models\User;
-use Filament\Actions\Action;
-use Filament\Notifications\Notification;
+use App\Notifications\StaffMessageNotification;
 use Illuminate\Support\Facades\Schema;
 
 class StaffConversationService
@@ -29,8 +28,9 @@ class StaffConversationService
         $this->notifyRecipient(
             $recipient,
             'Новое сообщение от ' . ($author->name ?: 'сотрудника'),
-            $resolvedSubject,
-            $conversation
+            trim($body) !== '' ? trim($body) : $resolvedSubject,
+            $conversation,
+            $author,
         );
 
         return $conversation;
@@ -59,10 +59,13 @@ class StaffConversationService
                 $this->notifyRecipient(
                     $recipient,
                     'Новое сообщение от ' . ($author->name ?: 'сотрудника'),
-                    trim((string) $conversation->subject) !== ''
-                        ? trim((string) $conversation->subject)
-                        : 'Внутренний диалог',
-                    $conversation
+                    trim($body) !== ''
+                        ? trim($body)
+                        : (trim((string) $conversation->subject) !== ''
+                            ? trim((string) $conversation->subject)
+                            : 'Внутренний диалог'),
+                    $conversation,
+                    $author,
                 );
             }
         }
@@ -149,22 +152,8 @@ class StaffConversationService
         string $title,
         string $body,
         StaffConversation $conversation,
+        User $author,
     ): void {
-        $url = '/admin/requests?' . http_build_query([
-            'channel' => 'staff',
-            'conversation_id' => (int) $conversation->id,
-        ]);
-
-        $notification = Notification::make()
-            ->title($title)
-            ->body($body)
-            ->actions([
-                Action::make('open')
-                    ->label('Открыть')
-                    ->url($url)
-                    ->markAsRead(),
-            ]);
-
-        $notification->sendToDatabase($recipient);
+        $recipient->notify(new StaffMessageNotification($conversation, $author, $title, $body));
     }
 }

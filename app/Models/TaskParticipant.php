@@ -3,6 +3,7 @@
 
 namespace App\Models;
 
+use App\Notifications\TaskParticipantAssignedNotification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +21,19 @@ class TaskParticipant extends Model
         'role',
     ];
 
+    protected static function booted(): void
+    {
+        static::created(function (self $participant): void {
+            $participant->notifyAssigned();
+        });
+
+        static::updated(function (self $participant): void {
+            if ($participant->wasChanged('role')) {
+                $participant->notifyAssigned();
+            }
+        });
+    }
+
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
@@ -28,5 +42,23 @@ class TaskParticipant extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    private function notifyAssigned(): void
+    {
+        $actorId = auth()->check() ? (int) auth()->id() : 0;
+        $userId = (int) ($this->user_id ?? 0);
+
+        if ($userId <= 0 || ($actorId > 0 && $actorId === $userId)) {
+            return;
+        }
+
+        $this->loadMissing('task', 'user');
+
+        if (! $this->task instanceof Task || ! $this->user instanceof User) {
+            return;
+        }
+
+        $this->user->notify(new TaskParticipantAssignedNotification($this->task, (string) $this->role));
     }
 }

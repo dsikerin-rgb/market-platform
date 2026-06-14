@@ -7,7 +7,7 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Models\Task;
-use App\Support\NotificationChannelResolver;
+use App\Support\NotificationChannelDefaults;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Bus\Queueable;
@@ -25,7 +25,7 @@ class TaskAssignedNotification extends LaravelNotification implements ShouldQueu
 
     public function via(object $notifiable): array
     {
-        return app(NotificationChannelResolver::class)->resolve(
+        return app(NotificationChannelDefaults::class)->resolveWithMailDefault(
             $notifiable,
             'tasks',
             (int) $this->task->market_id,
