@@ -25,9 +25,7 @@ class RestoreAdminFromImpersonation
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $path = (string) $request->path();
-
-        if ($path !== 'admin' && ! str_starts_with($path, 'admin/')) {
+        if (! $this->isAdminContext($request)) {
             return $next($request);
         }
 
@@ -60,5 +58,22 @@ class RestoreAdminFromImpersonation
         $request->setUserResolver(static fn (): User => $impersonator);
 
         return $next($request);
+    }
+
+    private function isAdminContext(Request $request): bool
+    {
+        $path = (string) $request->path();
+
+        if ($path === 'admin' || str_starts_with($path, 'admin/')) {
+            return true;
+        }
+
+        if ($path !== 'livewire/update' && ! str_starts_with($path, 'livewire/')) {
+            return false;
+        }
+
+        $referer = (string) $request->headers->get('referer', '');
+
+        return str_contains($referer, '/admin');
     }
 }
