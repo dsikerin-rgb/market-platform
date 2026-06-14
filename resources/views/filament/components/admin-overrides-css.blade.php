@@ -9,22 +9,6 @@
 @include('filament.partials.admin-workspace-styles')
 
 <style>
-/* === Маркер: можно выключить, поставив data-admin-overrides="0" на <html> === */
-html:not([data-admin-overrides="0"])::before{
-  content:"admin-overrides-css ✅";
-  position:fixed;
-  right:12px;
-  bottom:12px;
-  z-index:999999;
-  padding:4px 8px;
-  font:12px/1.2 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-  background:#111;
-  color:#fff;
-  border-radius:8px;
-  opacity:.85;
-  pointer-events:none;
-}
-
 /* ====================================================================== */
 /* === Dashboard: фикс фильтра "Период (месяц)" (вертикальные цифры)     === */
 /* ====================================================================== */

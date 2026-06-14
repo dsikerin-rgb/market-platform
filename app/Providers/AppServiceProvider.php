@@ -10,6 +10,8 @@ use App\Http\Controllers\Admin\TenantDuplicateIgnoreController;
 use App\Http\Controllers\Admin\TenantDuplicateRestoreController;
 use App\Http\Controllers\Admin\TenantMergePreflightController;
 use App\Listeners\NotifySuperAdminsAboutUserLogin;
+use App\Livewire\Admin\OnlineStaffRail;
+use App\Livewire\Admin\StaffLiveFeed;
 use App\Models\IntegrationExchange;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceTenantBinding;
@@ -49,6 +51,10 @@ class AppServiceProvider extends ServiceProvider
         MarketSpaceTenantBinding::observe(MarketSpaceTenantBindingSharedUseObserver::class);
 
         Event::listen(Login::class, NotifySuperAdminsAboutUserLogin::class);
+
+        app('livewire')->component('admin.online-staff-rail', OnlineStaffRail::class);
+        app('livewire')->component('admin.staff-live-feed', StaffLiveFeed::class);
+
 
         Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])
             ->post('/admin/tenant-merge/preflight', TenantMergePreflightController::class)

@@ -69,6 +69,7 @@ class User extends Authenticatable implements FilamentUser
             'telegram_profile' => 'array',
             'telegram_linked_at' => 'datetime',
             'notification_preferences' => 'array',
+            'last_seen_at' => 'datetime',
         ];
     }
 
