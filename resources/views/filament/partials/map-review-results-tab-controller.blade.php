@@ -5,7 +5,7 @@
     use Filament\Facades\Filament;
     use Livewire\Livewire;
 
-    $activeReviewResultsTab = in_array(request()->query('tab', 'review'), ['review', 'unconfirmed_links', 'data_quality', 'applied'], true)
+    $activeReviewResultsTab = in_array(request()->query('tab', 'review'), ['review', 'unconfirmed_links', 'unconfirmed_links_rejected', 'data_quality', 'applied'], true)
         ? request()->query('tab', 'review')
         : 'review';
 
@@ -90,7 +90,7 @@
     @include('filament.partials.tenant-merge-confirmation-wording')
 @endif
 
-@if (in_array($activeReviewResultsTab, ['review', 'unconfirmed_links'], true))
+@if (in_array($activeReviewResultsTab, ['review', 'unconfirmed_links', 'unconfirmed_links_rejected'], true))
     @include('filament.partials.map-review-card-tenant-context')
 @endif
 
@@ -271,6 +271,7 @@
         const tabItems = [
             { key: 'review', label: 'Ревизионные решения', url: @json(request()->fullUrlWithQuery(['tab' => 'review'])) },
             { key: 'unconfirmed_links', label: 'Финансовая связь не подтверждена', url: @json(request()->fullUrlWithQuery(['tab' => 'unconfirmed_links'])) },
+            { key: 'unconfirmed_links_rejected', label: 'Отклонённые связи', url: @json(request()->fullUrlWithQuery(['tab' => 'unconfirmed_links_rejected'])) },
             { key: 'data_quality', label: 'Дубли арендаторов', url: @json(request()->fullUrlWithQuery(['tab' => 'data_quality'])) },
             { key: 'applied', label: 'Применено', url: @json(request()->fullUrlWithQuery(['tab' => 'applied'])) },
         ];
@@ -281,8 +282,12 @@
                 copy: 'Места со спорным или незавершённым ревизионным результатом.',
             },
             unconfirmed_links: {
-                title: 'Нужно уточнить',
-                copy: 'Места на карте, где статус взят по арендатору, но финансовая связь с местом не подтверждена.',
+                title: 'Финансовая связь не подтверждена',
+                copy: 'Места, где долг найден по арендатору, но связь с конкретным местом требует ручного решения.',
+            },
+            unconfirmed_links_rejected: {
+                title: 'Отклонённые финансовые связи',
+                copy: 'Решения, где оператор запретил применять общий долг арендатора к конкретному месту. Ошибочное решение можно вернуть в проверку.',
             },
             data_quality: {
                 title: 'Возможные дубли арендаторов',
