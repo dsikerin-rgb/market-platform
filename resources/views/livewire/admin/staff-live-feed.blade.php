@@ -26,6 +26,14 @@
             default => 'ответов',
         };
     };
+
+    $avatarUrl = static function ($user): ?string {
+        return $user instanceof \App\Models\User ? $user->staffAvatarUrl() : null;
+    };
+
+    $avatarColor = static function ($user): string {
+        return $user instanceof \App\Models\User ? $user->staffAvatarColor() : '#2563eb';
+    };
 @endphp
 
 <section class="staff-live-feed" wire:poll.30s>
@@ -310,21 +318,31 @@
         }
 
         .staff-live-feed__avatar {
+            --staff-avatar-color: #2563eb;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             width: 2.65rem;
             height: 2.65rem;
+            overflow: hidden;
             border-radius: 999px;
-            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
-            color: #1e3a8a;
+            background: linear-gradient(180deg, color-mix(in srgb, var(--staff-avatar-color) 16%, #ffffff) 0%, color-mix(in srgb, var(--staff-avatar-color) 30%, #ffffff) 100%);
+            color: var(--staff-avatar-color);
             font-size: 0.8rem;
             font-weight: 800;
         }
 
         html.dark .staff-live-feed__avatar {
-            background: linear-gradient(180deg, rgba(30, 64, 175, 0.9), rgba(15, 23, 42, 0.92));
-            color: #dbeafe;
+            background: linear-gradient(180deg, color-mix(in srgb, var(--staff-avatar-color) 50%, #0f172a) 0%, #0f172a 100%);
+            color: #ffffff;
+        }
+
+        .staff-live-feed__avatar-image,
+        .staff-live-feed__comment-avatar-image {
+            width: 100%;
+            height: 100%;
+            border-radius: inherit;
+            object-fit: cover;
         }
 
         .staff-live-feed__meta {
@@ -400,21 +418,23 @@
         }
 
         .staff-live-feed__comment-avatar {
+            --staff-avatar-color: #0284c7;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             width: 2rem;
             height: 2rem;
+            overflow: hidden;
             border-radius: 999px;
-            background: #e0f2fe;
-            color: #075985;
+            background: color-mix(in srgb, var(--staff-avatar-color) 14%, #ffffff);
+            color: var(--staff-avatar-color);
             font-size: 0.68rem;
             font-weight: 900;
         }
 
         html.dark .staff-live-feed__comment-avatar {
-            background: rgba(14, 165, 233, 0.14);
-            color: #bae6fd;
+            background: color-mix(in srgb, var(--staff-avatar-color) 34%, #0f172a);
+            color: #ffffff;
         }
 
         .staff-live-feed__comment-card {
@@ -666,7 +686,7 @@
 
             <div class="staff-live-feed__actions">
                 <div class="staff-live-feed__tools">
-                    <label class="staff-live-feed__file-label">
+                    <label class="staff-live-feed__file-label" title="До 5 файлов, до 20 МБ каждый. Хранение в облаке.">
                         <x-filament::icon icon="heroicon-o-paper-clip" class="h-4 w-4" />
                         Вложить файл
                         <input
@@ -676,8 +696,6 @@
                             multiple
                         >
                     </label>
-
-                    <div class="staff-live-feed__hint">До 5 файлов, до 20 МБ каждый. Хранение в облаке.</div>
                 </div>
 
                 <div class="staff-live-feed__tools">
@@ -700,7 +718,17 @@
             @endphp
 
             <article class="staff-live-feed__post" wire:key="staff-feed-post-{{ $post->id }}">
-                <div class="staff-live-feed__avatar">{{ $initials($post->author?->name) }}</div>
+                @php
+                    $postAuthorAvatarUrl = $avatarUrl($post->author);
+                @endphp
+
+                <div class="staff-live-feed__avatar" style="--staff-avatar-color: {{ $avatarColor($post->author) }}">
+                    @if ($postAuthorAvatarUrl)
+                        <img class="staff-live-feed__avatar-image" src="{{ $postAuthorAvatarUrl }}" alt="{{ $post->author?->name ?? 'Сотрудник' }}" loading="lazy">
+                    @else
+                        {{ $initials($post->author?->name) }}
+                    @endif
+                </div>
 
                 <div>
                     <div class="staff-live-feed__meta">
@@ -764,7 +792,17 @@
 
                                 @foreach ($postComments as $comment)
                                     <div class="staff-live-feed__comment" wire:key="staff-feed-comment-{{ $comment->id }}">
-                                        <div class="staff-live-feed__comment-avatar">{{ $initials($comment->author?->name) }}</div>
+                                        @php
+                                            $commentAuthorAvatarUrl = $avatarUrl($comment->author);
+                                        @endphp
+
+                                        <div class="staff-live-feed__comment-avatar" style="--staff-avatar-color: {{ $avatarColor($comment->author) }}">
+                                            @if ($commentAuthorAvatarUrl)
+                                                <img class="staff-live-feed__comment-avatar-image" src="{{ $commentAuthorAvatarUrl }}" alt="{{ $comment->author?->name ?? 'Сотрудник' }}" loading="lazy">
+                                            @else
+                                                {{ $initials($comment->author?->name) }}
+                                            @endif
+                                        </div>
 
                                         <div class="staff-live-feed__comment-card">
                                             <div class="staff-live-feed__comment-meta">

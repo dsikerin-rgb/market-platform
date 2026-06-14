@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin;
 
+use App\Models\StaffConversationMessage;
 use App\Models\User;
 use App\Support\StaffConversationService;
 use App\Support\SystemAgentService;
@@ -9,6 +10,7 @@ use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 
@@ -24,10 +26,11 @@ class OnlineStaffRail extends Component
             'onlineStaff' => $this->onlineStaff(),
             'offlineStaff' => $this->offlineStaff(),
             'selectedStaff' => $this->selectedStaff(),
+            'selectedStaffUnreadMessages' => $this->selectedStaffUnreadMessages(),
         ]);
     }
 
-    private function onlineStaff()
+    private function onlineStaff(): Collection
     {
         if (! Schema::hasColumn('users', 'last_seen_at')) {
             return collect();
@@ -39,16 +42,18 @@ class OnlineStaffRail extends Component
             return collect();
         }
 
-        return $this->staffBaseQuery($this->resolveMarketId(), $user)
+        $staff = $this->staffBaseQuery($this->resolveMarketId(), $user)
             ->whereNotNull('last_seen_at')
             ->where('last_seen_at', '>=', now()->subMinutes(5))
             ->orderByRaw('CASE WHEN id = ? THEN 0 ELSE 1 END', [(int) $user->id])
             ->orderByDesc('last_seen_at')
             ->limit(12)
             ->get();
+
+        return $this->attachUnreadCounts($staff, $user);
     }
 
-    private function offlineStaff()
+    private function offlineStaff(): Collection
     {
         if (! Schema::hasColumn('users', 'last_seen_at')) {
             return collect();
@@ -62,7 +67,7 @@ class OnlineStaffRail extends Component
 
         $marketId = $this->resolveMarketId();
 
-        return $this->staffBaseQuery($marketId, $user)
+        $staff = $this->staffBaseQuery($marketId, $user)
             ->where(function (Builder $query): void {
                 $query
                     ->whereNull('last_seen_at')
@@ -72,6 +77,8 @@ class OnlineStaffRail extends Component
             ->orderBy('name')
             ->limit(10)
             ->get();
+
+        return $this->attachUnreadCounts($staff, $user);
     }
 
     public function openStaffModal(int $userId): void
@@ -85,6 +92,18 @@ class OnlineStaffRail extends Component
         $this->selectedStaffId = null;
         $this->messageBody = '';
         $this->resetErrorBag('messageBody');
+    }
+
+    public function markSelectedStaffMessagesRead(StaffConversationService $service): void
+    {
+        $user = Filament::auth()->user();
+        $staff = $this->selectedStaff();
+
+        if (! $user || ! $staff) {
+            return;
+        }
+
+        $service->markIncomingFromStaffRead($user, $staff);
     }
 
     public function sendStaffMessage(StaffConversationService $service): void
@@ -138,7 +157,6 @@ class OnlineStaffRail extends Component
     private function staffBaseQuery(int $marketId, User $user): Builder
     {
         $query = User::query()
-            ->select(['id', 'name', 'email', 'market_id', 'last_seen_at'])
             ->where(function (Builder $query): void {
                 $query
                     ->whereNull('tenant_id')
@@ -168,6 +186,79 @@ class OnlineStaffRail extends Component
         }
 
         return $query->where('market_id', $marketId);
+    }
+
+    private function attachUnreadCounts(Collection $staff, User $user): Collection
+    {
+        if ($staff->isEmpty() || ! $this->canReadMessageState()) {
+            return $staff;
+        }
+
+        $counts = $this->unreadCountsBySender($user);
+
+        return $staff->map(function (User $person) use ($counts): User {
+            $person->setAttribute('unread_staff_messages_count', (int) ($counts[(int) $person->id] ?? 0));
+
+            return $person;
+        });
+    }
+
+    private function unreadCountsBySender(User $user): Collection
+    {
+        if (! $this->canReadMessageState()) {
+            return collect();
+        }
+
+        return StaffConversationMessage::query()
+            ->selectRaw('staff_conversation_messages.user_id as sender_user_id, COUNT(*) as unread_count')
+            ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+            ->whereNull('staff_conversation_messages.read_at')
+            ->where('staff_conversation_messages.user_id', '<>', (int) $user->id)
+            ->where(function ($query) use ($user): void {
+                $query
+                    ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                    ->orWhere('staff_conversations.recipient_user_id', (int) $user->id);
+            })
+            ->groupBy('staff_conversation_messages.user_id')
+            ->pluck('unread_count', 'sender_user_id')
+            ->mapWithKeys(static fn ($count, $userId): array => [(int) $userId => (int) $count]);
+    }
+
+    private function selectedStaffUnreadMessages(): Collection
+    {
+        $user = Filament::auth()->user();
+        $staff = $this->selectedStaff();
+
+        if (! $user || ! $staff || ! $this->canReadMessageState()) {
+            return collect();
+        }
+
+        return StaffConversationMessage::query()
+            ->select(['staff_conversation_messages.id', 'staff_conversation_messages.staff_conversation_id', 'staff_conversation_messages.user_id', 'staff_conversation_messages.body', 'staff_conversation_messages.created_at'])
+            ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+            ->whereNull('staff_conversation_messages.read_at')
+            ->where('staff_conversation_messages.user_id', (int) $staff->id)
+            ->where(function ($query) use ($user, $staff): void {
+                $query->where(function ($pair) use ($user, $staff): void {
+                    $pair
+                        ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                        ->where('staff_conversations.recipient_user_id', (int) $staff->id);
+                })->orWhere(function ($pair) use ($user, $staff): void {
+                    $pair
+                        ->where('staff_conversations.created_by_user_id', (int) $staff->id)
+                        ->where('staff_conversations.recipient_user_id', (int) $user->id);
+                });
+            })
+            ->orderByDesc('staff_conversation_messages.created_at')
+            ->limit(3)
+            ->get();
+    }
+
+    private function canReadMessageState(): bool
+    {
+        return Schema::hasTable('staff_conversations')
+            && Schema::hasTable('staff_conversation_messages')
+            && Schema::hasColumn('staff_conversation_messages', 'read_at');
     }
 
     private function resolveMarketId(): int

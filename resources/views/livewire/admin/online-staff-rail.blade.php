@@ -25,6 +25,14 @@
             return 'неизвестно';
         }
     };
+
+    $avatarUrl = static function ($user): ?string {
+        return $user instanceof \App\Models\User ? $user->staffAvatarUrl() : null;
+    };
+
+    $avatarColor = static function ($user): string {
+        return $user instanceof \App\Models\User ? $user->staffAvatarColor() : '#2563eb';
+    };
 @endphp
 
 <div class="staff-presence" wire:poll.30s aria-label="Сотрудники">
@@ -88,16 +96,18 @@
         }
 
         .staff-presence__avatar {
+            --staff-avatar-color: #2563eb;
             position: relative;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             width: 2.45rem;
             height: 2.45rem;
-            border: 1px solid rgba(37, 99, 235, 0.18);
+            overflow: visible;
+            border: 1px solid color-mix(in srgb, var(--staff-avatar-color) 24%, transparent);
             border-radius: 999px;
-            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
-            color: #1e3a8a;
+            background: linear-gradient(180deg, color-mix(in srgb, var(--staff-avatar-color) 16%, #ffffff) 0%, color-mix(in srgb, var(--staff-avatar-color) 30%, #ffffff) 100%);
+            color: var(--staff-avatar-color);
             font-size: 0.78rem;
             font-weight: 800;
             letter-spacing: 0;
@@ -114,9 +124,17 @@
         }
 
         html.dark .staff-presence__avatar {
-            border-color: rgba(96, 165, 250, 0.24);
-            background: linear-gradient(180deg, rgba(30, 64, 175, 0.9), rgba(15, 23, 42, 0.92));
-            color: #dbeafe;
+            border-color: color-mix(in srgb, var(--staff-avatar-color) 36%, transparent);
+            background: linear-gradient(180deg, color-mix(in srgb, var(--staff-avatar-color) 50%, #0f172a) 0%, #0f172a 100%);
+            color: #ffffff;
+        }
+
+        .staff-presence__avatar-image,
+        .staff-presence__card-avatar-image {
+            width: 100%;
+            height: 100%;
+            border-radius: inherit;
+            object-fit: cover;
         }
 
         .staff-presence__avatar::after {
@@ -137,6 +155,30 @@
             color: #64748b;
             opacity: 0.72;
             filter: saturate(0.65);
+        }
+
+        .staff-presence__unread-badge {
+            position: absolute;
+            top: -0.25rem;
+            right: -0.25rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 1.05rem;
+            height: 1.05rem;
+            padding: 0 0.22rem;
+            border: 2px solid #fff;
+            border-radius: 999px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 0.62rem;
+            font-weight: 900;
+            line-height: 1;
+            box-shadow: 0 8px 16px rgba(239, 68, 68, 0.28);
+        }
+
+        html.dark .staff-presence__unread-badge {
+            border-color: #0f172a;
         }
 
         .staff-presence__avatar--offline::after {
@@ -197,16 +239,23 @@
         }
 
         .staff-presence__card-avatar {
+            --staff-avatar-color: #2563eb;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             width: 3rem;
             height: 3rem;
+            overflow: hidden;
             border-radius: 999px;
-            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
-            color: #1e3a8a;
+            background: linear-gradient(180deg, color-mix(in srgb, var(--staff-avatar-color) 16%, #ffffff) 0%, color-mix(in srgb, var(--staff-avatar-color) 30%, #ffffff) 100%);
+            color: var(--staff-avatar-color);
             font-weight: 800;
             flex-shrink: 0;
+        }
+
+        html.dark .staff-presence__card-avatar {
+            background: linear-gradient(180deg, color-mix(in srgb, var(--staff-avatar-color) 50%, #0f172a) 0%, #0f172a 100%);
+            color: #ffffff;
         }
 
         .staff-presence__card-title {
@@ -291,6 +340,59 @@
             color: #e2e8f0;
         }
 
+        .staff-presence__unread-panel {
+            display: grid;
+            gap: 0.65rem;
+            padding: 0.85rem;
+            border: 1px solid rgba(239, 68, 68, 0.22);
+            border-radius: 0.95rem;
+            background: #fff7f7;
+        }
+
+        html.dark .staff-presence__unread-panel {
+            border-color: rgba(248, 113, 113, 0.22);
+            background: rgba(127, 29, 29, 0.18);
+        }
+
+        .staff-presence__unread-title {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            color: #b91c1c;
+            font-size: 0.82rem;
+            font-weight: 900;
+        }
+
+        html.dark .staff-presence__unread-title {
+            color: #fecaca;
+        }
+
+        .staff-presence__unread-list {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .staff-presence__unread-item {
+            color: #334155;
+            font-size: 0.83rem;
+            line-height: 1.45;
+            overflow-wrap: anywhere;
+        }
+
+        html.dark .staff-presence__unread-item {
+            color: #e2e8f0;
+        }
+
+        .staff-presence__unread-time {
+            color: #64748b;
+            font-size: 0.74rem;
+            font-weight: 700;
+        }
+
+        html.dark .staff-presence__unread-time {
+            color: #fca5a5;
+        }
+
         .staff-presence__textarea {
             width: 100%;
             min-height: 5.5rem;
@@ -370,13 +472,27 @@
         </div>
 
         @forelse ($onlineStaff as $person)
+            @php
+                $personAvatarUrl = $avatarUrl($person);
+                $unreadCount = (int) ($person->unread_staff_messages_count ?? 0);
+            @endphp
+
             <button
                 type="button"
                 class="staff-presence__avatar"
                 title="{{ $person->name }} · онлайн"
+                style="--staff-avatar-color: {{ $avatarColor($person) }}"
                 wire:click="openStaffModal({{ (int) $person->id }})"
             >
-                {{ $initials($person->name) }}
+                @if ($personAvatarUrl)
+                    <img class="staff-presence__avatar-image" src="{{ $personAvatarUrl }}" alt="{{ $person->name }}" loading="lazy">
+                @else
+                    {{ $initials($person->name) }}
+                @endif
+
+                @if ($unreadCount > 0)
+                    <span class="staff-presence__unread-badge">{{ $unreadCount > 9 ? '9+' : $unreadCount }}</span>
+                @endif
             </button>
         @empty
             <div class="staff-presence__empty">нет онлайн</div>
@@ -389,13 +505,27 @@
         </div>
 
         @forelse ($offlineStaff as $person)
+            @php
+                $personAvatarUrl = $avatarUrl($person);
+                $unreadCount = (int) ($person->unread_staff_messages_count ?? 0);
+            @endphp
+
             <button
                 type="button"
                 class="staff-presence__avatar staff-presence__avatar--offline"
                 title="{{ $person->name }} · офлайн"
+                style="--staff-avatar-color: {{ $avatarColor($person) }}"
                 wire:click="openStaffModal({{ (int) $person->id }})"
             >
-                {{ $initials($person->name) }}
+                @if ($personAvatarUrl)
+                    <img class="staff-presence__avatar-image" src="{{ $personAvatarUrl }}" alt="{{ $person->name }}" loading="lazy">
+                @else
+                    {{ $initials($person->name) }}
+                @endif
+
+                @if ($unreadCount > 0)
+                    <span class="staff-presence__unread-badge">{{ $unreadCount > 9 ? '9+' : $unreadCount }}</span>
+                @endif
             </button>
         @empty
             <div class="staff-presence__empty">нет офлайн</div>
@@ -403,10 +533,27 @@
     </div>
 
     @if ($selectedStaff)
+        @php
+            $selectedAvatarUrl = $avatarUrl($selectedStaff);
+            $firstUnreadConversationId = (int) ($selectedStaffUnreadMessages->first()?->staff_conversation_id ?? 0);
+            $conversationUrl = $firstUnreadConversationId > 0
+                ? url('/admin/requests?' . http_build_query([
+                    'channel' => 'staff',
+                    'conversation_id' => $firstUnreadConversationId,
+                ]))
+                : null;
+        @endphp
+
         <div class="staff-presence__modal" wire:click.self="closeStaffModal">
             <div class="staff-presence__card" role="dialog" aria-modal="true">
                 <div class="staff-presence__card-head">
-                    <div class="staff-presence__card-avatar">{{ $initials($selectedStaff->name) }}</div>
+                    <div class="staff-presence__card-avatar" style="--staff-avatar-color: {{ $avatarColor($selectedStaff) }}">
+                        @if ($selectedAvatarUrl)
+                            <img class="staff-presence__card-avatar-image" src="{{ $selectedAvatarUrl }}" alt="{{ $selectedStaff->name }}" loading="lazy">
+                        @else
+                            {{ $initials($selectedStaff->name) }}
+                        @endif
+                    </div>
 
                     <div>
                         <h3 class="staff-presence__card-title">{{ $selectedStaff->name }}</h3>
@@ -421,6 +568,36 @@
                 </div>
 
                 <div class="staff-presence__card-body">
+                    @if ($selectedStaffUnreadMessages->isNotEmpty())
+                        <div class="staff-presence__unread-panel">
+                            <div class="staff-presence__unread-title">
+                                <x-filament::icon icon="heroicon-o-bell-alert" class="h-4 w-4" />
+                                Новые сообщения
+                            </div>
+
+                            <div class="staff-presence__unread-list">
+                                @foreach ($selectedStaffUnreadMessages as $message)
+                                    <div class="staff-presence__unread-item" wire:key="staff-unread-message-{{ $message->id }}">
+                                        <div class="staff-presence__unread-time">{{ $message->created_at?->timezone(config('app.timezone'))->format('d.m.Y H:i') }}</div>
+                                        {{ \Illuminate\Support\Str::limit(trim((string) $message->body), 180) }}
+                                    </div>
+                                @endforeach
+                            </div>
+
+                            <div class="staff-presence__actions">
+                                @if ($conversationUrl)
+                                    <a class="staff-presence__button staff-presence__button--ghost" href="{{ $conversationUrl }}">
+                                        Открыть переписку
+                                    </a>
+                                @endif
+
+                                <button type="button" class="staff-presence__button" wire:click="markSelectedStaffMessagesRead">
+                                    Отметить прочитанным
+                                </button>
+                            </div>
+                        </div>
+                    @endif
+
                     <div class="staff-presence__facts">
                         <div class="staff-presence__fact">
                             <div class="staff-presence__fact-label">Email</div>

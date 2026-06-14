@@ -331,6 +331,10 @@
             }
 
             if ($selectedConversation) {
+                if ($user) {
+                    app(\App\Support\StaffConversationService::class)->markConversationRead($selectedConversation, $user);
+                }
+
                 $conversationMessages = \App\Models\StaffConversationMessage::query()
                     ->where('staff_conversation_id', (int) $selectedConversation->id)
                     ->with('user:id,name')

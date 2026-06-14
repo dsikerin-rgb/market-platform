@@ -9,6 +9,7 @@ use App\Models\StaffConversationMessage;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Schema;
 
 class StaffConversationService
 {
@@ -27,7 +28,7 @@ class StaffConversationService
         $this->addMessage($conversation, $author, $body, notifyRecipient: false);
         $this->notifyRecipient(
             $recipient,
-            'Новое сообщение от сотрудника',
+            'Новое сообщение от ' . ($author->name ?: 'сотрудника'),
             $resolvedSubject,
             $conversation
         );
@@ -57,7 +58,7 @@ class StaffConversationService
             if ($recipient instanceof User) {
                 $this->notifyRecipient(
                     $recipient,
-                    'Новое сообщение от сотрудника',
+                    'Новое сообщение от ' . ($author->name ?: 'сотрудника'),
                     trim((string) $conversation->subject) !== ''
                         ? trim((string) $conversation->subject)
                         : 'Внутренний диалог',
@@ -79,6 +80,42 @@ class StaffConversationService
             (int) ($conversation->created_by_user_id ?? 0),
             (int) ($conversation->recipient_user_id ?? 0),
         ], true);
+    }
+
+    public function markConversationRead(StaffConversation $conversation, User $reader): void
+    {
+        if (! Schema::hasColumn('staff_conversation_messages', 'read_at')) {
+            return;
+        }
+
+        StaffConversationMessage::query()
+            ->where('staff_conversation_id', (int) $conversation->id)
+            ->where('user_id', '<>', (int) $reader->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+    }
+
+    public function markIncomingFromStaffRead(User $reader, User $staff): void
+    {
+        if (! Schema::hasColumn('staff_conversation_messages', 'read_at')) {
+            return;
+        }
+
+        StaffConversationMessage::query()
+            ->where('user_id', (int) $staff->id)
+            ->whereNull('read_at')
+            ->whereHas('conversation', function ($query) use ($reader, $staff): void {
+                $query->where(function ($pair) use ($reader, $staff): void {
+                    $pair
+                        ->where('created_by_user_id', (int) $reader->id)
+                        ->where('recipient_user_id', (int) $staff->id);
+                })->orWhere(function ($pair) use ($reader, $staff): void {
+                    $pair
+                        ->where('created_by_user_id', (int) $staff->id)
+                        ->where('recipient_user_id', (int) $reader->id);
+                });
+            })
+            ->update(['read_at' => now()]);
     }
 
     private function resolveCounterparty(StaffConversation $conversation, User $author): ?User
