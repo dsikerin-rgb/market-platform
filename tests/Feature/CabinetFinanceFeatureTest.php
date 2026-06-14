@@ -152,6 +152,101 @@ class CabinetFinanceFeatureTest extends TestCase
             ->assertDontSee('Старый закрытый документ');
     }
 
+    public function test_merchant_sees_own_payment_by_1c_period_even_when_bank_date_is_next_month(): void
+    {
+        [$market, $tenant] = $this->createTenantContext();
+        $merchant = $this->createCabinetUser((int) $market->id, (int) $tenant->id, 'merchant');
+
+        $contractWithoutSpace = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => null,
+            'number' => 'NO-SPACE/2026',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'monthly_rent' => 12000,
+            'currency' => 'RUB',
+            'is_active' => true,
+        ]);
+
+        TenantPayment::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'tenant_contract_id' => (int) $contractWithoutSpace->id,
+            'tenant_external_id' => 'tenant-1c',
+            'contract_external_id' => 'contract-without-space-1c',
+            'payment_external_id' => 'payment-cross-month-1c',
+            'document_number' => '77',
+            'payment_date' => '2026-07-02',
+            'period' => '2026-06-01',
+            'organization_name' => 'Eco Market',
+            'account' => '51',
+            'amount' => 12000,
+            'purpose' => 'June rent paid in July bank document',
+            'source_row_hash' => hash('sha256', 'payment-cross-month-row'),
+        ]);
+
+        $this->actingAs($merchant, 'web');
+
+        $this->get(route('cabinet.payments', ['month' => '2026-06']))
+            ->assertOk()
+            ->assertSee('12 000,00', false)
+            ->assertSee('June rent paid in July bank document')
+            ->assertSee('NO-SPACE/2026');
+    }
+
+    public function test_merchant_user_does_not_see_payment_for_unassigned_space(): void
+    {
+        [$market, $tenant, $spaceA] = $this->createTenantContext();
+        $merchantUser = $this->createCabinetUser((int) $market->id, (int) $tenant->id, 'merchant-user');
+
+        $spaceB = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'number' => 'P2',
+            'display_name' => 'Second pavilion',
+            'is_active' => true,
+        ]);
+
+        $contractB = TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $spaceB->id,
+            'number' => 'P2/2026',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'monthly_rent' => 15000,
+            'currency' => 'RUB',
+            'is_active' => true,
+        ]);
+
+        $merchantUser->tenantSpaces()->sync([(int) $spaceA->id]);
+
+        TenantPayment::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'tenant_contract_id' => (int) $contractB->id,
+            'tenant_external_id' => 'tenant-1c',
+            'contract_external_id' => 'contract-space-b-1c',
+            'payment_external_id' => 'payment-space-b-1c',
+            'document_number' => '88',
+            'payment_date' => '2026-06-10',
+            'period' => '2026-06-01',
+            'organization_name' => 'Eco Market',
+            'account' => '51',
+            'amount' => 15000,
+            'purpose' => 'Payment for another space',
+            'source_row_hash' => hash('sha256', 'payment-space-b-row'),
+        ]);
+
+        $this->actingAs($merchantUser, 'web');
+
+        $this->get(route('cabinet.payments', ['month' => '2026-06']))
+            ->assertOk()
+            ->assertDontSee('Payment for another space')
+            ->assertDontSee('P2/2026');
+    }
+
     private function createTenantContext(): array
     {
         $market = Market::query()->create([
