@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin;
 
 use App\Models\StaffFeedPost;
+use App\Models\StaffConversationMessage;
 use App\Models\User;
 use App\Support\MarketplaceMediaStorage;
 use Filament\Facades\Filament;
@@ -165,6 +166,7 @@ class StaffLiveFeed extends Component
         return view('livewire.admin.staff-live-feed', [
             'posts' => $this->posts(),
             'commentsReady' => Schema::hasTable('staff_feed_comments'),
+            'unreadSummary' => $this->unreadStaffMessageSummary(),
         ]);
     }
 
@@ -247,6 +249,64 @@ class StaffLiveFeed extends Component
     private function isSuperAdmin(User $user): bool
     {
         return method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+    }
+
+    /**
+     * @return array{count:int,senders:list<string>}
+     */
+    private function unreadStaffMessageSummary(): array
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user || ! $this->canReadStaffMessageState()) {
+            return [
+                'count' => 0,
+                'senders' => [],
+            ];
+        }
+
+        $baseQuery = StaffConversationMessage::query()
+            ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+            ->whereNull('staff_conversation_messages.read_at')
+            ->where('staff_conversation_messages.user_id', '<>', (int) $user->id)
+            ->where(function ($query) use ($user): void {
+                $query
+                    ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                    ->orWhere('staff_conversations.recipient_user_id', (int) $user->id);
+            });
+
+        $count = (clone $baseQuery)->count('staff_conversation_messages.id');
+
+        if ($count < 1) {
+            return [
+                'count' => 0,
+                'senders' => [],
+            ];
+        }
+
+        $senders = (clone $baseQuery)
+            ->join('users as senders', 'senders.id', '=', 'staff_conversation_messages.user_id')
+            ->orderByDesc('staff_conversation_messages.created_at')
+            ->limit(5)
+            ->pluck('senders.name')
+            ->map(static fn ($name): string => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->take(3)
+            ->values()
+            ->all();
+
+        return [
+            'count' => (int) $count,
+            'senders' => $senders,
+        ];
+    }
+
+    private function canReadStaffMessageState(): bool
+    {
+        return Schema::hasTable('staff_conversations')
+            && Schema::hasTable('staff_conversation_messages')
+            && Schema::hasColumn('staff_conversation_messages', 'read_at');
     }
 
     /**

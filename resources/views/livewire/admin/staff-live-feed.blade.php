@@ -34,6 +34,11 @@
     $avatarColor = static function ($user): string {
         return $user instanceof \App\Models\User ? $user->staffAvatarColor() : '#2563eb';
     };
+
+    $unreadCount = (int) data_get($unreadSummary ?? [], 'count', 0);
+    $unreadSenders = collect(data_get($unreadSummary ?? [], 'senders', []))
+        ->filter()
+        ->values();
 @endphp
 
 <section class="staff-live-feed" wire:poll.30s>
@@ -101,6 +106,63 @@
 
         html.dark .staff-live-feed__copy {
             color: #94a3b8;
+        }
+
+        .staff-live-feed__unread-alert {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            max-width: min(100%, 26rem);
+            border: 1px solid rgba(239, 68, 68, 0.24);
+            border-radius: 1rem;
+            background: #fff7f7;
+            padding: 0.7rem 0.85rem;
+            color: #991b1b;
+            box-shadow: 0 14px 28px rgba(239, 68, 68, 0.10);
+        }
+
+        html.dark .staff-live-feed__unread-alert {
+            border-color: rgba(248, 113, 113, 0.24);
+            background: rgba(127, 29, 29, 0.18);
+            color: #fecaca;
+        }
+
+        .staff-live-feed__unread-alert-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            background: #ef4444;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .staff-live-feed__unread-alert-text {
+            display: grid;
+            gap: 0.12rem;
+            min-width: 0;
+        }
+
+        .staff-live-feed__unread-alert-title {
+            font-size: 0.86rem;
+            font-weight: 900;
+            line-height: 1.25;
+        }
+
+        .staff-live-feed__unread-alert-meta {
+            color: #b45309;
+            font-size: 0.78rem;
+            font-weight: 700;
+            line-height: 1.3;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        html.dark .staff-live-feed__unread-alert-meta {
+            color: #fed7aa;
         }
 
         .staff-live-feed__composer {
@@ -646,6 +708,24 @@
             </h3>
             <p class="staff-live-feed__copy">Сообщения для сотрудников рынка на главном экране.</p>
         </div>
+
+        @if ($unreadCount > 0)
+            <div class="staff-live-feed__unread-alert" title="Новые личные сообщения">
+                <span class="staff-live-feed__unread-alert-icon">
+                    <x-filament::icon icon="heroicon-o-bell-alert" class="h-5 w-5" />
+                </span>
+                <span class="staff-live-feed__unread-alert-text">
+                    <span class="staff-live-feed__unread-alert-title">
+                        Новые личные сообщения: {{ $unreadCount > 99 ? '99+' : $unreadCount }}
+                    </span>
+                    @if ($unreadSenders->isNotEmpty())
+                        <span class="staff-live-feed__unread-alert-meta">
+                            {{ $unreadSenders->implode(', ') }}
+                        </span>
+                    @endif
+                </span>
+            </div>
+        @endif
     </div>
 
     <div class="staff-live-feed__composer">

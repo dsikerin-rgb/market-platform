@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use App\Livewire\Admin\StaffLiveFeed;
 use App\Models\Market;
+use App\Models\StaffConversation;
+use App\Models\StaffConversationMessage;
 use App\Models\StaffFeedComment;
 use App\Models\StaffFeedPost;
 use App\Models\User;
@@ -96,6 +98,65 @@ class StaffLiveFeedCommentsTest extends TestCase
             'author_user_id' => (int) $superAdmin->id,
             'body' => 'Комментарий супер-админа',
         ]);
+    }
+
+    public function test_live_feed_shows_only_current_users_unread_staff_message_summary(): void
+    {
+        $market = $this->createMarket('Test Market');
+        $otherMarket = $this->createMarket('Other Market');
+        $admin = $this->actingAsMarketAdmin($market);
+
+        $sender = User::factory()->create([
+            'name' => 'Message Sender',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'message-sender-feed@example.test',
+        ]);
+        $hiddenSender = User::factory()->create([
+            'name' => 'Hidden Sender',
+            'market_id' => (int) $otherMarket->id,
+            'tenant_id' => null,
+            'email' => 'hidden-sender-feed@example.test',
+        ]);
+        $hiddenRecipient = User::factory()->create([
+            'name' => 'Hidden Recipient',
+            'market_id' => (int) $otherMarket->id,
+            'tenant_id' => null,
+            'email' => 'hidden-recipient-feed@example.test',
+        ]);
+
+        $conversation = StaffConversation::query()->create([
+            'market_id' => (int) $market->id,
+            'created_by_user_id' => (int) $sender->id,
+            'recipient_user_id' => (int) $admin->id,
+            'subject' => 'Unread topic',
+            'last_message_at' => now(),
+        ]);
+        StaffConversationMessage::query()->create([
+            'staff_conversation_id' => (int) $conversation->id,
+            'user_id' => (int) $sender->id,
+            'body' => 'Unread internal message',
+            'read_at' => null,
+        ]);
+
+        $hiddenConversation = StaffConversation::query()->create([
+            'market_id' => (int) $otherMarket->id,
+            'created_by_user_id' => (int) $hiddenSender->id,
+            'recipient_user_id' => (int) $hiddenRecipient->id,
+            'subject' => 'Hidden topic',
+            'last_message_at' => now(),
+        ]);
+        StaffConversationMessage::query()->create([
+            'staff_conversation_id' => (int) $hiddenConversation->id,
+            'user_id' => (int) $hiddenSender->id,
+            'body' => 'Hidden internal message',
+            'read_at' => null,
+        ]);
+
+        Livewire::test(StaffLiveFeed::class)
+            ->assertSeeHtml('staff-live-feed__unread-alert')
+            ->assertSee('Message Sender')
+            ->assertDontSee('Hidden Sender');
     }
 
     private function createMarket(string $name): Market
