@@ -1859,7 +1859,7 @@ class MapReviewResultsService
             ? DB::table('tenant_contracts')
                 ->where('market_id', $marketId)
                 ->where('external_id', $contractExternalId)
-                ->get(['id', 'number', 'status', 'is_active', 'market_space_id', 'space_mapping_mode'])
+                ->get(['id', 'number', 'status', 'is_active', 'tenant_id', 'market_space_id', 'space_mapping_mode'])
             : collect();
 
         $linkedSpaces = $this->linkedSpacesForContracts(
@@ -1908,6 +1908,15 @@ class MapReviewResultsService
             && in_array($linkState, ['other_space', 'unlinked_contract'], true)
             && $isContractActive
             && $mappingMode !== TenantContract::SPACE_MAPPING_MODE_EXCLUDED;
+        $relinkImpact = $canRelinkToCurrentSpace && $localContract !== null
+            ? $this->settlementRelinkImpact(
+                $marketId,
+                $currentSpace,
+                (int) $localContract->id,
+                $linkedSpaces,
+                (int) ($localContract->tenant_id ?? 0)
+            )
+            : null;
         $reviewPriority = $this->settlementContractReviewPriority(
             $linkState,
             $contractMatchesCurrentSpace,
@@ -1919,6 +1928,7 @@ class MapReviewResultsService
             'review_priority' => $reviewPriority,
             'contract_matches_current_space' => $contractMatchesCurrentSpace,
             'can_relink_to_current_space' => $canRelinkToCurrentSpace,
+            'relink_impact' => $relinkImpact,
             'contract_external_id' => $contractExternalId,
             'contract_name' => $contractName,
             'contract_label' => $contractName !== ''
@@ -1944,6 +1954,117 @@ class MapReviewResultsService
                 default => 'требует проверки',
             },
         ];
+    }
+
+    /**
+     * @param  list<array{space_id:int,label:string,source:string}>  $linkedSpaces
+     * @return array<string, mixed>|null
+     */
+    private function settlementRelinkImpact(
+        int $marketId,
+        MarketSpace $targetSpace,
+        int $contractId,
+        array $linkedSpaces,
+        int $tenantId
+    ): ?array {
+        $previousSpaceId = (int) ($linkedSpaces[0]['space_id'] ?? 0);
+        $previousSpaceLabel = trim((string) ($linkedSpaces[0]['label'] ?? ''));
+
+        if ($previousSpaceId <= 0 || $previousSpaceId === (int) $targetSpace->id) {
+            return null;
+        }
+
+        $previousSpace = MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->whereKey($previousSpaceId)
+            ->first(['id', 'number', 'display_name', 'code']);
+
+        if (! $previousSpace) {
+            return null;
+        }
+
+        $fallbackContract = $this->bestFallbackContractForSpaceAfterRelink(
+            $marketId,
+            $previousSpace,
+            $contractId,
+            $tenantId
+        );
+
+        return [
+            'target_space_id' => (int) $targetSpace->id,
+            'target_space_label' => $this->spaceLabel($targetSpace),
+            'previous_space_id' => $previousSpaceId,
+            'previous_space_label' => $previousSpaceLabel !== '' ? $previousSpaceLabel : $this->spaceLabel($previousSpace),
+            'previous_space_status' => $fallbackContract !== null ? 'covered' : 'needs_review',
+            'previous_space_message' => $fallbackContract !== null
+                ? 'Прежнее место останется связанным с другим активным договором.'
+                : 'У прежнего места не найден другой активный договор. Оно останется в очереди проверки.',
+            'fallback_contract' => $fallbackContract,
+        ];
+    }
+
+    /**
+     * @return array{id:int,number:string,label:string,matches_space:bool}|null
+     */
+    private function bestFallbackContractForSpaceAfterRelink(
+        int $marketId,
+        MarketSpace $space,
+        int $excludedContractId,
+        int $tenantId
+    ): ?array {
+        if (! Schema::hasTable('tenant_contracts')) {
+            return null;
+        }
+
+        $query = DB::table('tenant_contracts')
+            ->where('market_id', $marketId)
+            ->where('market_space_id', (int) $space->id)
+            ->where('id', '!=', $excludedContractId)
+            ->where('is_active', true)
+            ->where(function ($query): void {
+                $query->whereNull('status')
+                    ->orWhereNotIn('status', ['terminated', 'archived']);
+            })
+            ->where(function ($query): void {
+                $query->whereNull('space_mapping_mode')
+                    ->orWhere('space_mapping_mode', '!=', TenantContract::SPACE_MAPPING_MODE_EXCLUDED);
+            });
+
+        if ($tenantId > 0) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        $contracts = $query
+            ->get(['id', 'number']);
+
+        if ($contracts->isEmpty()) {
+            return null;
+        }
+
+        $spaceTokens = $this->settlementSpaceMatchTokens($space);
+        $best = $contracts
+            ->map(function (object $contract) use ($spaceTokens): array {
+                $number = trim((string) ($contract->number ?? ''));
+                $matchesSpace = $this->settlementContractTextMatchesSpace($number, $spaceTokens);
+
+                return [
+                    'id' => (int) $contract->id,
+                    'number' => $number,
+                    'label' => $number !== '' ? $number : 'Договор #'.(int) $contract->id,
+                    'matches_space' => $matchesSpace,
+                    'priority' => $matchesSpace ? 1 : 0,
+                ];
+            })
+            ->sortByDesc(static fn (array $contract): int => (int) $contract['priority'])
+            ->first();
+
+        if (! is_array($best)) {
+            return null;
+        }
+
+        unset($best['priority']);
+
+        return $best;
     }
 
     /**

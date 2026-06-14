@@ -1074,6 +1074,112 @@
                 color: #fecaca;
             }
 
+            .mrr-debt-review__impact {
+                display: grid;
+                gap: 0.42rem;
+                border-radius: 0.95rem;
+                border: 1px solid rgba(37, 99, 235, 0.18);
+                background: rgba(255, 255, 255, 0.78);
+                padding: 0.68rem;
+            }
+
+            .dark .mrr-debt-review__impact {
+                border-color: rgba(96, 165, 250, 0.2);
+                background: rgba(15, 23, 42, 0.62);
+            }
+
+            .mrr-debt-review__impact-title {
+                color: #2563eb;
+                font-size: 0.68rem;
+                font-weight: 880;
+                letter-spacing: 0.05em;
+                line-height: 1.2;
+                text-transform: uppercase;
+            }
+
+            .dark .mrr-debt-review__impact-title {
+                color: #bfdbfe;
+            }
+
+            .mrr-debt-review__impact-row {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+                align-items: center;
+                gap: 0.48rem;
+                border-radius: 0.82rem;
+                border: 1px solid rgba(148, 163, 184, 0.16);
+                background: rgba(248, 250, 252, 0.86);
+                padding: 0.56rem 0.62rem;
+            }
+
+            .mrr-debt-review__impact-row--primary {
+                border-color: rgba(37, 99, 235, 0.18);
+                background: rgba(239, 246, 255, 0.82);
+            }
+
+            .mrr-debt-review__impact-row--ok {
+                border-color: rgba(22, 163, 74, 0.2);
+                background: rgba(240, 253, 244, 0.84);
+            }
+
+            .mrr-debt-review__impact-row--warning {
+                border-color: rgba(245, 158, 11, 0.24);
+                background: rgba(255, 251, 235, 0.86);
+            }
+
+            .dark .mrr-debt-review__impact-row {
+                border-color: rgba(148, 163, 184, 0.16);
+                background: rgba(15, 23, 42, 0.62);
+            }
+
+            .mrr-debt-review__impact-label {
+                color: #64748b;
+                font-size: 0.66rem;
+                font-weight: 780;
+                line-height: 1.18;
+            }
+
+            .dark .mrr-debt-review__impact-label {
+                color: #94a3b8;
+            }
+
+            .mrr-debt-review__impact-value {
+                margin-top: 0.14rem;
+                color: #0f172a;
+                font-size: 0.88rem;
+                font-weight: 880;
+                line-height: 1.18;
+                overflow-wrap: anywhere;
+            }
+
+            .dark .mrr-debt-review__impact-value {
+                color: #f8fafc;
+            }
+
+            .mrr-debt-review__impact-arrow {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 1.8rem;
+                height: 1.8rem;
+                border-radius: 999px;
+                background: rgba(37, 99, 235, 0.1);
+                color: #2563eb;
+                font-size: 1rem;
+                font-weight: 900;
+            }
+
+            .mrr-debt-review__impact-note {
+                color: #64748b;
+                font-size: 0.74rem;
+                font-weight: 640;
+                line-height: 1.35;
+            }
+
+            .dark .mrr-debt-review__impact-note {
+                color: #cbd5e1;
+            }
+
             .mrr-debt-review__primary-action {
                 display: flex;
                 flex-wrap: wrap;
@@ -1199,6 +1305,15 @@
 
                 .mrr-debt-review__metrics {
                     grid-template-columns: 1fr;
+                }
+
+                .mrr-debt-review__impact-row {
+                    grid-template-columns: 1fr;
+                }
+
+                .mrr-debt-review__impact-arrow {
+                    justify-self: start;
+                    transform: rotate(90deg);
                 }
             }
 
@@ -3457,6 +3572,17 @@
                                             $settlementLinkedMapUrl = trim((string) ($settlementPrimaryLinkedSpace['map_url'] ?? ''));
                                             $settlementCanRelinkToCurrentSpace = (bool) ($settlementPrimaryContract['can_relink_to_current_space'] ?? false);
                                             $settlementContractMatchesCurrentSpace = (bool) ($settlementPrimaryContract['contract_matches_current_space'] ?? false);
+                                            $settlementRelinkImpact = is_array($settlementPrimaryContract['relink_impact'] ?? null) ? $settlementPrimaryContract['relink_impact'] : [];
+                                            $settlementRelinkPreviousSpaceLabel = trim((string) ($settlementRelinkImpact['previous_space_label'] ?? ''));
+                                            $settlementRelinkPreviousSpaceStatus = trim((string) ($settlementRelinkImpact['previous_space_status'] ?? ''));
+                                            $settlementRelinkPreviousSpaceMessage = trim((string) ($settlementRelinkImpact['previous_space_message'] ?? ''));
+                                            $settlementRelinkFallbackContract = is_array($settlementRelinkImpact['fallback_contract'] ?? null) ? $settlementRelinkImpact['fallback_contract'] : [];
+                                            $settlementRelinkFallbackContractLabel = trim((string) ($settlementRelinkFallbackContract['label'] ?? ''));
+                                            $settlementRelinkImpactConfirmLine = $settlementRelinkPreviousSpaceLabel !== ''
+                                                ? ($settlementRelinkPreviousSpaceStatus === 'covered' && $settlementRelinkFallbackContractLabel !== ''
+                                                    ? ' Прежнее место ' . $settlementRelinkPreviousSpaceLabel . ' останется на договоре ' . $settlementRelinkFallbackContractLabel . '.'
+                                                    : ' Прежнее место ' . $settlementRelinkPreviousSpaceLabel . ' останется в проверке.')
+                                                : '';
                                             $debtReviewTenantName = $currentTenantName !== ''
                                                 ? $currentTenantName
                                                 : ($financialTenantName !== '' ? $financialTenantName : 'Арендатор не указан');
@@ -3854,6 +3980,47 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                     </div>
                                                                 </div>
 
+                                                                @if ($settlementCanRelinkToCurrentSpace && $settlementRelinkImpact !== [])
+                                                                    <div class="mrr-debt-review__impact">
+                                                                        <div class="mrr-debt-review__impact-title">Будет после нажатия</div>
+                                                                        <div class="mrr-debt-review__impact-row mrr-debt-review__impact-row--primary">
+                                                                            <div>
+                                                                                <div class="mrr-debt-review__impact-label">Договор ОСВ</div>
+                                                                                <div class="mrr-debt-review__impact-value">{{ $settlementContractLabel }}</div>
+                                                                            </div>
+                                                                            <div class="mrr-debt-review__impact-arrow" aria-hidden="true">→</div>
+                                                                            <div>
+                                                                                <div class="mrr-debt-review__impact-label">Будет связан с</div>
+                                                                                <div class="mrr-debt-review__impact-value">{{ $currentSpaceLabel }}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                        @if ($settlementRelinkPreviousSpaceLabel !== '')
+                                                                            <div class="mrr-debt-review__impact-row {{ $settlementRelinkPreviousSpaceStatus === 'covered' ? 'mrr-debt-review__impact-row--ok' : 'mrr-debt-review__impact-row--warning' }}">
+                                                                                <div>
+                                                                                    <div class="mrr-debt-review__impact-label">Прежнее место</div>
+                                                                                    <div class="mrr-debt-review__impact-value">{{ $settlementRelinkPreviousSpaceLabel }}</div>
+                                                                                </div>
+                                                                                <div class="mrr-debt-review__impact-arrow" aria-hidden="true">{{ $settlementRelinkPreviousSpaceStatus === 'covered' ? '✓' : '!' }}</div>
+                                                                                <div>
+                                                                                    <div class="mrr-debt-review__impact-label">
+                                                                                        {{ $settlementRelinkPreviousSpaceStatus === 'covered' ? 'Остаётся на договоре' : 'Что дальше' }}
+                                                                                    </div>
+                                                                                    <div class="mrr-debt-review__impact-value">
+                                                                                        @if ($settlementRelinkPreviousSpaceStatus === 'covered' && $settlementRelinkFallbackContractLabel !== '')
+                                                                                            {{ $settlementRelinkFallbackContractLabel }}
+                                                                                        @else
+                                                                                            Проверить отдельно
+                                                                                        @endif
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            @if ($settlementRelinkPreviousSpaceMessage !== '')
+                                                                                <div class="mrr-debt-review__impact-note">{{ $settlementRelinkPreviousSpaceMessage }}</div>
+                                                                            @endif
+                                                                        @endif
+                                                                    </div>
+                                                                @endif
+
                                                                 @if ($attentionTab !== 'unconfirmed_links_rejected')
                                                                     <div class="mrr-debt-review__primary-action">
                                                                         @if ($settlementCanRelinkToCurrentSpace && $settlementLocalContractId > 0)
@@ -3866,7 +4033,8 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 data-mrr-current-space="{{ $currentSpaceLabel }}"
                                                                                 data-mrr-linked-space="{{ $settlementLinkedSpaceLabel }}"
                                                                                 data-mrr-contract-label="{{ $settlementContractLabel }}"
-                                                                                data-mrr-confirm="Перепривязать договор ОСВ «{{ $settlementContractLabel }}» к месту {{ $currentSpaceLabel }}? Долг арендатора и окраска карты не пересчитываются."
+                                                                                data-mrr-impact-summary="{{ $settlementRelinkImpactConfirmLine }}"
+                                                                                data-mrr-confirm="Перепривязать договор ОСВ «{{ $settlementContractLabel }}» к месту {{ $currentSpaceLabel }}?{{ $settlementRelinkImpactConfirmLine }} Долг арендатора и окраска карты не пересчитываются."
                                                                             >
                                                                                 Перепривязать к {{ $currentSpaceLabel }}
                                                                             </button>
@@ -7219,9 +7387,13 @@ const markSpaceFreeState = {
 
                     const currentSpace = String(button.dataset.mrrCurrentSpace || '').trim();
                     const linkedSpace = String(button.dataset.mrrLinkedSpace || '').trim();
-                    const reason = linkedSpace !== ''
+                    let reason = linkedSpace !== ''
                         ? `Договор ОСВ перепривязан из ${linkedSpace} к ${currentSpace}.`
                         : `Договор ОСВ привязан к ${currentSpace}.`;
+                    const impactSummary = String(button.dataset.mrrImpactSummary || '').trim();
+                    if (impactSummary !== '') {
+                        reason = `${reason} ${impactSummary}`;
+                    }
                     const originalText = button.textContent;
 
                     button.setAttribute('disabled', 'disabled');
