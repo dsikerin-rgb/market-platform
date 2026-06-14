@@ -2014,7 +2014,8 @@ class MarketSpaceResource extends BaseResource
                 Tab::make('Финансы')
                     ->visible(fn (?MarketSpace $record): bool => (string) ($record?->status ?? '') !== 'maintenance')
                     ->schema([
-                        Section::make('Финансы 1С')
+                        Section::make('Сводка')
+                            ->description('Итог по ОСВ, начисления и оплаты по этому месту за выбранный период.')
                             ->schema([
                                 Forms\Components\Placeholder::make('space_settlement_balances')
                                     ->hiddenLabel()
