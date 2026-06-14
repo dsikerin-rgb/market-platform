@@ -191,6 +191,20 @@ class TenantContractResource extends BaseResource
                             ->columnSpanFull(),
                     ]),
 
+                Tab::make('Финансы 1С')
+                    ->schema([
+                        Section::make('Финансы по договору')
+                            ->description('ОСВ, начисления и оплаты, которые 1С передала по этому договору.')
+                            ->schema([
+                                Placeholder::make('contract_finance_1c')
+                                    ->hiddenLabel()
+                                    ->content(fn (?TenantContract $record): HtmlString => static::renderContractFinance1C($record))
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(1)
+                            ->columnSpanFull(),
+                    ]),
+
                 Tab::make('1С')
                     ->schema([
                         Section::make('Документ из 1С')
@@ -789,6 +803,445 @@ class TenantContractResource extends BaseResource
             'amount_label' => static::formatRubForContractCard($amount),
             'period_label' => $latestPeriod !== null ? static::formatContractCardPeriod((string) $latestPeriod) : null,
         ];
+    }
+
+    private static function renderContractFinance1C(?TenantContract $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('<div class="text-sm text-gray-500">Финансы появятся после сохранения договора.</div>');
+        }
+
+        $settlement = static::contractSettlementFinance($record);
+        $accruals = static::contractAccrualFinance($record);
+        $payments = static::contractPaymentFinance($record);
+
+        $balance = $settlement['balance'];
+        $statusLabel = match (true) {
+            $balance === null => 'Нет данных ОСВ',
+            $balance > 0.009 => 'Есть задолженность',
+            $balance < -0.009 => 'Переплата',
+            default => 'Нет задолженности',
+        };
+        $statusClass = match (true) {
+            $balance === null => 'contract-finance-1c__status--muted',
+            $balance > 0.009 => 'contract-finance-1c__status--danger',
+            $balance < -0.009 => 'contract-finance-1c__status--success',
+            default => 'contract-finance-1c__status--success',
+        };
+
+        $summaryCards = [
+            ['label' => 'Статус ОСВ', 'value' => $statusLabel, 'class' => $statusClass],
+            ['label' => 'Итог по ОСВ', 'value' => $balance !== null ? static::formatRubForContractCard(abs($balance)) : '—', 'class' => $balance !== null && $balance > 0.009 ? 'contract-finance-1c__value--danger' : ''],
+            ['label' => 'Начислено за период ОСВ', 'value' => $settlement['accrued'] !== null ? static::formatRubForContractCard($settlement['accrued']) : '—', 'class' => ''],
+            ['label' => 'Оплачено за период ОСВ', 'value' => $settlement['paid'] !== null ? static::formatRubForContractCard($settlement['paid']) : '—', 'class' => ''],
+            ['label' => 'Период ОСВ', 'value' => $settlement['period_label'] ?: '—', 'class' => ''],
+            ['label' => 'Обновлено', 'value' => $settlement['imported_label'] ?: '—', 'class' => ''],
+            ['label' => 'Начислений в журнале', 'value' => (string) $accruals['count'], 'class' => ''],
+            ['label' => 'Оплат в журнале', 'value' => (string) $payments['count'], 'class' => ''],
+        ];
+
+        $summaryHtml = '';
+        foreach ($summaryCards as $card) {
+            $summaryHtml .= '<div class="contract-finance-1c__card">'
+                . '<div class="contract-finance-1c__label">' . e((string) $card['label']) . '</div>'
+                . '<div class="contract-finance-1c__value ' . e((string) $card['class']) . '">' . e((string) $card['value']) . '</div>'
+                . '</div>';
+        }
+
+        $settlementRowsHtml = static::renderContractFinanceSettlementRows($settlement['rows']);
+        $accrualRowsHtml = static::renderContractFinanceAccrualRows($accruals['rows']);
+        $paymentRowsHtml = static::renderContractFinancePaymentRows($payments['rows']);
+
+        $accrualLimitNote = $accruals['count'] > count($accruals['rows'])
+            ? '<div class="contract-finance-1c__note">Показаны последние ' . e((string) count($accruals['rows'])) . ' начислений из ' . e((string) $accruals['count']) . '.</div>'
+            : '';
+        $paymentLimitNote = $payments['count'] > count($payments['rows'])
+            ? '<div class="contract-finance-1c__note">Показаны последние ' . e((string) count($payments['rows'])) . ' оплат из ' . e((string) $payments['count']) . '.</div>'
+            : '';
+
+        $emptyHint = $settlement['count'] === 0 && $accruals['count'] === 0 && $payments['count'] === 0
+            ? '<div class="contract-finance-1c__empty">По этому договору пока нет строк ОСВ, начислений или оплат из 1С.</div>'
+            : '';
+
+        return new HtmlString(
+            '<style>
+                .contract-finance-1c{display:grid;gap:16px}
+                .contract-finance-1c__summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+                .contract-finance-1c__card{border:1px solid rgba(148,163,184,.35);border-radius:10px;background:rgba(248,250,252,.78);padding:11px 12px;min-width:0}
+                .dark .contract-finance-1c__card{background:rgba(15,23,42,.45);border-color:rgba(148,163,184,.25)}
+                .contract-finance-1c__label{font-size:12px;line-height:1.25;color:#64748b}
+                .dark .contract-finance-1c__label{color:#94a3b8}
+                .contract-finance-1c__value{margin-top:5px;font-size:18px;font-weight:780;line-height:1.2;color:#0f172a;overflow-wrap:anywhere}
+                .dark .contract-finance-1c__value{color:#e2e8f0}
+                .contract-finance-1c__value--danger{color:#b91c1c}
+                .contract-finance-1c__status--danger{color:#b91c1c}
+                .contract-finance-1c__status--success{color:#15803d}
+                .contract-finance-1c__status--muted{color:#64748b}
+                .contract-finance-1c__section{display:grid;gap:9px}
+                .contract-finance-1c__section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+                .contract-finance-1c__section-title{font-size:15px;font-weight:760;line-height:1.25;color:#0f172a}
+                .dark .contract-finance-1c__section-title{color:#f8fafc}
+                .contract-finance-1c__section-meta{font-size:12px;color:#64748b}
+                .dark .contract-finance-1c__section-meta{color:#94a3b8}
+                .contract-finance-1c__table-wrap{overflow:auto;border:1px solid rgba(148,163,184,.32);border-radius:10px;background:#fff}
+                .dark .contract-finance-1c__table-wrap{background:rgba(15,23,42,.4);border-color:rgba(148,163,184,.24)}
+                .contract-finance-1c table{width:100%;min-width:860px;border-collapse:collapse;font-size:12px;line-height:1.35}
+                .contract-finance-1c th{position:sticky;top:0;background:#f8fafc;color:#475569;font-weight:760;text-align:left}
+                .dark .contract-finance-1c th{background:#111827;color:#cbd5e1}
+                .contract-finance-1c th,.contract-finance-1c td{padding:9px 10px;border-bottom:1px solid rgba(148,163,184,.22);vertical-align:top}
+                .contract-finance-1c tr:last-child td{border-bottom:0}
+                .contract-finance-1c__amount{text-align:right;white-space:nowrap;font-weight:760}
+                .contract-finance-1c__muted{color:#64748b}
+                .dark .contract-finance-1c__muted{color:#94a3b8}
+                .contract-finance-1c__note,.contract-finance-1c__empty{font-size:12px;line-height:1.4;color:#64748b}
+                .dark .contract-finance-1c__note,.dark .contract-finance-1c__empty{color:#94a3b8}
+                @media (max-width:760px){.contract-finance-1c__section-head{display:grid}.contract-finance-1c table{min-width:760px}}
+            </style>
+            <div class="contract-finance-1c">
+                ' . $emptyHint . '
+                <div class="contract-finance-1c__summary">' . $summaryHtml . '</div>
+                <div class="contract-finance-1c__section">
+                    <div class="contract-finance-1c__section-head">
+                        <div class="contract-finance-1c__section-title">ОСВ по договору</div>
+                        <div class="contract-finance-1c__section-meta">' . e($settlement['count'] > 0 ? (string) $settlement['count'] . ' строк' : 'строк нет') . '</div>
+                    </div>
+                    <div class="contract-finance-1c__table-wrap">
+                        <table>
+                            <thead><tr><th>Период</th><th>Организация</th><th>Счет</th><th class="contract-finance-1c__amount">Начислено</th><th class="contract-finance-1c__amount">Оплачено</th><th class="contract-finance-1c__amount">Итог</th></tr></thead>
+                            <tbody>' . $settlementRowsHtml . '</tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="contract-finance-1c__section">
+                    <div class="contract-finance-1c__section-head">
+                        <div class="contract-finance-1c__section-title">Начисления</div>
+                        <div class="contract-finance-1c__section-meta">Всего: ' . e((string) $accruals['count']) . ' · сумма: ' . e(static::formatRubForContractCard((float) $accruals['sum'])) . '</div>
+                    </div>
+                    ' . $accrualLimitNote . '
+                    <div class="contract-finance-1c__table-wrap">
+                        <table>
+                            <thead><tr><th>Период</th><th>Документ</th><th>За что</th><th>Место из 1С</th><th class="contract-finance-1c__amount">Сумма</th><th>Импорт</th></tr></thead>
+                            <tbody>' . $accrualRowsHtml . '</tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="contract-finance-1c__section">
+                    <div class="contract-finance-1c__section-head">
+                        <div class="contract-finance-1c__section-title">Оплаты</div>
+                        <div class="contract-finance-1c__section-meta">Всего: ' . e((string) $payments['count']) . ' · сумма: ' . e(static::formatRubForContractCard((float) $payments['sum'])) . '</div>
+                    </div>
+                    ' . $paymentLimitNote . '
+                    <div class="contract-finance-1c__table-wrap">
+                        <table>
+                            <thead><tr><th>Период</th><th>Дата</th><th>Документ</th><th>Назначение</th><th class="contract-finance-1c__amount">Сумма</th><th>Импорт</th></tr></thead>
+                            <tbody>' . $paymentRowsHtml . '</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>'
+        );
+    }
+
+    /**
+     * @return array{count:int,accrued:?float,paid:?float,balance:?float,period_label:?string,imported_label:?string,rows:\Illuminate\Support\Collection<int, object>}
+     */
+    private static function contractSettlementFinance(TenantContract $record): array
+    {
+        $empty = [
+            'count' => 0,
+            'accrued' => null,
+            'paid' => null,
+            'balance' => null,
+            'period_label' => null,
+            'imported_label' => null,
+            'rows' => collect(),
+        ];
+
+        if (! DbSchema::hasTable('tenant_settlement_balances')) {
+            return $empty;
+        }
+
+        $base = DB::table('tenant_settlement_balances as tsb');
+        static::applyContractFinanceMatch($base, 'tenant_settlement_balances', 'tsb', $record);
+
+        $count = (int) (clone $base)->count();
+        if ($count === 0) {
+            return $empty;
+        }
+
+        $latestPeriodTo = (clone $base)->max('tsb.period_to');
+        $latestBase = clone $base;
+        if ($latestPeriodTo !== null) {
+            $latestBase->where('tsb.period_to', $latestPeriodTo);
+        }
+
+        $rows = (clone $latestBase)
+            ->select([
+                'tsb.period_from',
+                'tsb.period_to',
+                'tsb.organization_name',
+                'tsb.organization_external_id',
+                'tsb.account',
+                'tsb.turnover_debit',
+                'tsb.turnover_credit',
+                'tsb.closing_debit',
+                'tsb.closing_credit',
+                'tsb.imported_at',
+            ])
+            ->orderBy('tsb.account')
+            ->orderBy('tsb.organization_name')
+            ->get();
+
+        $periodFrom = $rows->pluck('period_from')->filter()->sort()->first();
+        $periodTo = $rows->pluck('period_to')->filter()->sort()->last();
+        $importedAt = $rows->pluck('imported_at')->filter()->sort()->last();
+        $accrued = (float) $rows->sum(fn (object $row): float => (float) ($row->turnover_debit ?? 0));
+        $paid = (float) $rows->sum(fn (object $row): float => (float) ($row->turnover_credit ?? 0));
+        $balance = (float) $rows->sum(fn (object $row): float => (float) ($row->closing_debit ?? 0) - (float) ($row->closing_credit ?? 0));
+
+        return [
+            'count' => $count,
+            'accrued' => $accrued,
+            'paid' => $paid,
+            'balance' => $balance,
+            'period_label' => static::formatContractFinancePeriodRange($periodFrom, $periodTo),
+            'imported_label' => static::formatContractCardDateTime($importedAt),
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * @return array{count:int,sum:float,rows:\Illuminate\Support\Collection<int, object>}
+     */
+    private static function contractAccrualFinance(TenantContract $record): array
+    {
+        if (! DbSchema::hasTable('tenant_accruals')) {
+            return ['count' => 0, 'sum' => 0.0, 'rows' => collect()];
+        }
+
+        $amountExpression = static::contractAccrualAmountExpression();
+        $base = DB::table('tenant_accruals as ta');
+        static::applyContractFinanceMatch($base, 'tenant_accruals', 'ta', $record);
+
+        $count = (int) (clone $base)->count();
+        $sum = (float) ((clone $base)->sum(DB::raw($amountExpression)) ?? 0);
+
+        $rows = (clone $base)
+            ->select([
+                'ta.period',
+                static::hasTableColumn('tenant_accruals', 'document_date') ? 'ta.document_date' : DB::raw('NULL as document_date'),
+                static::hasTableColumn('tenant_accruals', 'document_number') ? 'ta.document_number' : DB::raw('NULL as document_number'),
+                static::hasTableColumn('tenant_accruals', 'document_name') ? 'ta.document_name' : DB::raw('NULL as document_name'),
+                static::hasTableColumn('tenant_accruals', 'service_name') ? 'ta.service_name' : DB::raw('NULL as service_name'),
+                static::hasTableColumn('tenant_accruals', 'line_description') ? 'ta.line_description' : DB::raw('NULL as line_description'),
+                static::hasTableColumn('tenant_accruals', 'purpose') ? 'ta.purpose' : DB::raw('NULL as purpose'),
+                static::hasTableColumn('tenant_accruals', 'source_place_code') ? 'ta.source_place_code' : DB::raw('NULL as source_place_code'),
+                static::hasTableColumn('tenant_accruals', 'source_place_name') ? 'ta.source_place_name' : DB::raw('NULL as source_place_name'),
+                static::hasTableColumn('tenant_accruals', 'imported_at') ? 'ta.imported_at' : DB::raw('NULL as imported_at'),
+                DB::raw($amountExpression . ' as amount_value'),
+            ])
+            ->orderByDesc('ta.period')
+            ->orderByDesc(static::hasTableColumn('tenant_accruals', 'document_date') ? 'ta.document_date' : 'ta.id')
+            ->orderByDesc('ta.id')
+            ->limit(300)
+            ->get();
+
+        return ['count' => $count, 'sum' => $sum, 'rows' => $rows];
+    }
+
+    /**
+     * @return array{count:int,sum:float,rows:\Illuminate\Support\Collection<int, object>}
+     */
+    private static function contractPaymentFinance(TenantContract $record): array
+    {
+        if (! DbSchema::hasTable('tenant_payments')) {
+            return ['count' => 0, 'sum' => 0.0, 'rows' => collect()];
+        }
+
+        $base = DB::table('tenant_payments as tp');
+        static::applyContractFinanceMatch($base, 'tenant_payments', 'tp', $record);
+
+        $count = (int) (clone $base)->count();
+        $sum = (float) ((clone $base)->sum('tp.amount') ?? 0);
+
+        $rows = (clone $base)
+            ->select([
+                'tp.period',
+                'tp.payment_date',
+                'tp.document_number',
+                'tp.payment_external_id',
+                'tp.amount',
+                'tp.purpose',
+                'tp.imported_at',
+            ])
+            ->orderByDesc('tp.payment_date')
+            ->orderByDesc('tp.id')
+            ->limit(300)
+            ->get();
+
+        return ['count' => $count, 'sum' => $sum, 'rows' => $rows];
+    }
+
+    private static function applyContractFinanceMatch($query, string $table, string $alias, TenantContract $record): void
+    {
+        $contractId = (int) $record->id;
+        $externalId = trim((string) ($record->external_id ?? ''));
+        $tenantId = (int) ($record->tenant_id ?? 0);
+
+        $query->where($alias . '.market_id', (int) $record->market_id);
+
+        if ($tenantId > 0 && static::hasTableColumn($table, 'tenant_id')) {
+            $query->where($alias . '.tenant_id', $tenantId);
+        }
+
+        $hasContractId = static::hasTableColumn($table, 'tenant_contract_id');
+        $hasExternalId = static::hasTableColumn($table, 'contract_external_id') && $externalId !== '';
+
+        $query->where(function ($query) use ($alias, $contractId, $externalId, $hasContractId, $hasExternalId): void {
+            if ($hasContractId) {
+                $query->orWhere($alias . '.tenant_contract_id', $contractId);
+            }
+
+            if ($hasExternalId) {
+                $query->orWhere($alias . '.contract_external_id', $externalId);
+            }
+
+            if (! $hasContractId && ! $hasExternalId) {
+                $query->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    private static function contractAccrualAmountExpression(): string
+    {
+        $parts = [];
+
+        foreach (['total_with_vat', 'total_no_vat', 'amount', 'rent_amount'] as $column) {
+            if (static::hasTableColumn('tenant_accruals', $column)) {
+                $parts[] = $column;
+            }
+        }
+
+        return $parts !== [] ? 'COALESCE(' . implode(', ', $parts) . ', 0)' : '0';
+    }
+
+    private static function renderContractFinanceSettlementRows(\Illuminate\Support\Collection $rows): string
+    {
+        if ($rows->isEmpty()) {
+            return '<tr><td colspan="6" class="contract-finance-1c__muted">По договору нет строк ОСВ 1С.</td></tr>';
+        }
+
+        $html = '';
+        foreach ($rows as $row) {
+            $periodLabel = static::formatContractFinancePeriodRange($row->period_from ?? null, $row->period_to ?? null) ?: '—';
+            $organization = trim((string) ($row->organization_name ?? $row->organization_external_id ?? ''));
+            $account = trim((string) ($row->account ?? ''));
+            $balance = (float) ($row->closing_debit ?? 0) - (float) ($row->closing_credit ?? 0);
+
+            $html .= '<tr>'
+                . '<td>' . e($periodLabel) . '</td>'
+                . '<td>' . e($organization !== '' ? $organization : '—') . '</td>'
+                . '<td>' . e($account !== '' ? $account : '—') . '</td>'
+                . '<td class="contract-finance-1c__amount">' . e(static::formatRubForContractCard((float) ($row->turnover_debit ?? 0))) . '</td>'
+                . '<td class="contract-finance-1c__amount">' . e(static::formatRubForContractCard((float) ($row->turnover_credit ?? 0))) . '</td>'
+                . '<td class="contract-finance-1c__amount">' . e(($balance < -0.009 ? 'Переплата ' : '') . static::formatRubForContractCard(abs($balance))) . '</td>'
+                . '</tr>';
+        }
+
+        return $html;
+    }
+
+    private static function renderContractFinanceAccrualRows(\Illuminate\Support\Collection $rows): string
+    {
+        if ($rows->isEmpty()) {
+            return '<tr><td colspan="6" class="contract-finance-1c__muted">По договору нет начислений из 1С.</td></tr>';
+        }
+
+        $html = '';
+        foreach ($rows as $row) {
+            $document = static::firstFilledString($row->document_number ?? null, $row->document_name ?? null);
+            $reason = static::firstFilledString($row->service_name ?? null, $row->line_description ?? null, $row->purpose ?? null);
+            $place = trim(implode(' · ', array_filter([
+                trim((string) ($row->source_place_code ?? '')),
+                trim((string) ($row->source_place_name ?? '')),
+            ])));
+
+            $html .= '<tr>'
+                . '<td>' . e(static::formatContractCardPeriod((string) ($row->period ?? ''))) . '</td>'
+                . '<td>' . e(($document !== '' ? $document : '—') . (filled($row->document_date ?? null) ? ' · ' . static::formatContractFinanceDate($row->document_date) : '')) . '</td>'
+                . '<td>' . e($reason !== '' ? $reason : '—') . '</td>'
+                . '<td>' . e($place !== '' ? $place : '—') . '</td>'
+                . '<td class="contract-finance-1c__amount">' . e(static::formatRubForContractCard((float) ($row->amount_value ?? 0))) . '</td>'
+                . '<td>' . e(static::formatContractCardDateTime($row->imported_at ?? null) ?? '—') . '</td>'
+                . '</tr>';
+        }
+
+        return $html;
+    }
+
+    private static function renderContractFinancePaymentRows(\Illuminate\Support\Collection $rows): string
+    {
+        if ($rows->isEmpty()) {
+            return '<tr><td colspan="6" class="contract-finance-1c__muted">По договору нет оплат из 1С.</td></tr>';
+        }
+
+        $html = '';
+        foreach ($rows as $row) {
+            $document = static::firstFilledString($row->document_number ?? null, $row->payment_external_id ?? null);
+            $purpose = trim((string) ($row->purpose ?? ''));
+
+            $html .= '<tr>'
+                . '<td>' . e(static::formatContractCardPeriod((string) ($row->period ?? ''))) . '</td>'
+                . '<td>' . e(static::formatContractFinanceDate($row->payment_date ?? null)) . '</td>'
+                . '<td>' . e($document !== '' ? $document : '—') . '</td>'
+                . '<td>' . e($purpose !== '' ? $purpose : '—') . '</td>'
+                . '<td class="contract-finance-1c__amount">' . e(static::formatRubForContractCard((float) ($row->amount ?? 0))) . '</td>'
+                . '<td>' . e(static::formatContractCardDateTime($row->imported_at ?? null) ?? '—') . '</td>'
+                . '</tr>';
+        }
+
+        return $html;
+    }
+
+    private static function firstFilledString(mixed ...$values): string
+    {
+        foreach ($values as $value) {
+            $string = trim((string) ($value ?? ''));
+            if ($string !== '') {
+                return $string;
+            }
+        }
+
+        return '';
+    }
+
+    private static function formatContractFinancePeriodRange(mixed $from, mixed $to): ?string
+    {
+        $fromLabel = static::formatContractFinanceDate($from);
+        $toLabel = static::formatContractFinanceDate($to);
+
+        if ($fromLabel === '—' && $toLabel === '—') {
+            return null;
+        }
+
+        if ($fromLabel !== '—' && $toLabel !== '—') {
+            return $fromLabel . ' — ' . $toLabel;
+        }
+
+        return $fromLabel !== '—' ? $fromLabel : $toLabel;
+    }
+
+    private static function formatContractFinanceDate(mixed $value): string
+    {
+        if (! $value) {
+            return '—';
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('d.m.Y');
+        } catch (Throwable) {
+            return (string) $value;
+        }
     }
 
     private static function contractDateRangeLabel(TenantContract $record, array $classified): string
