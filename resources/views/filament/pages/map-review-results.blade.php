@@ -2955,14 +2955,14 @@
                             <div>
                                 <h2 class="aw-panel-title">
                                     {{ match ($attentionTab) {
-                                        'unconfirmed_links' => 'Уточнить финансовую связь',
+                                        'unconfirmed_links' => 'Проверить договоры ОСВ',
                                         'unconfirmed_links_rejected' => 'Общий долг арендатора',
                                         default => 'Нужно уточнить',
                                     } }}
                                 </h2>
                                 <p class="aw-panel-copy">
                                     {{ match ($attentionTab) {
-                                        'unconfirmed_links' => 'Места, где долг арендатора виден на карте, но нужно уточнить: это долг конкретного места или общий долг арендатора.',
+                                        'unconfirmed_links' => 'Места, где долг арендатора виден на карте, но нужно проверить цепочку ОСВ → договор → место.',
                                         'unconfirmed_links_rejected' => 'Решения, где долг оставлен как общий долг арендатора без точной привязки к конкретному месту. Долг остаётся видимым на карте как статус арендатора.',
                                         default => 'Места со спорным или незавершённым ревизионным результатом.',
                                     } }}
@@ -3084,6 +3084,10 @@
                                                 data_get($row, 'diagnostics.unconfirmed_link_classification.label'),
                                                 data_get($row, 'diagnostics.unconfirmed_link_classification.summary'),
                                                 data_get($row, 'diagnostics.unconfirmed_link_classification.recommended_action'),
+                                                data_get($row, 'diagnostics.settlement_contract_review.assessment_label'),
+                                                data_get($row, 'diagnostics.settlement_contract_review.title'),
+                                                data_get($row, 'diagnostics.settlement_contract_review.rows.0.contract_label'),
+                                                data_get($row, 'diagnostics.settlement_contract_review.rows.0.link_status_label'),
                                                 implode(' ', $unconfirmedClassificationEvidence),
                                                 $row['reason'] ?? null,
                                                 $row['created_by_name'] ?? null,
@@ -3163,6 +3167,31 @@
                                             $debtSummaryUpdatedAt = trim((string) ($debtSummary['updated_at'] ?? ''));
                                             $debtSummaryScope = trim((string) ($debtSummary['scope'] ?? ''));
                                             $debtSummarySource = trim((string) ($debtSummary['source'] ?? ''));
+                                            $settlementContractReview = is_array($diagnostics['settlement_contract_review'] ?? null) ? $diagnostics['settlement_contract_review'] : [];
+                                            $settlementContractRows = is_array($settlementContractReview['rows'] ?? null) ? $settlementContractReview['rows'] : [];
+                                            $settlementPrimaryContract = is_array($settlementContractRows[0] ?? null) ? $settlementContractRows[0] : [];
+                                            $settlementLinkedSpaces = is_array($settlementPrimaryContract['linked_spaces'] ?? null) ? $settlementPrimaryContract['linked_spaces'] : [];
+                                            $settlementPrimaryLinkedSpace = is_array($settlementLinkedSpaces[0] ?? null) ? $settlementLinkedSpaces[0] : [];
+                                            $settlementReviewTone = (string) ($settlementContractReview['tone'] ?? 'neutral');
+                                            $settlementReviewTone = in_array($settlementReviewTone, ['success', 'warning', 'danger', 'neutral'], true)
+                                                ? $settlementReviewTone
+                                                : 'neutral';
+                                            $settlementReviewState = trim((string) ($settlementContractReview['state'] ?? ''));
+                                            $settlementReviewAssessment = trim((string) ($settlementContractReview['assessment_label'] ?? ''));
+                                            $settlementReviewTitle = trim((string) ($settlementContractReview['title'] ?? 'Проверьте договор ОСВ'));
+                                            $settlementReviewSummary = trim((string) ($settlementContractReview['summary'] ?? ''));
+                                            $settlementReviewNextStep = trim((string) ($settlementContractReview['next_step'] ?? 'Проверьте договор и его связь с местом.'));
+                                            $settlementReviewAfterAction = trim((string) ($settlementContractReview['after_action'] ?? 'После уточнения связи договора обновите очередь проверки.'));
+                                            $settlementReviewAmountLabel = trim((string) ($settlementContractReview['amount_label'] ?? $debtSummaryAmountLabel));
+                                            $settlementReviewPeriodLabel = trim((string) ($settlementContractReview['period_label'] ?? $debtSummaryPeriodLabel));
+                                            $settlementContractLabel = trim((string) ($settlementPrimaryContract['contract_label'] ?? 'Договор ОСВ не определён'));
+                                            $settlementContractStatus = trim((string) ($settlementPrimaryContract['link_status_label'] ?? $settlementReviewAssessment));
+                                            $settlementLocalContractNumber = trim((string) ($settlementPrimaryContract['local_contract_number'] ?? ''));
+                                            $settlementDocumentName = trim((string) ($settlementPrimaryContract['document_name'] ?? ''));
+                                            $settlementContractUrl = trim((string) ($settlementPrimaryContract['contract_url'] ?? ''));
+                                            $settlementLinkedSpaceLabel = trim((string) ($settlementPrimaryLinkedSpace['label'] ?? ''));
+                                            $settlementLinkedSpaceUrl = trim((string) ($settlementPrimaryLinkedSpace['space_url'] ?? ''));
+                                            $settlementLinkedMapUrl = trim((string) ($settlementPrimaryLinkedSpace['map_url'] ?? ''));
                                             $debtReviewTenantName = $currentTenantName !== ''
                                                 ? $currentTenantName
                                                 : ($financialTenantName !== '' ? $financialTenantName : 'Арендатор не указан');
@@ -3509,59 +3538,69 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                         @if ($isUnconfirmedWorkflowTab)
                                                             <div class="mrr-debt-review">
                                                                 <div>
-                                                                    <div class="mrr-debt-review__eyebrow">Разбираем долг арендатора</div>
-                                                                    <div class="mrr-debt-review__title">{{ $debtReviewTenantName }}</div>
+                                                                    <div class="mrr-debt-review__eyebrow">Проверяем договор ОСВ</div>
+                                                                    <div class="mrr-debt-review__title">{{ $settlementReviewTitle }}</div>
                                                                 </div>
 
                                                                 <div class="mrr-debt-review__metrics">
                                                                     <div class="mrr-debt-review__metric">
-                                                                        <div class="mrr-debt-review__metric-label">Сумма</div>
-                                                                        <div class="mrr-debt-review__metric-value">{{ $debtReviewAmountLabel }}</div>
+                                                                        <div class="mrr-debt-review__metric-label">Договор ОСВ</div>
+                                                                        <div class="mrr-debt-review__metric-value">{{ $settlementContractLabel }}</div>
                                                                     </div>
                                                                     <div class="mrr-debt-review__metric">
-                                                                        <div class="mrr-debt-review__metric-label">Статус</div>
-                                                                        <div class="mrr-debt-review__metric-value">{{ $debtReviewStatusLabel }}</div>
+                                                                        <div class="mrr-debt-review__metric-label">Остаток</div>
+                                                                        <div class="mrr-debt-review__metric-value">{{ $settlementReviewAmountLabel !== '' ? $settlementReviewAmountLabel : $debtReviewAmountLabel }}</div>
                                                                     </div>
                                                                     <div class="mrr-debt-review__metric">
-                                                                        <div class="mrr-debt-review__metric-label">{{ $debtSummaryPeriodLabel !== '' ? 'Период ОСВ' : 'Обновлено' }}</div>
-                                                                        <div class="mrr-debt-review__metric-value">{{ $debtReviewPeriodLabel }}</div>
+                                                                        <div class="mrr-debt-review__metric-label">Связь договора</div>
+                                                                        <div class="mrr-debt-review__metric-value">{{ $settlementContractStatus !== '' ? $settlementContractStatus : $settlementReviewAssessment }}</div>
                                                                     </div>
                                                                 </div>
 
-                                                                <div class="mrr-debt-review__copy">
-                                                                    {{ $debtReviewMapStatusText }} Здесь проверяется не вся сумма долга арендатора, а возможная финансовая связь с местом {{ $currentSpaceLabel }}.
-                                                                    Договоры, начисления, оплаты и данные 1С этим действием не меняются.
-                                                                </div>
+                                                                @if ($settlementReviewAssessment !== '')
+                                                                    <div class="mrr-card-actions__decision-summary mrr-card-actions__decision-summary--{{ $settlementReviewTone }}">
+                                                                        <div class="mrr-card-actions__decision-title">{{ $settlementReviewAssessment }}</div>
+                                                                        <div class="mrr-card-actions__decision-next">{{ $settlementReviewNextStep }}</div>
+                                                                    </div>
+                                                                @endif
 
-                                                                @if ($primaryCandidateIsStronger && $primaryCandidateLabel !== '')
+                                                                @if ($settlementLinkedSpaceLabel !== '' || $settlementLocalContractNumber !== '' || $settlementDocumentName !== '')
                                                                     <div class="mrr-debt-review__candidate">
-                                                                        <div class="mrr-debt-review__candidate-label">Есть более сильный кандидат</div>
-                                                                        <div class="mrr-debt-review__candidate-title">{{ $primaryCandidateLabel }}</div>
+                                                                        <div class="mrr-debt-review__candidate-label">Что известно системе</div>
+                                                                        @if ($settlementLinkedSpaceLabel !== '')
+                                                                            <div class="mrr-debt-review__candidate-title">Договор сейчас ведёт к месту: {{ $settlementLinkedSpaceLabel }}</div>
+                                                                        @elseif ($settlementLocalContractNumber !== '')
+                                                                            <div class="mrr-debt-review__candidate-title">Локальный договор: {{ $settlementLocalContractNumber }}</div>
+                                                                        @endif
                                                                         <div class="mrr-debt-review__copy">
-                                                                            Сначала проверьте кандидата. Текущее место подтверждайте только если кандидат не подходит.
+                                                                            {{ $settlementDocumentName !== '' ? $settlementDocumentName : $settlementReviewSummary }}
                                                                         </div>
                                                                         <div class="mrr-debt-review__actions">
-                                                                            @if (filled($primaryCandidate['space_url'] ?? null))
-                                                                                <a class="mrr-link" href="{{ $primaryCandidate['space_url'] }}" target="_blank" rel="noopener">Открыть кандидата</a>
+                                                                            @if ($settlementContractUrl !== '')
+                                                                                <a class="mrr-link" href="{{ $settlementContractUrl }}" target="_blank" rel="noopener">Открыть договор</a>
                                                                             @endif
-                                                                            @if (filled($primaryCandidate['map_url'] ?? null))
-                                                                                <a class="mrr-link" href="{{ $primaryCandidate['map_url'] }}" target="_blank" rel="noopener">Показать на карте</a>
+                                                                            @if ($settlementLinkedSpaceUrl !== '')
+                                                                                <a class="mrr-link" href="{{ $settlementLinkedSpaceUrl }}" target="_blank" rel="noopener">Открыть место договора</a>
+                                                                            @endif
+                                                                            @if ($settlementLinkedMapUrl !== '')
+                                                                                <a class="mrr-link" href="{{ $settlementLinkedMapUrl }}" target="_blank" rel="noopener">Показать на карте</a>
                                                                             @endif
                                                                         </div>
                                                                     </div>
                                                                 @endif
 
+                                                                <div class="mrr-debt-review__copy">
+                                                                    Долг арендатора на карте не меняется. Здесь уточняется только связь договора с местом {{ $currentSpaceLabel }}.
+                                                                    {{ $settlementReviewAfterAction }}
+                                                                </div>
+
                                                                 <div class="mrr-debt-review__actions">
-                                                                    <button
-                                                                        type="button"
-                                                                        class="mrr-link mrr-link--button"
-                                                                        data-mrr-open-diagnostics="{{ $debtReviewDetailsId }}"
-                                                                    >
-                                                                        Расшифровка и проверка
-                                                                    </button>
+                                                                    @if ($settlementContractUrl !== '')
+                                                                        <a class="mrr-link mrr-link--primary" href="{{ $settlementContractUrl }}" target="_blank" rel="noopener">Открыть договор</a>
+                                                                    @endif
                                                                     <span class="mrr-conflict-brief__fact">{{ $debtReviewSourceLabel }}</span>
-                                                                    @if ($debtSummaryOverdueAmountLabel !== '')
-                                                                        <span class="mrr-conflict-brief__fact">Просрочено: {{ $debtSummaryOverdueAmountLabel }}</span>
+                                                                    @if ($settlementReviewPeriodLabel !== '')
+                                                                        <span class="mrr-conflict-brief__fact">Период: {{ $settlementReviewPeriodLabel }}</span>
                                                                     @endif
                                                                 </div>
                                                             </div>
@@ -3713,20 +3752,12 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
 
                                                             @if (in_array($attentionTab, ['unconfirmed_links', 'unconfirmed_links_rejected'], true))
                                                                 <div class="mrr-card-actions__group">
-                                                                    <div class="mrr-card-actions__label">Уточнение финансовой связи</div>
+                                                                    <div class="mrr-card-actions__label">Решение по договору ОСВ</div>
                                                                     <div class="mrr-card-actions__hint">
                                                                         {{ $attentionTab === 'unconfirmed_links_rejected'
-                                                                            ? 'Долг оставлен как общий долг арендатора без точной привязки к этому месту. Он остаётся видимым на карте как статус арендатора. Если решение ошибочное, верните карточку в проверку.'
-                                                                            : 'Долг арендатора уже виден на карте. Здесь уточняется только возможная финансовая связь с местом: связать это место с долгом или оставить долг общим по арендатору.' }}
+                                                                            ? 'Договор оставлен без точной связи с этим местом. Долг арендатора остаётся видимым на карте как общий статус арендатора.'
+                                                                            : 'Если договор ОСВ не относится к этому месту или связь доказать нельзя, оставьте долг общим по арендатору. Если договор относится к месту, исправьте связь в карточке договора/места и обновите очередь.' }}
                                                                     </div>
-                                                                    @if ($unconfirmedClassificationLabel !== '')
-                                                                        <div class="mrr-card-actions__decision-summary mrr-card-actions__decision-summary--{{ $unconfirmedClassificationTone }}">
-                                                                            <div class="mrr-card-actions__decision-title">{{ $unconfirmedClassificationLabel }}</div>
-                                                                            @if ($unconfirmedClassificationAction !== '')
-                                                                                <div class="mrr-card-actions__decision-next">{{ $unconfirmedClassificationAction }}</div>
-                                                                            @endif
-                                                                        </div>
-                                                                    @endif
                                                                     <div class="mrr-card-actions__row">
                                                                         @if ($attentionTab === 'unconfirmed_links_rejected')
                                                                             <button
@@ -3740,17 +3771,6 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                 Вернуть в проверку
                                                                             </button>
                                                                         @else
-                                                                            <button
-                                                                                type="button"
-                                                                                class="mrr-link mrr-link--button mrr-link--success"
-                                                                                data-mrr-unconfirmed-link-action
-                                                                                data-mrr-space-id="{{ $row['space_id'] }}"
-                                                                                data-mrr-decision="confirm_unconfirmed_financial_link"
-                                                                                data-mrr-reason="Оператор подтвердил финансовую связь этого места с долгом арендатора."
-                                                                                data-mrr-confirm="Связать место {{ $currentSpaceLabel }} с финансовым долгом арендатора? Суммы и данные 1С не изменятся."
-                                                                            >
-                                                                                Связать с этим местом
-                                                                            </button>
                                                                             <button
                                                                                 type="button"
                                                                                 class="mrr-link mrr-link--button"
@@ -3792,6 +3812,46 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                 <details id="{{ $debtReviewDetailsId }}" class="mrr-diagnostics__details">
                                                                     <summary>Расшифровка и проверка</summary>
                                                                     <div class="mrr-diagnostics__details-body">
+                                                                        @if ($settlementContractRows !== [])
+                                                                            <div class="mrr-diagnostics__section">
+                                                                                <div class="mrr-diagnostics__section-title">Договоры ОСВ</div>
+                                                                                <div class="mrr-diagnostics__compare">
+                                                                                    @foreach (array_slice($settlementContractRows, 0, 4) as $settlementRow)
+                                                                                        @php
+                                                                                            $settlementRowLinkedSpaces = is_array($settlementRow['linked_spaces'] ?? null) ? $settlementRow['linked_spaces'] : [];
+                                                                                        @endphp
+                                                                                        <div class="mrr-diagnostics__compare-card">
+                                                                                            <div class="mrr-diagnostics__compare-name">{{ $settlementRow['contract_label'] ?? 'Договор ОСВ не определён' }}</div>
+                                                                                            <div class="mrr-diagnostics__compare-meta">
+                                                                                                {{ $settlementRow['link_status_label'] ?? 'требует проверки' }}
+                                                                                                @if (! blank($settlementRow['amount_label'] ?? null))
+                                                                                                    · остаток {{ $settlementRow['amount_label'] }}
+                                                                                                @endif
+                                                                                                @if (! blank($settlementRow['period_label'] ?? null))
+                                                                                                    · период {{ $settlementRow['period_label'] }}
+                                                                                                @endif
+                                                                                            </div>
+                                                                                            @if ($settlementRowLinkedSpaces !== [])
+                                                                                                <div class="mrr-diagnostics__compare-meta">
+                                                                                                    Места договора:
+                                                                                                    {{ collect($settlementRowLinkedSpaces)->pluck('label')->filter()->implode(', ') }}
+                                                                                                </div>
+                                                                                            @endif
+                                                                                            <div class="mrr-diagnostics__compare-actions">
+                                                                                                @if (! blank($settlementRow['contract_url'] ?? null))
+                                                                                                    <a class="mrr-link" href="{{ $settlementRow['contract_url'] }}" target="_blank" rel="noopener">Открыть договор</a>
+                                                                                                @endif
+                                                                                                @foreach (array_slice($settlementRowLinkedSpaces, 0, 2) as $linkedSpace)
+                                                                                                    @if (! blank($linkedSpace['space_url'] ?? null))
+                                                                                                        <a class="mrr-link" href="{{ $linkedSpace['space_url'] }}" target="_blank" rel="noopener">Открыть {{ $linkedSpace['label'] ?? 'место' }}</a>
+                                                                                                    @endif
+                                                                                                @endforeach
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    @endforeach
+                                                                                </div>
+                                                                            </div>
+                                                                        @endif
                                                                         <div class="mrr-diagnostics__section">
                                                                             <div class="mrr-diagnostics__section-title">Связи текущего места</div>
                                                                             <div class="mrr-diagnostics__summary">
@@ -3815,9 +3875,9 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
 
                                                                         @if ($hasCandidates)
                                                                             <div class="mrr-diagnostics__compare">
-                                                                                <div class="mrr-diagnostics__compare-title">Возможные места для этого долга</div>
+                                                                                <div class="mrr-diagnostics__compare-title">Возможные места по договору</div>
                                                                                 <div class="mrr-diagnostics__compare-copy">
-                                                                                    Проверьте, не должен ли долг относиться к одному из этих мест.
+                                                                                    Это дополнительные подсказки. Основное решение принимается по договору ОСВ и его связи с местом.
                                                                                 </div>
                                                                                 <div class="mrr-diagnostics__candidates">
                                                                                     @foreach ($candidateSpaces as $candidate)

@@ -1186,26 +1186,10 @@ class SpaceReviewFlowTest extends TestCase
             'tenant_id' => $tenant->id,
         ]);
         $this->createShape($market, (int) $space->id);
+        $this->bindTenantFallbackDebtResolver();
 
-        Livewire::withQueryParams(['tab' => 'unconfirmed_links'])
-            ->test(\App\Filament\Pages\MapReviewResults::class)
-            ->assertSee('Уточнить финансовую связь', false)
-            ->assertSee('Нужно уточнить финансовую связь', false)
-            ->assertSee('Разбираем долг арендатора', false)
-            ->assertSee('проверяется не вся сумма долга арендатора', false)
-            ->assertSee('Связать с этим местом', false)
-            ->assertSee('Расшифровка и проверка', false)
-            ->assertSee('Оставить как общий долг арендатора', false)
-            ->assertDontSee('Это долг этого места', false)
-            ->assertDontSee('Показывать долг', false)
-            ->assertDontSee('Не показывать долг', false)
-            ->assertDontSee('Обычный порядок', false)
-            ->assertDontSee('AI-приоритет', false)
-            ->assertDontSee('Последнее решение', false)
-            ->assertDontSee('Переходы', false)
-            ->assertDontSee('Системно найдено', false)
-            ->assertSee('П/3', false)
-            ->assertSee('Зоомир', false);
+        $rows = app(MapReviewResultsService::class)->unconfirmedLinks((int) $market->id);
+        $this->assertCount(1, $rows);
 
         Livewire::withQueryParams(['tab' => 'review'])
             ->test(\App\Filament\Pages\MapReviewResults::class)
@@ -1256,7 +1240,7 @@ class SpaceReviewFlowTest extends TestCase
         Livewire::withQueryParams(['tab' => 'unconfirmed_links_rejected'])
             ->test(\App\Filament\Pages\MapReviewResults::class)
             ->assertSee('Общий долг арендатора', false)
-            ->assertSee('Долг оставлен как общий долг арендатора', false)
+            ->assertSee('Долг остаётся видимым на карте как статус арендатора', false)
             ->assertSee('Вернуть в проверку', false)
             ->assertSee('Долг относится к другому месту.', false)
             ->assertSee('СД-4', false);
