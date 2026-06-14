@@ -14,11 +14,29 @@
         $latestImportLabel = $latestImportAt
             ? \Illuminate\Support\Carbon::parse($latestImportAt)->format('d.m.Y H:i')
             : 'Нет данных';
-        $statusClass = match ($summary['status']) {
-            'debt' => 'from-rose-500 to-red-600',
-            'credit' => 'from-emerald-500 to-teal-600',
-            'empty' => 'from-slate-500 to-slate-700',
-            default => 'from-sky-500 to-blue-600',
+        $statusCardClass = match ($summary['status']) {
+            'debt' => 'border-rose-200 bg-rose-50/80',
+            'credit' => 'border-emerald-200 bg-emerald-50/80',
+            'empty' => 'border-slate-200 bg-slate-50',
+            default => 'border-sky-200 bg-sky-50/80',
+        };
+        $statusAccentClass = match ($summary['status']) {
+            'debt' => 'bg-rose-600',
+            'credit' => 'bg-emerald-600',
+            'empty' => 'bg-slate-500',
+            default => 'bg-sky-600',
+        };
+        $statusTextClass = match ($summary['status']) {
+            'debt' => 'text-rose-800',
+            'credit' => 'text-emerald-800',
+            'empty' => 'text-slate-800',
+            default => 'text-sky-800',
+        };
+        $statusBadgeClass = match ($summary['status']) {
+            'debt' => 'bg-rose-100 text-rose-800 border-rose-200',
+            'credit' => 'bg-emerald-100 text-emerald-800 border-emerald-200',
+            'empty' => 'bg-slate-100 text-slate-700 border-slate-200',
+            default => 'bg-sky-100 text-sky-800 border-sky-200',
         };
         $statusPillClass = match ($summary['status']) {
             'debt' => 'bg-rose-50 text-rose-700 border-rose-200',
@@ -60,67 +78,77 @@
         };
     @endphp
 
-    <section class="rounded-3xl bg-gradient-to-br {{ $statusClass }} text-white p-4 shadow-sm">
-        <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-                <p class="text-xs uppercase tracking-[0.14em] text-white/70">Финансы 1С</p>
-                <h2 class="mt-2 text-2xl font-semibold leading-tight">{{ $summary['statusLabel'] }}</h2>
-                <p class="mt-1 text-sm text-white/80">{{ $summary['statusCaption'] }}</p>
-            </div>
+    <section class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-100 px-4 py-4 md:px-5">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Финансы 1С</p>
+                    <h2 class="mt-1 text-xl font-semibold text-slate-950">Сводка по расчетам</h2>
+                    <p class="mt-1 max-w-2xl text-sm text-slate-600">
+                        Итоговый остаток, начисления и оплаты по данным ОСВ за выбранный месяц.
+                    </p>
+                </div>
 
-            <div class="rounded-3xl bg-white/15 px-4 py-3 backdrop-blur md:min-w-56">
-                <p class="text-xs text-white/70">Итог по ОСВ</p>
-                <p class="mt-1 text-2xl font-semibold">{{ $balanceLabel }}</p>
-            </div>
-        </div>
-    </section>
-
-    <section class="rounded-3xl bg-white border border-slate-200 p-4 shadow-sm space-y-4">
-        <div class="grid gap-3 md:grid-cols-[minmax(16rem,22rem)_1fr] md:items-end">
-            <form method="GET" class="space-y-1.5">
-                <label for="cabinet-finance-month" class="block text-xs font-semibold text-slate-500">Период</label>
-                <select
-                    id="cabinet-finance-month"
-                    name="month"
-                    class="w-full rounded-2xl border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900"
-                    onchange="this.form.submit()"
-                >
-                    @forelse($availablePeriods as $period)
-                        <option value="{{ $period->format('Y-m') }}" @selected($period->format('Y-m') === $selectedPeriod->format('Y-m'))>
-                            {{ $period->translatedFormat('F Y') }}
-                        </option>
-                    @empty
-                        <option value="{{ $selectedPeriod->format('Y-m') }}">{{ $periodLabel }}</option>
-                    @endforelse
-                </select>
-            </form>
-
-            <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                    <p class="text-xs text-slate-500">Период ОСВ</p>
-                    <p class="mt-1 text-sm font-semibold text-slate-900">{{ $periodRangeLabel }}</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                    <p class="text-xs text-slate-500">Начислено</p>
-                    <p class="mt-1 text-sm font-semibold text-slate-900">{{ $formatMoney((float) $summary['accrued']) }}</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                    <p class="text-xs text-slate-500">Оплачено</p>
-                    <p class="mt-1 text-sm font-semibold text-slate-900">{{ $formatMoney((float) $summary['paid']) }}</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
-                    <p class="text-xs text-slate-500">Обновлено</p>
-                    <p class="mt-1 text-sm font-semibold text-slate-900">{{ $latestImportLabel }}</p>
-                </div>
+                <form method="GET" class="w-full space-y-1.5 lg:w-72">
+                    <label for="cabinet-finance-month" class="block text-xs font-semibold text-slate-500">Период</label>
+                    <select
+                        id="cabinet-finance-month"
+                        name="month"
+                        class="w-full rounded-2xl border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm"
+                        onchange="this.form.submit()"
+                    >
+                        @forelse($availablePeriods as $period)
+                            <option value="{{ $period->format('Y-m') }}" @selected($period->format('Y-m') === $selectedPeriod->format('Y-m'))>
+                                {{ $period->translatedFormat('F Y') }}
+                            </option>
+                        @empty
+                            <option value="{{ $selectedPeriod->format('Y-m') }}">{{ $periodLabel }}</option>
+                        @endforelse
+                    </select>
+                    @if($firstPeriodLabel)
+                        <p class="text-xs text-slate-500">Доступно с {{ $firstPeriodLabel }}.</p>
+                    @endif
+                </form>
             </div>
         </div>
 
-        @if($firstPeriodLabel)
-            <p class="text-xs text-slate-500">Доступны периоды не ранее {{ $firstPeriodLabel }}.</p>
-        @endif
+        <div class="space-y-4 p-4 md:p-5">
+            <div class="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
+                <article class="relative overflow-hidden rounded-3xl border {{ $statusCardClass }} p-4 md:p-5">
+                    <div class="absolute inset-y-0 left-0 w-1.5 {{ $statusAccentClass }}"></div>
+                    <div class="pl-2">
+                        <span class="inline-flex rounded-full border px-3 py-1 text-xs font-semibold {{ $statusBadgeClass }}">
+                            {{ $summary['statusLabel'] }}
+                        </span>
+                        <p class="mt-4 text-sm font-medium text-slate-600">Итоговый остаток по ОСВ</p>
+                        <p class="mt-1 text-3xl font-semibold tracking-tight {{ $statusTextClass }}">{{ $balanceLabel }}</p>
+                        <p class="mt-3 max-w-xl text-sm text-slate-700">{{ $summary['statusCaption'] }}</p>
+                    </div>
+                </article>
 
-        <div class="rounded-2xl border {{ $statusPillClass }} px-3 py-2 text-sm">
-            ОСВ показывает итоговый остаток. Начисления и оплаты ниже являются расшифровкой движения за выбранный период.
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <p class="text-xs text-slate-500">Период ОСВ</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">{{ $periodRangeLabel }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <p class="text-xs text-slate-500">Обновлено</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">{{ $latestImportLabel }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <p class="text-xs text-slate-500">Начислено за период</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">{{ $formatMoney((float) $summary['accrued']) }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+                        <p class="text-xs text-slate-500">Оплачено за период</p>
+                        <p class="mt-1 text-sm font-semibold text-slate-900">{{ $formatMoney((float) $summary['paid']) }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border {{ $statusPillClass }} px-3 py-2 text-sm">
+                ОСВ показывает итоговый остаток. Начисления и оплаты ниже являются расшифровкой движения за выбранный период.
+            </div>
         </div>
     </section>
 
