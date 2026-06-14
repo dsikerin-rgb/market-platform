@@ -1612,7 +1612,7 @@
 
             .mrr-diagnostics__compare {
                 display: grid;
-                gap: 0.55rem;
+                gap: 0.65rem;
                 border-radius: 1rem;
                 border: 1px solid rgba(37, 99, 235, 0.14);
                 background: rgba(37, 99, 235, 0.06);
@@ -1646,10 +1646,121 @@
                 color: #94a3b8;
             }
 
+            .mrr-diagnostics__compare-card {
+                display: grid;
+                gap: 0.62rem;
+                border-radius: 0.85rem;
+                border: 1px solid rgba(148, 163, 184, 0.18);
+                background: rgba(255, 255, 255, 0.78);
+                padding: 0.72rem 0.82rem;
+            }
+
+            .dark .mrr-diagnostics__compare-card {
+                border-color: rgba(148, 163, 184, 0.16);
+                background: rgba(15, 23, 42, 0.42);
+            }
+
+            .mrr-diagnostics__compare-head {
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                gap: 0.65rem;
+            }
+
+            .mrr-diagnostics__compare-name {
+                color: #0f172a;
+                font-size: 0.92rem;
+                font-weight: 800;
+                line-height: 1.25;
+            }
+
+            .dark .mrr-diagnostics__compare-name {
+                color: #f8fafc;
+            }
+
+            .mrr-diagnostics__compare-badge {
+                flex-shrink: 0;
+                border-radius: 999px;
+                border: 1px solid rgba(37, 99, 235, 0.16);
+                background: rgba(37, 99, 235, 0.08);
+                color: #1d4ed8;
+                padding: 0.22rem 0.5rem;
+                font-size: 0.68rem;
+                font-weight: 800;
+                line-height: 1.15;
+                text-align: center;
+            }
+
+            .dark .mrr-diagnostics__compare-badge {
+                border-color: rgba(96, 165, 250, 0.24);
+                background: rgba(37, 99, 235, 0.16);
+                color: #bfdbfe;
+            }
+
+            .mrr-diagnostics__compare-facts {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.5rem;
+                margin: 0;
+            }
+
+            .mrr-diagnostics__compare-fact {
+                min-width: 0;
+                border-radius: 0.7rem;
+                background: rgba(248, 250, 252, 0.86);
+                padding: 0.45rem 0.55rem;
+            }
+
+            .dark .mrr-diagnostics__compare-fact {
+                background: rgba(15, 23, 42, 0.56);
+            }
+
+            .mrr-diagnostics__compare-fact dt {
+                margin: 0;
+                color: #64748b;
+                font-size: 0.68rem;
+                font-weight: 700;
+                line-height: 1.2;
+            }
+
+            .dark .mrr-diagnostics__compare-fact dt {
+                color: #94a3b8;
+            }
+
+            .mrr-diagnostics__compare-fact dd {
+                margin: 0.18rem 0 0;
+                overflow-wrap: anywhere;
+                color: #0f172a;
+                font-size: 0.78rem;
+                font-weight: 800;
+                line-height: 1.25;
+            }
+
+            .dark .mrr-diagnostics__compare-fact dd {
+                color: #f8fafc;
+            }
+
             .mrr-diagnostics__compare-actions {
                 display: flex;
                 flex-wrap: wrap;
                 gap: 0.45rem;
+            }
+
+            .mrr-diagnostics__compare-actions .mrr-link {
+                min-height: 1.8rem;
+                padding: 0.34rem 0.64rem;
+                font-size: 0.74rem;
+                font-weight: 800;
+            }
+
+            @media (max-width: 760px) {
+                .mrr-diagnostics__compare-head {
+                    flex-direction: column;
+                }
+
+                .mrr-diagnostics__compare-facts {
+                    grid-template-columns: 1fr;
+                }
             }
 
             .mrr-diagnostics__detail-list {
@@ -3590,17 +3701,6 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                     </div>
                                                                 </div>
 
-                                                                @if ($settlementReviewAssessment !== '')
-                                                                    <div class="mrr-card-actions__decision-summary mrr-card-actions__decision-summary--{{ $settlementReviewTone }}">
-                                                                        <div class="mrr-card-actions__decision-title">{{ $settlementReviewAssessment }}</div>
-                                                                        <div class="mrr-card-actions__decision-next">{{ $settlementReviewAfterAction }}</div>
-                                                                    </div>
-                                                                @endif
-
-                                                                <div class="mrr-debt-review__actions">
-                                                                    <span class="mrr-conflict-brief__fact">{{ $debtReviewSourceLabel }}</span>
-                                                                    <span class="mrr-conflict-brief__fact">Текущая карточка: {{ $currentSpaceLabel }}</span>
-                                                                </div>
                                                             </div>
                                                         @endif
                                                         <div class="mrr-card-actions">
@@ -3810,6 +3910,34 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                 <details id="{{ $debtReviewDetailsId }}" class="mrr-diagnostics__details">
                                                                     <summary>Показать проверку</summary>
                                                                     <div class="mrr-diagnostics__details-body">
+                                                                        <div class="mrr-diagnostics__section">
+                                                                            <div class="mrr-diagnostics__section-title">Почему система так решила</div>
+                                                                            <div class="mrr-diagnostics__compare">
+                                                                                <div class="mrr-diagnostics__compare-card">
+                                                                                    <dl class="mrr-diagnostics__compare-facts">
+                                                                                        <div class="mrr-diagnostics__compare-fact">
+                                                                                            <dt>Текущая карточка</dt>
+                                                                                            <dd>{{ $currentSpaceLabel }}</dd>
+                                                                                        </div>
+                                                                                        <div class="mrr-diagnostics__compare-fact">
+                                                                                            <dt>Договор ОСВ</dt>
+                                                                                            <dd>{{ $settlementContractLabel }}</dd>
+                                                                                        </div>
+                                                                                        <div class="mrr-diagnostics__compare-fact">
+                                                                                            <dt>Куда ведёт договор</dt>
+                                                                                            <dd>{{ $settlementLinkedSpaceLabel !== '' ? $settlementLinkedSpaceLabel : 'Место не подтверждено' }}</dd>
+                                                                                        </div>
+                                                                                    </dl>
+                                                                                    <div class="mrr-diagnostics__compare-copy">
+                                                                                        @if ($settlementLinkedSpaceLabel !== '')
+                                                                                            Система предлагает сначала проверить место договора. Если договор относится туда, текущую карточку не нужно связывать с этим договором.
+                                                                                        @else
+                                                                                            У договора нет понятной связи с местом, поэтому точную связь с текущей карточкой подтвердить нельзя без ручной проверки.
+                                                                                        @endif
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
                                                                         @if ($settlementContractRows !== [])
                                                                             <div class="mrr-diagnostics__section">
                                                                                 <div class="mrr-diagnostics__section-title">Договоры ОСВ</div>
@@ -3817,24 +3945,37 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                     @foreach (array_slice($settlementContractRows, 0, 4) as $settlementRow)
                                                                                         @php
                                                                                             $settlementRowLinkedSpaces = is_array($settlementRow['linked_spaces'] ?? null) ? $settlementRow['linked_spaces'] : [];
+                                                                                            $settlementRowContractLabel = trim((string) ($settlementRow['contract_label'] ?? 'Договор ОСВ не определён'));
+                                                                                            $settlementRowStatusLabel = trim((string) ($settlementRow['link_status_label'] ?? 'требует проверки'));
+                                                                                            $settlementRowAmountLabel = trim((string) ($settlementRow['amount_label'] ?? ''));
+                                                                                            $settlementRowPeriodLabel = trim((string) ($settlementRow['period_label'] ?? ''));
+                                                                                            $settlementRowSpacesLabel = collect($settlementRowLinkedSpaces)->pluck('label')->filter()->implode(', ');
                                                                                         @endphp
                                                                                         <div class="mrr-diagnostics__compare-card">
-                                                                                            <div class="mrr-diagnostics__compare-name">{{ $settlementRow['contract_label'] ?? 'Договор ОСВ не определён' }}</div>
-                                                                                            <div class="mrr-diagnostics__compare-meta">
-                                                                                                {{ $settlementRow['link_status_label'] ?? 'требует проверки' }}
-                                                                                                @if (! blank($settlementRow['amount_label'] ?? null))
-                                                                                                    · остаток {{ $settlementRow['amount_label'] }}
-                                                                                                @endif
-                                                                                                @if (! blank($settlementRow['period_label'] ?? null))
-                                                                                                    · период {{ $settlementRow['period_label'] }}
-                                                                                                @endif
+                                                                                            <div class="mrr-diagnostics__compare-head">
+                                                                                                <div class="mrr-diagnostics__compare-name">{{ $settlementRowContractLabel }}</div>
+                                                                                                <div class="mrr-diagnostics__compare-badge">{{ $settlementRowStatusLabel }}</div>
                                                                                             </div>
-                                                                                            @if ($settlementRowLinkedSpaces !== [])
-                                                                                                <div class="mrr-diagnostics__compare-meta">
-                                                                                                    Места договора:
-                                                                                                    {{ collect($settlementRowLinkedSpaces)->pluck('label')->filter()->implode(', ') }}
-                                                                                                </div>
-                                                                                            @endif
+                                                                                            <dl class="mrr-diagnostics__compare-facts">
+                                                                                                @if ($settlementRowAmountLabel !== '')
+                                                                                                    <div class="mrr-diagnostics__compare-fact">
+                                                                                                        <dt>Остаток</dt>
+                                                                                                        <dd>{{ $settlementRowAmountLabel }}</dd>
+                                                                                                    </div>
+                                                                                                @endif
+                                                                                                @if ($settlementRowPeriodLabel !== '')
+                                                                                                    <div class="mrr-diagnostics__compare-fact">
+                                                                                                        <dt>Период</dt>
+                                                                                                        <dd>{{ $settlementRowPeriodLabel }}</dd>
+                                                                                                    </div>
+                                                                                                @endif
+                                                                                                @if ($settlementRowSpacesLabel !== '')
+                                                                                                    <div class="mrr-diagnostics__compare-fact">
+                                                                                                        <dt>Место договора</dt>
+                                                                                                        <dd>{{ $settlementRowSpacesLabel }}</dd>
+                                                                                                    </div>
+                                                                                                @endif
+                                                                                            </dl>
                                                                                             <div class="mrr-diagnostics__compare-actions">
                                                                                                 @if (! blank($settlementRow['contract_url'] ?? null))
                                                                                                     <a class="mrr-link" href="{{ $settlementRow['contract_url'] }}" target="_blank" rel="noopener">Открыть договор</a>
@@ -3848,67 +3989,6 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                                         </div>
                                                                                     @endforeach
                                                                                 </div>
-                                                                            </div>
-                                                                        @endif
-                                                                        <div class="mrr-diagnostics__section">
-                                                                            <div class="mrr-diagnostics__section-title">Связи текущего места</div>
-                                                                            <div class="mrr-diagnostics__summary">
-                                                                                @foreach ($relationCounts as $item)
-                                                                                    <span class="mrr-diagnostics__count {{ ! empty($item['important']) ? 'mrr-diagnostics__count--important' : '' }}">
-                                                                                        {{ $item['label'] }}: {{ $item['count'] }}
-                                                                                    </span>
-                                                                                @endforeach
-                                                                                @foreach (array_slice($unconfirmedClassificationEvidence, 0, 3) as $evidenceItem)
-                                                                                    <span class="mrr-diagnostics__count">{{ $evidenceItem }}</span>
-                                                                                @endforeach
-                                                                            </div>
-                                                                        </div>
-
-                                                                        @if ($showRelationAssessment && $relationAssessment !== '')
-                                                                            <span class="mrr-assessment mrr-assessment--{{ $row['assessment_tone'] ?? 'neutral' }}">
-                                                                                {{ $row['assessment_label'] ?? 'Требует проверки' }}
-                                                                            </span>
-                                                                            <div class="mrr-diagnostics__assessment">{{ $relationAssessment }}</div>
-                                                                        @endif
-
-                                                                        @if ($hasCandidates)
-                                                                            <div class="mrr-diagnostics__compare">
-                                                                                <div class="mrr-diagnostics__compare-title">Возможные места по договору</div>
-                                                                                <div class="mrr-diagnostics__compare-copy">
-                                                                                    Это дополнительные подсказки. Основное решение принимается по договору ОСВ и его связи с местом.
-                                                                                </div>
-                                                                                <div class="mrr-diagnostics__candidates">
-                                                                                    @foreach ($candidateSpaces as $candidate)
-                                                                                        <div class="mrr-diagnostics__candidate">
-                                                                                            <div class="mrr-diagnostics__candidate-main">
-                                                                                                <div>{{ $candidate['label'] ?? ('#' . ($candidate['space_id'] ?? '')) }}</div>
-                                                                                                @if (filled($candidate['tenant_name'] ?? null))
-                                                                                                    <div class="mrr-diagnostics__candidate-meta">{{ $candidate['tenant_name'] }}</div>
-                                                                                                @endif
-                                                                                            </div>
-                                                                                            @if (filled($candidate['match_reason'] ?? null))
-                                                                                                <div class="mrr-diagnostics__candidate-meta">{{ $candidate['match_reason'] }}</div>
-                                                                                            @endif
-                                                                                            <div class="mrr-diagnostics__candidate-actions">
-                                                                                                @if (filled($candidate['space_url'] ?? null))
-                                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['space_url'] }}" target="_blank" rel="noopener">Открыть место</a>
-                                                                                                @endif
-                                                                                                @if (filled($candidate['map_url'] ?? null))
-                                                                                                    <a class="mrr-diagnostics__candidate-action" href="{{ $candidate['map_url'] }}" target="_blank" rel="noopener">Открыть карту</a>
-                                                                                                @endif
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    @endforeach
-                                                                                </div>
-                                                                            </div>
-                                                                        @elseif ($hasRelationDetails)
-                                                                            <div class="mrr-diagnostics__detail-list">
-                                                                                @foreach ($relationDetails as $item)
-                                                                                    <div class="mrr-diagnostics__detail-item">
-                                                                                        <div class="mrr-diagnostics__detail-title">{{ $item['label'] }}: {{ $item['count'] }}</div>
-                                                                                        <div class="mrr-diagnostics__detail-copy">{{ $item['description'] }}</div>
-                                                                                    </div>
-                                                                                @endforeach
                                                                             </div>
                                                                         @endif
                                                                     </div>
