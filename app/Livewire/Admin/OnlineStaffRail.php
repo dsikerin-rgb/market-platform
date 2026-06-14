@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use App\Models\User;
 use App\Support\StaffConversationService;
+use App\Support\SystemAgentService;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
@@ -38,27 +39,9 @@ class OnlineStaffRail extends Component
             return collect();
         }
 
-        $marketId = $this->resolveMarketId();
-
-        return User::query()
-            ->select(['id', 'name', 'email', 'market_id', 'last_seen_at'])
+        return $this->staffBaseQuery($this->resolveMarketId(), $user)
             ->whereNotNull('last_seen_at')
             ->where('last_seen_at', '>=', now()->subMinutes(5))
-            ->where(function (Builder $query): void {
-                $query
-                    ->whereNull('tenant_id')
-                    ->orWhere('tenant_id', 0);
-            })
-            ->whereDoesntHave('roles', function (Builder $query): void {
-                $query->whereIn('name', ['merchant', 'merchant-user', 'tenant', 'buyer', 'user']);
-            })
-            ->when($marketId > 0, function (Builder $query) use ($marketId, $user): Builder {
-                return $query->where(function (Builder $scoped) use ($marketId, $user): void {
-                    $scoped
-                        ->where('market_id', $marketId)
-                        ->orWhere('id', (int) $user->id);
-                });
-            })
             ->orderByRaw('CASE WHEN id = ? THEN 0 ELSE 1 END', [(int) $user->id])
             ->orderByDesc('last_seen_at')
             ->limit(12)
@@ -154,7 +137,7 @@ class OnlineStaffRail extends Component
 
     private function staffBaseQuery(int $marketId, User $user): Builder
     {
-        return User::query()
+        $query = User::query()
             ->select(['id', 'name', 'email', 'market_id', 'last_seen_at'])
             ->where(function (Builder $query): void {
                 $query
@@ -164,13 +147,27 @@ class OnlineStaffRail extends Component
             ->whereDoesntHave('roles', function (Builder $query): void {
                 $query->whereIn('name', ['merchant', 'merchant-user', 'tenant', 'buyer', 'user']);
             })
-            ->when($marketId > 0, function (Builder $query) use ($marketId, $user): Builder {
-                return $query->where(function (Builder $scoped) use ($marketId, $user): void {
-                    $scoped
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('email')
+                    ->orWhereRaw('LOWER(email) NOT LIKE ?', ['%@' . SystemAgentService::EMAIL_DOMAIN]);
+            });
+
+        if ($this->isSuperAdmin($user)) {
+            return $query->when($marketId > 0, function (Builder $scoped) use ($marketId, $user): Builder {
+                return $scoped->where(function (Builder $marketScoped) use ($marketId, $user): void {
+                    $marketScoped
                         ->where('market_id', $marketId)
                         ->orWhere('id', (int) $user->id);
                 });
             });
+        }
+
+        if ($marketId <= 0) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('market_id', $marketId);
     }
 
     private function resolveMarketId(): int
@@ -181,7 +178,7 @@ class OnlineStaffRail extends Component
             return 0;
         }
 
-        if (! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())) {
+        if (! $this->isSuperAdmin($user)) {
             return (int) ($user->market_id ?: 0);
         }
 
@@ -194,5 +191,10 @@ class OnlineStaffRail extends Component
             ?: session('filament.admin.selected_market_id')
             ?: 0
         );
+    }
+
+    private function isSuperAdmin(User $user): bool
+    {
+        return method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
     }
 }

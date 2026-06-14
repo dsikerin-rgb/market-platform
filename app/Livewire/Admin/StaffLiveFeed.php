@@ -3,11 +3,13 @@
 namespace App\Livewire\Admin;
 
 use App\Models\StaffFeedPost;
+use App\Models\User;
 use App\Support\MarketplaceMediaStorage;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -23,6 +25,11 @@ class StaffLiveFeed extends Component
      * @var array<int, TemporaryUploadedFile>
      */
     public array $attachments = [];
+
+    /**
+     * @var array<int, string>
+     */
+    public array $commentBodies = [];
 
     public function createPost(): void
     {
@@ -59,6 +66,13 @@ class StaffLiveFeed extends Component
             return;
         }
 
+        $marketId = $this->resolveMarketId();
+        if (! $this->isSuperAdmin($user) && $marketId <= 0) {
+            $this->addError('body', 'Для публикации нужен выбранный рынок.');
+
+            return;
+        }
+
         $storedAttachments = [];
         foreach ($files as $file) {
             $mimeType = (string) ($file->getMimeType() ?: 'application/octet-stream');
@@ -74,7 +88,7 @@ class StaffLiveFeed extends Component
         }
 
         StaffFeedPost::query()->create([
-            'market_id' => $this->resolveMarketId() ?: null,
+            'market_id' => $marketId > 0 ? $marketId : null,
             'author_user_id' => (int) $user->id,
             'type' => 'message',
             'body' => $body,
@@ -91,33 +105,118 @@ class StaffLiveFeed extends Component
             ->send();
     }
 
+    public function createComment(int $postId): void
+    {
+        if (! Schema::hasTable('staff_feed_comments')) {
+            Notification::make()
+                ->title('Комментарии еще не готовы')
+                ->body('Дождитесь завершения миграций базы данных.')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $field = 'commentBodies.' . $postId;
+
+        $this->validate([
+            $field => ['required', 'string', 'max:2000'],
+        ], [], [
+            $field => 'комментарий',
+        ]);
+
+        $body = trim((string) ($this->commentBodies[$postId] ?? ''));
+        if ($body === '') {
+            $this->addError($field, 'Напишите комментарий.');
+
+            return;
+        }
+
+        $user = Filament::auth()->user();
+        if (! $user) {
+            return;
+        }
+
+        $post = $this->visiblePostsQuery()->whereKey($postId)->first();
+        if (! $post) {
+            Notification::make()
+                ->title('Сообщение не найдено')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $post->comments()->create([
+            'author_user_id' => (int) $user->id,
+            'body' => $body,
+        ]);
+
+        unset($this->commentBodies[$postId]);
+
+        Notification::make()
+            ->title('Комментарий добавлен')
+            ->success()
+            ->send();
+    }
+
     public function render(): View
     {
         return view('livewire.admin.staff-live-feed', [
             'posts' => $this->posts(),
+            'commentsReady' => Schema::hasTable('staff_feed_comments'),
         ]);
     }
 
-    private function posts()
+    private function posts(): Collection
     {
         if (! Schema::hasTable('staff_feed_posts')) {
             return collect();
         }
 
-        $marketId = $this->resolveMarketId();
+        $query = $this->visiblePostsQuery()
+            ->with(['author:id,name,email']);
 
-        return StaffFeedPost::query()
-            ->with(['author:id,name,email'])
-            ->when($marketId > 0, function (Builder $query) use ($marketId): Builder {
-                return $query->where(function (Builder $scoped) use ($marketId): void {
-                    $scoped
-                        ->whereNull('market_id')
-                        ->orWhere('market_id', $marketId);
-                });
-            })
+        if (Schema::hasTable('staff_feed_comments')) {
+            $query->with([
+                'comments' => fn ($comments) => $comments
+                    ->with(['author:id,name,email'])
+                    ->oldest(),
+            ]);
+        }
+
+        return $query
             ->latest()
             ->limit(20)
             ->get();
+    }
+
+    private function visiblePostsQuery(): Builder
+    {
+        $user = Filament::auth()->user();
+        $marketId = $this->resolveMarketId();
+
+        $query = StaffFeedPost::query();
+
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($this->isSuperAdmin($user)) {
+            return $query->when($marketId > 0, function (Builder $scoped) use ($marketId): Builder {
+                return $scoped->where(function (Builder $marketScoped) use ($marketId): void {
+                    $marketScoped
+                        ->whereNull('market_id')
+                        ->orWhere('market_id', $marketId);
+                });
+            });
+        }
+
+        if ($marketId <= 0) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('market_id', $marketId);
     }
 
     private function resolveMarketId(): int
@@ -128,7 +227,7 @@ class StaffLiveFeed extends Component
             return 0;
         }
 
-        if (! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())) {
+        if (! $this->isSuperAdmin($user)) {
             return (int) ($user->market_id ?: 0);
         }
 
@@ -141,5 +240,10 @@ class StaffLiveFeed extends Component
             ?: session('filament.admin.selected_market_id')
             ?: 0
         );
+    }
+
+    private function isSuperAdmin(User $user): bool
+    {
+        return method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
     }
 }

@@ -11,6 +11,21 @@
 
         return mb_strtoupper(implode('', $letters));
     };
+
+    $replyWord = static function (int $count): string {
+        $lastTwo = $count % 100;
+        $last = $count % 10;
+
+        if ($lastTwo >= 11 && $lastTwo <= 14) {
+            return 'ответов';
+        }
+
+        return match ($last) {
+            1 => 'ответ',
+            2, 3, 4 => 'ответа',
+            default => 'ответов',
+        };
+    };
 @endphp
 
 <section class="staff-live-feed" wire:poll.30s>
@@ -352,6 +367,155 @@
             color: #e2e8f0;
         }
 
+        .staff-live-feed__comments {
+            display: grid;
+            gap: 0.65rem;
+            margin-top: 0.85rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.16);
+            padding-top: 0.85rem;
+        }
+
+        html.dark .staff-live-feed__comments {
+            border-top-color: rgba(148, 163, 184, 0.14);
+        }
+
+        .staff-live-feed__comments-title {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: #475569;
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        html.dark .staff-live-feed__comments-title {
+            color: #94a3b8;
+        }
+
+        .staff-live-feed__comment {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            gap: 0.55rem;
+        }
+
+        .staff-live-feed__comment-avatar {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #075985;
+            font-size: 0.68rem;
+            font-weight: 900;
+        }
+
+        html.dark .staff-live-feed__comment-avatar {
+            background: rgba(14, 165, 233, 0.14);
+            color: #bae6fd;
+        }
+
+        .staff-live-feed__comment-card {
+            min-width: 0;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            border-radius: 0.9rem;
+            background: rgba(255, 255, 255, 0.68);
+            padding: 0.6rem 0.7rem;
+        }
+
+        html.dark .staff-live-feed__comment-card {
+            border-color: rgba(148, 163, 184, 0.12);
+            background: rgba(15, 23, 42, 0.38);
+        }
+
+        .staff-live-feed__comment-meta {
+            display: flex;
+            align-items: baseline;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        .staff-live-feed__comment-author {
+            color: #0f172a;
+            font-size: 0.82rem;
+            font-weight: 800;
+        }
+
+        html.dark .staff-live-feed__comment-author {
+            color: #f8fafc;
+        }
+
+        .staff-live-feed__comment-body {
+            margin-top: 0.25rem;
+            color: #334155;
+            font-size: 0.86rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        html.dark .staff-live-feed__comment-body {
+            color: #cbd5e1;
+        }
+
+        .staff-live-feed__comment-form {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.55rem;
+            align-items: start;
+        }
+
+        .staff-live-feed__comment-input {
+            width: 100%;
+            min-height: 2.5rem;
+            resize: vertical;
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            border-radius: 0.85rem;
+            background: #fff;
+            padding: 0.62rem 0.75rem;
+            color: #0f172a;
+            font-size: 0.86rem;
+            line-height: 1.45;
+            outline: none;
+        }
+
+        html.dark .staff-live-feed__comment-input {
+            border-color: rgba(148, 163, 184, 0.18);
+            background: rgba(15, 23, 42, 0.62);
+            color: #f8fafc;
+        }
+
+        .staff-live-feed__comment-input:focus {
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+        }
+
+        .staff-live-feed__comment-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            border: 0;
+            border-radius: 0.85rem;
+            background: #0f172a;
+            color: #fff;
+            cursor: pointer;
+            transition: background-color 150ms ease, transform 150ms ease;
+        }
+
+        .staff-live-feed__comment-button:hover,
+        .staff-live-feed__comment-button:focus-visible {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        html.dark .staff-live-feed__comment-button {
+            background: #2563eb;
+        }
+
         .staff-live-feed__attachments {
             display: grid;
             gap: 0.55rem;
@@ -440,6 +604,14 @@
 
             .staff-live-feed__post {
                 grid-template-columns: minmax(0, 1fr);
+            }
+
+            .staff-live-feed__comment-form {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .staff-live-feed__comment-button {
+                width: 100%;
             }
         }
     </style>
@@ -575,6 +747,58 @@
                                     </a>
                                 @endif
                             @endforeach
+                        </div>
+                    @endif
+
+                    @if ($commentsReady)
+                        @php
+                            $postComments = $post->comments ?? collect();
+                        @endphp
+
+                        <div class="staff-live-feed__comments">
+                            @if ($postComments->isNotEmpty())
+                                <div class="staff-live-feed__comments-title">
+                                    <x-filament::icon icon="heroicon-o-chat-bubble-left" class="h-4 w-4" />
+                                    {{ $postComments->count() }} {{ $replyWord($postComments->count()) }}
+                                </div>
+
+                                @foreach ($postComments as $comment)
+                                    <div class="staff-live-feed__comment" wire:key="staff-feed-comment-{{ $comment->id }}">
+                                        <div class="staff-live-feed__comment-avatar">{{ $initials($comment->author?->name) }}</div>
+
+                                        <div class="staff-live-feed__comment-card">
+                                            <div class="staff-live-feed__comment-meta">
+                                                <span class="staff-live-feed__comment-author">{{ $comment->author?->name ?? 'Сотрудник' }}</span>
+                                                <span class="staff-live-feed__time">{{ $comment->created_at?->timezone(config('app.timezone'))->format('d.m.Y H:i') }}</span>
+                                            </div>
+
+                                            <div class="staff-live-feed__comment-body">{{ $comment->body }}</div>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            @endif
+
+                            <form class="staff-live-feed__comment-form" wire:submit.prevent="createComment({{ $post->id }})">
+                                <textarea
+                                    class="staff-live-feed__comment-input"
+                                    wire:model.defer="commentBodies.{{ $post->id }}"
+                                    placeholder="Написать комментарий..."
+                                ></textarea>
+
+                                <button
+                                    type="submit"
+                                    class="staff-live-feed__comment-button"
+                                    title="Отправить комментарий"
+                                    wire:loading.attr="disabled"
+                                    wire:target="createComment({{ $post->id }})"
+                                >
+                                    <x-filament::icon icon="heroicon-o-paper-airplane" class="h-4 w-4" />
+                                </button>
+                            </form>
+
+                            @error('commentBodies.' . $post->id)
+                                <div class="staff-live-feed__error">{{ $message }}</div>
+                            @enderror
                         </div>
                     @endif
                 </div>
