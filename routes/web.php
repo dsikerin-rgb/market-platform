@@ -6,6 +6,7 @@ declare(strict_types=1);
 use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Http\Controllers\Auth\MarketRegistrationController;
+use App\Http\Controllers\Auth\StaffInvitationController;
 use App\Http\Controllers\Admin\TenantCabinetImpersonationController;
 use App\Http\Controllers\Cabinet\AccrualsController;
 use App\Http\Controllers\Cabinet\CabinetAuthController;
@@ -86,6 +87,11 @@ Route::get('/media/{path}', function (string $path) {
 Route::get('/login', function () {
     return redirect()->route('cabinet.login');
 })->name('login');
+
+Route::get('/staff-invitations/{invitation}/{token}', [StaffInvitationController::class, 'show'])
+    ->name('staff-invitations.accept');
+Route::post('/staff-invitations/{invitation}/{token}', [StaffInvitationController::class, 'accept'])
+    ->name('staff-invitations.accept.submit');
 
 Route::prefix('cabinet')->middleware('cabinet.no_cache')->group(function () {
     Route::get('/login', [CabinetAuthController::class, 'showLogin'])->name('cabinet.login');
