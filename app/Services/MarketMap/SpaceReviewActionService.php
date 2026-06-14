@@ -621,6 +621,137 @@ final class SpaceReviewActionService
     }
 
     /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    public function relinkSettlementContractToSpace(
+        Market $market,
+        MarketSpace $space,
+        array $validated,
+        ?int $userId,
+    ): array {
+        $contractId = (int) ($validated['tenant_contract_id'] ?? 0);
+        $reason = trim((string) ($validated['reason'] ?? ''));
+
+        if ($contractId <= 0) {
+            return [
+                'ok' => false,
+                'status_code' => 422,
+                'message' => 'Не выбран договор для перепривязки.',
+            ];
+        }
+
+        if ((int) ($space->tenant_id ?? 0) <= 0) {
+            return [
+                'ok' => false,
+                'status_code' => 422,
+                'message' => 'У места нет текущего арендатора. Сначала проверьте арендатора места.',
+            ];
+        }
+
+        $contract = TenantContract::query()
+            ->where('market_id', (int) $market->id)
+            ->whereKey($contractId)
+            ->first();
+
+        if (! $contract) {
+            return [
+                'ok' => false,
+                'status_code' => 404,
+                'message' => 'Договор не найден в текущем рынке.',
+            ];
+        }
+
+        if ((int) ($contract->tenant_id ?? 0) !== (int) $space->tenant_id) {
+            return [
+                'ok' => false,
+                'status_code' => 422,
+                'message' => 'Договор относится к другому арендатору. Сначала разберите арендатора места.',
+            ];
+        }
+
+        if ($contract->excludesFromSpaceMapping()) {
+            return [
+                'ok' => false,
+                'status_code' => 422,
+                'message' => 'Этот договор исключён из привязки к местам. Откройте договор и измените режим связи вручную.',
+            ];
+        }
+
+        if (! (bool) $contract->is_active || in_array((string) $contract->status, ['terminated', 'archived'], true)) {
+            return [
+                'ok' => false,
+                'status_code' => 422,
+                'message' => 'Неактивный договор нельзя перепривязать из карточки ревизии.',
+            ];
+        }
+
+        $previousSpaceId = (int) ($contract->market_space_id ?? 0);
+        if ($previousSpaceId === (int) $space->id && $contract->usesManualSpaceMapping()) {
+            $this->markSpaceReviewed($space, 'matched', $userId, now());
+
+            return [
+                'ok' => true,
+                'mode' => 'already_relinked',
+                'message' => 'Договор уже связан с этим местом.',
+            ];
+        }
+
+        $now = now();
+
+        $operation = DB::transaction(function () use ($market, $space, $contract, $previousSpaceId, $reason, $userId, $now): Operation {
+            $contract->forceFill([
+                'market_space_id' => (int) $space->id,
+                'space_mapping_mode' => TenantContract::SPACE_MAPPING_MODE_MANUAL,
+                'space_mapping_updated_at' => $now,
+                'space_mapping_updated_by_user_id' => $userId,
+            ])->save();
+
+            $payload = [
+                'market_space_id' => (int) $space->id,
+                'decision' => SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK,
+                'action' => 'relink_settlement_contract',
+                'tenant_contract_id' => (int) $contract->id,
+                'previous_market_space_id' => $previousSpaceId > 0 ? $previousSpaceId : null,
+                'target_market_space_id' => (int) $space->id,
+            ];
+
+            if ($reason !== '') {
+                $payload['reason'] = $reason;
+            }
+
+            $operation = Operation::query()->create([
+                'market_id' => (int) $market->id,
+                'entity_type' => 'market_space',
+                'entity_id' => (int) $space->id,
+                'type' => OperationType::SPACE_REVIEW,
+                'effective_at' => $now,
+                'status' => SpaceReviewDecision::defaultOperationStatus(SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK),
+                'payload' => $payload,
+                'comment' => $reason !== '' ? $reason : null,
+                'created_by' => $userId,
+            ]);
+
+            $this->markSpaceReviewed($space, 'matched', $userId, $now);
+
+            return $operation;
+        });
+
+        $space->refresh();
+
+        return [
+            'ok' => true,
+            'mode' => 'relink_settlement_contract',
+            'operation' => [
+                'id' => (int) $operation->id,
+                'status' => (string) $operation->status,
+                'decision' => SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK,
+            ],
+            'message' => 'Договор перепривязан к этому месту.',
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      */
     private function createSpaceReviewOperation(

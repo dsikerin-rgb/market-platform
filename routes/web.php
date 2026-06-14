@@ -4294,6 +4294,73 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     ]);
 })->name('filament.admin.market-map.review-decision');
 
+    Route::post('/admin/market-map/review-relink-settlement-contract', function (Request $request) use (
+    $resolveMarketForMap,
+    $ensureCanEditShapes,
+    $hasMapReviewColumns,
+    $buildMapReviewProgress,
+    $mapReviewStatusLabel
+) {
+    $ensureCanEditShapes();
+    $market = $resolveMarketForMap();
+
+    if (! $hasMapReviewColumns()) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Map review columns are missing on market_spaces.',
+        ], 422);
+    }
+
+    $validated = $request->validate([
+        'market_space_id' => ['required', 'integer', 'min:1'],
+        'tenant_contract_id' => ['required', 'integer', 'min:1'],
+        'reason' => ['nullable', 'string', 'max:2000'],
+    ]);
+
+    $space = MarketSpace::query()
+        ->where('market_id', (int) $market->id)
+        ->whereKey((int) $validated['market_space_id'])
+        ->first();
+
+    if (! $space) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Map review space was not found in the current market.',
+        ], 404);
+    }
+
+    $result = app(SpaceReviewActionService::class)->relinkSettlementContractToSpace(
+        $market,
+        $space,
+        $validated,
+        Filament::auth()->id(),
+    );
+
+    if (($result['ok'] ?? false) !== true) {
+        return response()->json([
+            'ok' => false,
+            'message' => (string) ($result['message'] ?? 'Review action failed.'),
+            'errors' => $result['errors'] ?? null,
+        ], (int) ($result['status_code'] ?? 422));
+    }
+
+    $space->refresh();
+
+    return response()->json([
+        'ok' => true,
+        'mode' => (string) ($result['mode'] ?? 'relink_settlement_contract'),
+        'operation' => $result['operation'] ?? null,
+        'message' => $result['message'] ?? null,
+        'item' => [
+            'market_space_id' => (int) $space->id,
+            'review_status' => (string) ($space->map_review_status ?? ''),
+            'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+            'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+        ],
+        'progress' => $buildMapReviewProgress($market),
+    ]);
+})->name('filament.admin.market-map.review-relink-settlement-contract');
+
     Route::get('/admin/map-review-results/ai-review', function (Request $request) use (
         $resolveMarketForMap,
         $canEditShapes

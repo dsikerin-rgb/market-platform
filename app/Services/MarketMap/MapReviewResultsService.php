@@ -1718,9 +1718,9 @@ class MapReviewResultsService
                 $contractRows,
                 $contractExternalId === '__no_contract__' ? '' : $contractExternalId,
                 $marketId,
-                (int) $space->id
+                $space
             ))
-            ->sortByDesc(static fn (array $row): float => abs((float) ($row['amount'] ?? 0)))
+            ->sortByDesc(static fn (array $row): float => (float) ($row['review_priority'] ?? 0))
             ->values();
 
         $primary = $groups->first();
@@ -1851,14 +1851,15 @@ class MapReviewResultsService
         });
     }
 
-    private function settlementContractReviewRow(Collection $rows, string $contractExternalId, int $marketId, int $currentSpaceId): array
+    private function settlementContractReviewRow(Collection $rows, string $contractExternalId, int $marketId, MarketSpace $currentSpace): array
     {
+        $currentSpaceId = (int) $currentSpace->id;
         $first = $rows->first();
         $localContracts = $contractExternalId !== ''
             ? DB::table('tenant_contracts')
                 ->where('market_id', $marketId)
                 ->where('external_id', $contractExternalId)
-                ->get(['id', 'number', 'status', 'is_active', 'market_space_id'])
+                ->get(['id', 'number', 'status', 'is_active', 'market_space_id', 'space_mapping_mode'])
             : collect();
 
         $linkedSpaces = $this->linkedSpacesForContracts(
@@ -1891,9 +1892,33 @@ class MapReviewResultsService
         $documentName = trim((string) ($first->settlement_document_name ?? ''));
         $contractName = trim((string) ($first->contract_name ?? ''));
         $localContract = $localContracts->first();
+        $currentSpaceTokens = $this->settlementSpaceMatchTokens($currentSpace);
+        $contractText = trim(implode(' ', array_filter([
+            $contractName,
+            $documentName,
+            $localContract?->number ? (string) $localContract->number : null,
+        ], static fn ($value): bool => filled($value))));
+        $contractMatchesCurrentSpace = $this->settlementContractTextMatchesSpace($contractText, $currentSpaceTokens);
+        $isContractActive = $localContract !== null
+            && (bool) ($localContract->is_active ?? false)
+            && ! in_array((string) ($localContract->status ?? ''), ['terminated', 'archived'], true);
+        $mappingMode = $localContract?->space_mapping_mode ? (string) $localContract->space_mapping_mode : TenantContract::SPACE_MAPPING_MODE_AUTO;
+        $canRelinkToCurrentSpace = $localContract !== null
+            && $currentSpaceId > 0
+            && in_array($linkState, ['other_space', 'unlinked_contract'], true)
+            && $isContractActive
+            && $mappingMode !== TenantContract::SPACE_MAPPING_MODE_EXCLUDED;
+        $reviewPriority = $this->settlementContractReviewPriority(
+            $linkState,
+            $contractMatchesCurrentSpace,
+            (float) $rows->sum('debt_amount')
+        );
 
         return [
             'link_state' => $linkState,
+            'review_priority' => $reviewPriority,
+            'contract_matches_current_space' => $contractMatchesCurrentSpace,
+            'can_relink_to_current_space' => $canRelinkToCurrentSpace,
             'contract_external_id' => $contractExternalId,
             'contract_name' => $contractName,
             'contract_label' => $contractName !== ''
@@ -1902,6 +1927,7 @@ class MapReviewResultsService
             'local_contract_id' => $localContract?->id ? (int) $localContract->id : null,
             'local_contract_number' => $localContract?->number ? (string) $localContract->number : null,
             'local_contract_status' => $localContract?->status ? (string) $localContract->status : null,
+            'local_contract_mapping_mode' => $mappingMode,
             'amount' => (float) $rows->sum('debt_amount'),
             'amount_label' => $this->moneyLabel((float) $rows->sum('debt_amount')),
             'period_label' => $this->dateLabel((string) $rows->max('period_to')),
@@ -1918,6 +1944,76 @@ class MapReviewResultsService
                 default => 'требует проверки',
             },
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function settlementSpaceMatchTokens(MarketSpace $space): array
+    {
+        $tokens = [];
+
+        foreach (['number', 'display_name', 'code'] as $attribute) {
+            $value = trim((string) ($space->{$attribute} ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized = $this->normalizeSettlementPlaceText($value);
+            if ($normalized !== '') {
+                $tokens[] = $normalized;
+            }
+
+            $base = preg_split('#[/\\\\]#u', $value, 2)[0] ?? '';
+            $base = $this->normalizeSettlementPlaceText((string) $base);
+            if ($base !== '' && mb_strlen($base, 'UTF-8') >= 3) {
+                $tokens[] = $base;
+            }
+        }
+
+        return array_values(array_unique($tokens));
+    }
+
+    /**
+     * @param  list<string>  $spaceTokens
+     */
+    private function settlementContractTextMatchesSpace(string $contractText, array $spaceTokens): bool
+    {
+        $contractText = $this->normalizeSettlementPlaceText($contractText);
+        if ($contractText === '' || $spaceTokens === []) {
+            return false;
+        }
+
+        foreach ($spaceTokens as $token) {
+            if ($token !== '' && mb_strlen($token, 'UTF-8') >= 3 && str_contains($contractText, $token)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function settlementContractReviewPriority(string $linkState, bool $matchesCurrentSpace, float $amount): float
+    {
+        $priority = match ($linkState) {
+            'current_space' => 100000,
+            'other_space' => $matchesCurrentSpace ? 90000 : 50000,
+            'unlinked_contract' => $matchesCurrentSpace ? 85000 : 45000,
+            'multiple_spaces' => 40000,
+            'missing_local_contract' => 30000,
+            'no_contract_in_osv' => 20000,
+            default => 10000,
+        };
+
+        return $priority + min(abs($amount), 9999.0);
+    }
+
+    private function normalizeSettlementPlaceText(string $value): string
+    {
+        $value = mb_strtolower(trim($value), 'UTF-8');
+        $value = str_replace('ё', 'е', $value);
+
+        return preg_replace('/[^\p{L}\p{N}]+/u', '', $value) ?? '';
     }
 
     /**
@@ -2938,7 +3034,9 @@ class MapReviewResultsService
                 .(filled($payload['shape_id'] ?? null) ? ' · shape #'.(int) $payload['shape_id'] : ''),
             SpaceReviewDecision::MARK_SPACE_FREE => 'Место отмечено как свободное',
             SpaceReviewDecision::MARK_SPACE_SERVICE => 'Место отмечено как служебное',
-            SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь с местом подтверждена оператором',
+            SpaceReviewDecision::CONFIRM_UNCONFIRMED_FINANCIAL_LINK => ($payload['action'] ?? null) === 'relink_settlement_contract'
+                ? 'Договор ОСВ перепривязан к месту'
+                : 'Финансовая связь с местом подтверждена оператором',
             SpaceReviewDecision::REJECT_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь с местом отклонена оператором',
             SpaceReviewDecision::REOPEN_UNCONFIRMED_FINANCIAL_LINK => 'Финансовая связь возвращена в проверку',
             SpaceReviewDecision::FIX_SPACE_IDENTITY => $this->identityFixSummary($payload),

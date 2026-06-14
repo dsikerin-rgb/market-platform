@@ -3448,12 +3448,15 @@
                                             $settlementReviewPeriodLabel = trim((string) ($settlementContractReview['period_label'] ?? $debtSummaryPeriodLabel));
                                             $settlementContractLabel = trim((string) ($settlementPrimaryContract['contract_label'] ?? 'Договор ОСВ не определён'));
                                             $settlementContractStatus = trim((string) ($settlementPrimaryContract['link_status_label'] ?? $settlementReviewAssessment));
+                                            $settlementLocalContractId = (int) ($settlementPrimaryContract['local_contract_id'] ?? 0);
                                             $settlementLocalContractNumber = trim((string) ($settlementPrimaryContract['local_contract_number'] ?? ''));
                                             $settlementDocumentName = trim((string) ($settlementPrimaryContract['document_name'] ?? ''));
                                             $settlementContractUrl = trim((string) ($settlementPrimaryContract['contract_url'] ?? ''));
                                             $settlementLinkedSpaceLabel = trim((string) ($settlementPrimaryLinkedSpace['label'] ?? ''));
                                             $settlementLinkedSpaceUrl = trim((string) ($settlementPrimaryLinkedSpace['space_url'] ?? ''));
                                             $settlementLinkedMapUrl = trim((string) ($settlementPrimaryLinkedSpace['map_url'] ?? ''));
+                                            $settlementCanRelinkToCurrentSpace = (bool) ($settlementPrimaryContract['can_relink_to_current_space'] ?? false);
+                                            $settlementContractMatchesCurrentSpace = (bool) ($settlementPrimaryContract['contract_matches_current_space'] ?? false);
                                             $debtReviewTenantName = $currentTenantName !== ''
                                                 ? $currentTenantName
                                                 : ($financialTenantName !== '' ? $financialTenantName : 'Арендатор не указан');
@@ -3802,7 +3805,9 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                 <div>
                                                                     <div class="mrr-debt-review__eyebrow">Что решить</div>
                                                                     <div class="mrr-debt-review__title">
-                                                                        @if ($settlementLinkedSpaceLabel !== '')
+                                                                        @if ($settlementCanRelinkToCurrentSpace && $settlementContractMatchesCurrentSpace)
+                                                                            Договор похож на {{ $currentSpaceLabel }}, но ведёт в другое место
+                                                                        @elseif ($settlementLinkedSpaceLabel !== '')
                                                                             Договор ОСВ ведёт к другому месту
                                                                         @else
                                                                             {{ $settlementReviewTitle }}
@@ -3826,7 +3831,9 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
 
                                                                 <div class="mrr-debt-review__verdict">
                                                                     <div class="mrr-debt-review__verdict-title">
-                                                                        @if ($settlementLinkedSpaceLabel !== '')
+                                                                        @if ($settlementCanRelinkToCurrentSpace && $settlementContractMatchesCurrentSpace)
+                                                                            Если это договор {{ $currentSpaceLabel }}, перепривяжите его сюда
+                                                                        @elseif ($settlementLinkedSpaceLabel !== '')
                                                                             Договор ОСВ не относится к {{ $currentSpaceLabel }}
                                                                         @elseif ($settlementLocalContractNumber !== '')
                                                                             У договора ОСВ нет подтверждённого места
@@ -3835,7 +3842,9 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
                                                                         @endif
                                                                     </div>
                                                                     <div class="mrr-debt-review__copy">
-                                                                        @if ($settlementLinkedSpaceLabel !== '')
+                                                                        @if ($settlementCanRelinkToCurrentSpace && $settlementContractMatchesCurrentSpace)
+                                                                            Сейчас договор связан с {{ $settlementLinkedSpaceLabel ?: 'другим местом' }}. Перепривязка изменит только связь договора с местом; долг арендатора и окраска карты не пересчитываются.
+                                                                        @elseif ($settlementLinkedSpaceLabel !== '')
                                                                             Если договор действительно ведёт в {{ $settlementLinkedSpaceLabel }}, не связывайте его с {{ $currentSpaceLabel }}.
                                                                         @elseif ($settlementLocalContractNumber !== '')
                                                                             Проверьте договор перед привязкой: в сервисе нет надёжной связи с этим местом.
@@ -3847,9 +3856,24 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
 
                                                                 @if ($attentionTab !== 'unconfirmed_links_rejected')
                                                                     <div class="mrr-debt-review__primary-action">
+                                                                        @if ($settlementCanRelinkToCurrentSpace && $settlementLocalContractId > 0)
+                                                                            <button
+                                                                                type="button"
+                                                                                class="mrr-link mrr-link--button mrr-link--success mrr-link--decision"
+                                                                                data-mrr-relink-settlement-contract
+                                                                                data-mrr-space-id="{{ $row['space_id'] }}"
+                                                                                data-mrr-contract-id="{{ $settlementLocalContractId }}"
+                                                                                data-mrr-current-space="{{ $currentSpaceLabel }}"
+                                                                                data-mrr-linked-space="{{ $settlementLinkedSpaceLabel }}"
+                                                                                data-mrr-contract-label="{{ $settlementContractLabel }}"
+                                                                                data-mrr-confirm="Перепривязать договор ОСВ «{{ $settlementContractLabel }}» к месту {{ $currentSpaceLabel }}? Долг арендатора и окраска карты не пересчитываются."
+                                                                            >
+                                                                                Перепривязать к {{ $currentSpaceLabel }}
+                                                                            </button>
+                                                                        @endif
                                                                         <button
                                                                             type="button"
-                                                                            class="mrr-link mrr-link--button mrr-link--success mrr-link--decision"
+                                                                            class="mrr-link mrr-link--button {{ $settlementCanRelinkToCurrentSpace ? '' : 'mrr-link--success' }} mrr-link--decision"
                                                                             data-mrr-unconfirmed-link-action
                                                                             data-mrr-space-id="{{ $row['space_id'] }}"
                                                                             data-mrr-decision="reject_unconfirmed_financial_link"
@@ -4905,6 +4929,7 @@ $canConfirmFree = ! $isUnconfirmedWorkflowTab && $isConflictCase;
         <script>
             (() => {
                 const reviewDecisionUrl = @json(route('filament.admin.market-map.review-decision'));
+                const reviewRelinkSettlementContractUrl = @json(route('filament.admin.market-map.review-relink-settlement-contract'));
                 const reviewContractTenantSwitchUrl = @json(route('filament.admin.market-map.review-contract-tenant-switch'));
                 const reviewTenantSwitchUrl = @json(route('filament.admin.market-map.review-tenant-switch'));
                 const reviewResolveFinancialTenantUrl = @json(route('filament.admin.market-map.review-resolve-financial-tenant'));
@@ -7179,6 +7204,66 @@ const markSpaceFreeState = {
                     });
                 };
 
+                const applyRelinkSettlementContract = async (button) => {
+                    const spaceId = Number(button.dataset.mrrSpaceId || 0);
+                    const contractId = Number(button.dataset.mrrContractId || 0);
+
+                    if (!Number.isFinite(spaceId) || spaceId <= 0 || !Number.isFinite(contractId) || contractId <= 0) {
+                        return;
+                    }
+
+                    const confirmText = String(button.dataset.mrrConfirm || '').trim();
+                    if (confirmText !== '' && !window.confirm(confirmText)) {
+                        return;
+                    }
+
+                    const currentSpace = String(button.dataset.mrrCurrentSpace || '').trim();
+                    const linkedSpace = String(button.dataset.mrrLinkedSpace || '').trim();
+                    const reason = linkedSpace !== ''
+                        ? `Договор ОСВ перепривязан из ${linkedSpace} к ${currentSpace}.`
+                        : `Договор ОСВ привязан к ${currentSpace}.`;
+                    const originalText = button.textContent;
+
+                    button.setAttribute('disabled', 'disabled');
+                    button.textContent = 'Перепривязываем...';
+
+                    const response = await fetch(reviewRelinkSettlementContractUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                        },
+                        body: JSON.stringify({
+                            market_space_id: spaceId,
+                            tenant_contract_id: contractId,
+                            reason,
+                        }),
+                    });
+
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data?.ok) {
+                        button.removeAttribute('disabled');
+                        button.textContent = originalText;
+                        window.alert(String(data?.message || 'Не удалось перепривязать договор.'));
+                        return;
+                    }
+
+                    window.location.reload();
+                };
+
+                const handleRelinkSettlementContractClick = (event, button) => {
+                    if (!(button instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    applyRelinkSettlementContract(button).catch((errorInstance) => {
+                        window.alert(String(errorInstance?.message || errorInstance || 'Не удалось перепривязать договор.'));
+                    });
+                };
+
                 document.querySelectorAll('[data-mrr-unconfirmed-link-action]').forEach((button) => {
                     if (!(button instanceof HTMLElement)) {
                         return;
@@ -7186,6 +7271,16 @@ const markSpaceFreeState = {
 
                     button.addEventListener('click', (event) => {
                         handleUnconfirmedLinkActionClick(event, button);
+                    });
+                });
+
+                document.querySelectorAll('[data-mrr-relink-settlement-contract]').forEach((button) => {
+                    if (!(button instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    button.addEventListener('click', (event) => {
+                        handleRelinkSettlementContractClick(event, button);
                     });
                 });
 
@@ -7215,6 +7310,15 @@ const markSpaceFreeState = {
                     const unconfirmedLinkAction = event.target instanceof Element
                         ? event.target.closest('[data-mrr-unconfirmed-link-action]')
                         : null;
+
+                    const relinkSettlementContractAction = event.target instanceof Element
+                        ? event.target.closest('[data-mrr-relink-settlement-contract]')
+                        : null;
+
+                    if (relinkSettlementContractAction instanceof HTMLElement) {
+                        handleRelinkSettlementContractClick(event, relinkSettlementContractAction);
+                        return;
+                    }
 
                     if (!unconfirmedLinkAction || !(unconfirmedLinkAction instanceof HTMLElement)) {
                         return;
