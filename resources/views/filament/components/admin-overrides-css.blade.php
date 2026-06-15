@@ -2706,6 +2706,25 @@ html:not([data-admin-overrides="0"]) .fi-resource-roles-edit-page .fi-input-wrp:
     padding-inline: clamp(1rem, 1.2vw, 1.75rem) !important;
   }
 
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-market-spaces-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-market-spaces-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tenants-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tenants-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-contracts-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-contracts-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-accruals-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-accruals-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tasks-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tasks-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-tasks.fi-resource-edit-record-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-staff-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-staff-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-roles-list-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-resource-roles-edit-page),
+  html:not([data-admin-overrides="0"]) .fi-main:has(.fi-page-calendar){
+    padding-right: calc(clamp(1rem, 1.2vw, 1.75rem) + var(--staff-presence-gutter, 5.75rem)) !important;
+  }
+
   html:not([data-admin-overrides="0"]) .fi-page:where(
     .fi-resource-market-spaces-list-page,
     .fi-resource-market-spaces-edit-page,
