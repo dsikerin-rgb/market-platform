@@ -300,7 +300,7 @@ class QuickChatDrawer extends Component
         app(TicketAccessService::class)->scopeVisibleTo($query, $user);
         $this->scopeTicketSearch($query);
 
-        return $query->get()->map(function (Ticket $ticket): array {
+        return $query->get()->toBase()->map(function (Ticket $ticket): array {
             $subject = trim((string) $ticket->subject) !== ''
                 ? trim((string) $ticket->subject)
                 : 'Диалог с арендатором';
@@ -340,6 +340,7 @@ class QuickChatDrawer extends Component
         $this->scopeStaffSearch($query);
 
         return $query->get()
+            ->toBase()
             ->groupBy(fn (StaffConversation $conversation): int => $this->staffPeerId($conversation, $user))
             ->filter(fn (Collection $conversations, mixed $peerId): bool => (int) $peerId > 0 && $conversations->isNotEmpty())
             ->map(function (Collection $conversations, mixed $peerId) use ($user): array {
@@ -417,6 +418,7 @@ class QuickChatDrawer extends Component
         }
 
         return $query->get()
+            ->toBase()
             ->filter(fn (User $peer): bool => $this->canAccessStaffPeer($user, $peer))
             ->map(function (User $peer): array {
                 $name = trim((string) $peer->name);

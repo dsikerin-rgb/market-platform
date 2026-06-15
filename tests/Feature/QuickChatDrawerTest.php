@@ -144,6 +144,40 @@ class QuickChatDrawerTest extends TestCase
         ]);
     }
 
+    public function test_staff_search_can_mix_existing_chats_and_new_candidates(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+        $existingStaff = User::factory()->create([
+            'name' => 'Existing Search Peer',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'existing-search-peer@example.test',
+        ]);
+        $newStaff = User::factory()->create([
+            'name' => 'Fresh Search Peer',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'fresh-search-peer@example.test',
+        ]);
+
+        $this->createConversation($market, $admin, $existingStaff, 'Search topic', now());
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer')
+            ->set('search', 'Search Peer')
+            ->assertSee('Existing Search Peer')
+            ->assertSee('Fresh Search Peer')
+            ->assertSee('Новый диалог')
+            ->call('selectChat', 'staff', (int) $newStaff->id)
+            ->assertSee('Напишите первое сообщение, чтобы начать переписку.');
+    }
+
     public function test_super_admin_can_find_staff_dialog_candidate_without_selected_market(): void
     {
         $market = Market::query()->create([
