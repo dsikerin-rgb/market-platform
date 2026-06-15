@@ -29,6 +29,7 @@ class SettingsHub extends Page
     public static function canAccess(): bool
     {
         return MarketSettings::canAccess()
+            || MailDiagnostics::canAccess()
             || MarketplaceSettings::canAccess()
             || ReportResource::canViewAny()
             || MarketplaceSlideResource::canViewAny()
@@ -43,6 +44,11 @@ class SettingsHub extends Page
     public function getMarketplaceSettingsUrl(): string
     {
         return MarketplaceSettings::getUrl();
+    }
+
+    public function getMailDiagnosticsUrl(): string
+    {
+        return MailDiagnostics::getUrl();
     }
 
     public function getMarketplaceSlidesUrl(): string

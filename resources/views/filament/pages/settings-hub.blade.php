@@ -81,6 +81,16 @@
                 </a>
             @endif
 
+            @if (\App\Filament\Pages\MailDiagnostics::canAccess())
+                <a href="{{ $this->getMailDiagnosticsUrl() }}" class="settings-card">
+                    <div class="settings-card-title">Почта</div>
+                    <div class="settings-card-text">
+                        Системная диагностика SMTP-настроек, тестовая отправка и проверка текущей конфигурации. Доступно только super-admin.
+                    </div>
+                    <div class="settings-card-footer">Открыть</div>
+                </a>
+            @endif
+
             @if (\App\Filament\Resources\Roles\RoleResource::canViewAny())
                 <a href="{{ $this->getRolesUrl() }}" class="settings-card">
                     <div class="settings-card-title">Роли и права</div>
