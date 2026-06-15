@@ -211,6 +211,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         return redirect()
             ->to(url('/admin/requests?' . http_build_query([
+                'quick_chat' => 'ticket',
                 'tenant_id' => (int) $tenant->id,
                 'ticket_id' => (int) $ticket->id,
             ])))
@@ -250,6 +251,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         return redirect()
             ->to(url('/admin/requests?' . http_build_query([
+                'quick_chat' => 'staff',
                 'channel' => 'staff',
                 'conversation_id' => (int) $conversation->id,
             ])))
@@ -288,7 +290,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $ticketModel->touch();
         }
 
-        $params = ['ticket_id' => (int) $ticketModel->id];
+        $params = [
+            'quick_chat' => 'ticket',
+            'ticket_id' => (int) $ticketModel->id,
+        ];
 
         $tenantId = is_numeric($validated['tenant_id'] ?? null) ? (int) $validated['tenant_id'] : 0;
         if ($tenantId > 0) {
@@ -332,6 +337,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $service->addMessage($conversationModel, $user, trim((string) $validated['body']));
 
         $params = [
+            'quick_chat' => 'staff',
             'channel' => 'staff',
             'conversation_id' => (int) $conversationModel->id,
         ];

@@ -168,6 +168,7 @@ class TicketChatNotificationRouter
     private function buildAdminUrl(Ticket $ticket): string
     {
         return url('/admin/requests?' . http_build_query([
+            'quick_chat' => 'ticket',
             'tenant_id' => (int) ($ticket->tenant_id ?? 0),
             'ticket_id' => (int) $ticket->id,
         ]));

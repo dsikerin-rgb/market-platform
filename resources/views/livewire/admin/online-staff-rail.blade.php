@@ -538,6 +538,7 @@
             $firstUnreadConversationId = (int) ($selectedStaffUnreadMessages->first()?->staff_conversation_id ?? 0);
             $conversationUrl = $firstUnreadConversationId > 0
                 ? url('/admin/requests?' . http_build_query([
+                    'quick_chat' => 'staff',
                     'channel' => 'staff',
                     'conversation_id' => $firstUnreadConversationId,
                 ]))
