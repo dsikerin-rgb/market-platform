@@ -303,7 +303,7 @@
 
         .staff-presence__facts {
             display: grid;
-            grid-template-columns: minmax(0, 1.35fr) minmax(11rem, 0.85fr);
+            grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
             gap: 0.65rem;
         }
 
@@ -602,6 +602,11 @@
                         <div class="staff-presence__fact">
                             <div class="staff-presence__fact-label">Email</div>
                             <div class="staff-presence__fact-value">{{ $selectedStaff->email ?: 'не указан' }}</div>
+                        </div>
+
+                        <div class="staff-presence__fact">
+                            <div class="staff-presence__fact-label">Телефон</div>
+                            <div class="staff-presence__fact-value">{{ $selectedStaff->phone ?: 'не указан' }}</div>
                         </div>
 
                         <div class="staff-presence__fact">

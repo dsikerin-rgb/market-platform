@@ -100,6 +100,7 @@ class StaffResource extends BaseResource
         return [
             'name',
             'email',
+            'phone',
             'market.name',
         ];
     }

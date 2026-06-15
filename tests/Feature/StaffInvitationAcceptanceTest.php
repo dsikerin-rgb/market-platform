@@ -35,6 +35,7 @@ class StaffInvitationAcceptanceTest extends TestCase
             'token' => $token,
         ]), [
             'name' => 'New Staff',
+            'phone' => ' +7 913 000-00-00 ',
             'password' => 'strong-password',
             'password_confirmation' => 'strong-password',
         ]);
@@ -44,6 +45,7 @@ class StaffInvitationAcceptanceTest extends TestCase
         $user = User::query()->where('email', 'new-staff@example.test')->firstOrFail();
 
         $this->assertSame('New Staff', $user->name);
+        $this->assertSame('+7 913 000-00-00', $user->phone);
         $this->assertSame((int) $market->id, (int) $user->market_id);
         $this->assertTrue($user->hasRole('staff'));
         $this->assertAuthenticatedAs($user);

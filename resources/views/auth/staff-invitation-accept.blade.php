@@ -39,6 +39,12 @@
                     <div class="error">{{ $message }}</div>
                 @enderror
 
+                <label for="phone">Телефон <span style="font-weight:400;color:#6b7280">(необязательно)</span></label>
+                <input id="phone" name="phone" value="{{ old('phone') }}" autocomplete="tel" inputmode="tel" placeholder="+7 900 000-00-00">
+                @error('phone')
+                    <div class="error">{{ $message }}</div>
+                @enderror
+
                 <label for="password">Пароль</label>
                 <input id="password" name="password" type="password" required autocomplete="new-password">
                 @error('password')

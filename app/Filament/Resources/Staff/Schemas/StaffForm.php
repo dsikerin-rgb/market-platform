@@ -84,6 +84,16 @@ class StaffForm
                         ->placeholder('user@example.com')
                         ->autocomplete('new-email')
                         ->columnSpan(['default' => 12, 'md' => 6]),
+
+                    Forms\Components\TextInput::make('phone')
+                        ->label('Телефон')
+                        ->tel()
+                        ->maxLength(32)
+                        ->nullable()
+                        ->placeholder('+7 900 000-00-00')
+                        ->helperText('Необязательный номер для связи с сотрудником.')
+                        ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
+                        ->columnSpan(['default' => 12, 'md' => 6]),
                 ]),
 
             Section::make('Доступ')

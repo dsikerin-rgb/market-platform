@@ -73,6 +73,13 @@ class StaffTable
                     ->searchable()
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('phone')
+                    ->label('Телефон')
+                    ->placeholder('Не указан')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('market.name')
                     ->label('Рынок')
                     ->sortable()
