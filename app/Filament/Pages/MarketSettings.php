@@ -11,6 +11,7 @@ use App\Models\MarketplaceSlide;
 use App\Models\User;
 use App\Services\Debt\DebtDecisionPolicy;
 use App\Support\AdminCapabilities;
+use App\Support\MarketplaceSettingsValue;
 use App\Support\UserNotificationPreferences;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -284,7 +285,7 @@ class MarketSettings extends Page
             'personal_notification_channels' => $personalChannels,
             'personal_notification_topics' => $personalTopics,
             'brand_name' => trim((string) ($marketplaceSettings['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
-            'logo_path' => $marketplaceSettings['logo_path'] ?? null,
+            'logo_path' => MarketplaceSettingsValue::nullablePath($marketplaceSettings['logo_path'] ?? null),
             'hero_title' => trim((string) ($marketplaceSettings['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
             'hero_subtitle' => trim((string) ($marketplaceSettings['hero_subtitle'] ?? '')) ?: 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
             'public_phone' => trim((string) ($marketplaceSettings['public_phone'] ?? '+7 (3852) 55-67-55')),
@@ -930,7 +931,7 @@ class MarketSettings extends Page
         );
         $settings['marketplace'] = [
             'brand_name' => trim((string) ($state['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
-            'logo_path' => $state['logo_path'] ?? null,
+            'logo_path' => MarketplaceSettingsValue::nullablePath($state['logo_path'] ?? null),
             'hero_title' => trim((string) ($state['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
             'hero_subtitle' => trim((string) ($state['hero_subtitle'] ?? '')),
             'public_phone' => trim((string) ($state['public_phone'] ?? '')),

@@ -7,6 +7,7 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\MarketplaceSlideResource;
 use App\Models\Market;
 use App\Models\MarketplaceSlide;
+use App\Support\MarketplaceSettingsValue;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -91,7 +92,7 @@ class MarketplaceSettings extends Page
 
         $this->form->fill([
             'brand_name' => trim((string) ($settings['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
-            'logo_path' => $settings['logo_path'] ?? null,
+            'logo_path' => MarketplaceSettingsValue::nullablePath($settings['logo_path'] ?? null),
             'hero_title' => trim((string) ($settings['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
             'hero_subtitle' => trim((string) ($settings['hero_subtitle'] ?? '')) ?: 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
             'public_phone' => trim((string) ($settings['public_phone'] ?? '+7 (3852) 55-67-55')),
@@ -222,7 +223,7 @@ class MarketplaceSettings extends Page
         $settings = (array) ($this->market->settings ?? []);
         $settings['marketplace'] = [
             'brand_name' => trim((string) ($state['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
-            'logo_path' => $state['logo_path'] ?? null,
+            'logo_path' => MarketplaceSettingsValue::nullablePath($state['logo_path'] ?? null),
             'hero_title' => trim((string) ($state['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
             'hero_subtitle' => trim((string) ($state['hero_subtitle'] ?? '')),
             'public_phone' => trim((string) ($state['public_phone'] ?? '')),
