@@ -10,6 +10,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
 use App\Support\StaffConversationService;
+use App\Support\TicketAccessService;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
@@ -266,6 +267,7 @@ class QuickChatDrawer extends Component
             ->limit(20);
 
         $this->scopeMarket($query, $user);
+        app(TicketAccessService::class)->scopeVisibleTo($query, $user);
         $this->scopeTicketSearch($query);
 
         return $query->get()->map(function (Ticket $ticket): array {
@@ -576,12 +578,7 @@ class QuickChatDrawer extends Component
 
     private function canAccessTicket(User $user, Ticket $ticket): bool
     {
-        if ($this->isSuperAdmin($user)) {
-            return true;
-        }
-
-        return (int) ($user->market_id ?? 0) > 0
-            && (int) ($user->market_id ?? 0) === (int) $ticket->market_id;
+        return app(TicketAccessService::class)->canView($user, $ticket);
     }
 
     private function canAccessStaffPeer(User $user, User $peer): bool

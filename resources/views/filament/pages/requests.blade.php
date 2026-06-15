@@ -3,6 +3,7 @@
 <x-filament-panels::page>
     @php
         $user = \Filament\Facades\Filament::auth()->user();
+        $ticketAccess = app(\App\Support\TicketAccessService::class);
 
         $tenantFilterId = max(0, (int) request('tenant_id'));
 
@@ -44,6 +45,12 @@
             } else {
                 $ticketsQuery->whereRaw('1 = 0');
             }
+        }
+
+        if ($user) {
+            $ticketAccess->scopeVisibleTo($ticketsQuery, $user);
+        } else {
+            $ticketsQuery->whereRaw('1 = 0');
         }
 
         if ($tenantFilterId > 0) {
@@ -96,6 +103,12 @@
                 } else {
                     $singleTicketQuery->whereRaw('1 = 0');
                 }
+            }
+
+            if ($user) {
+                $ticketAccess->scopeVisibleTo($singleTicketQuery, $user);
+            } else {
+                $singleTicketQuery->whereRaw('1 = 0');
             }
 
             if ($tenantFilterId > 0) {

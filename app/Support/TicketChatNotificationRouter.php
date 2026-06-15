@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Models\Market;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketChatNotification;
@@ -119,32 +118,7 @@ class TicketChatNotificationRouter
      */
     private function resolveMarketChatRecipients(Ticket $ticket, User $sender): Collection
     {
-        $market = Market::query()
-            ->select(['id', 'settings'])
-            ->find((int) $ticket->market_id);
-
-        if (! $market) {
-            return collect();
-        }
-
-        $settings = (array) ($market->settings ?? []);
-        $categoryRecipientIds = null;
-        $ticketCategory = (string) ($ticket->category ?? '');
-        if ($ticketCategory === 'repair') {
-            $categoryRecipientIds = $settings['request_repair_notification_recipient_user_ids'] ?? null;
-        } elseif ($ticketCategory === 'help') {
-            $categoryRecipientIds = $settings['request_help_notification_recipient_user_ids'] ?? null;
-        }
-
-        $recipientIds = $categoryRecipientIds
-            ?? $settings['request_notification_recipient_user_ids']
-            ?? $settings['holiday_notification_recipient_user_ids']
-            ?? [];
-
-        $recipientIds = array_values(array_filter(
-            (array) $recipientIds,
-            static fn ($value): bool => is_numeric($value),
-        ));
+        $recipientIds = app(TicketAccessService::class)->recipientIdsForTicket($ticket);
 
         if ($recipientIds === []) {
             return collect();
