@@ -275,7 +275,7 @@ class QuickChatDrawer extends Component
                 'subtitle' => $tenantName !== '' ? $tenantName : 'Арендатор',
                 'preview' => Str::limit(trim((string) $ticket->description), 110),
                 'meta' => $this->formatDateTime($ticket->updated_at),
-                'count' => (int) $ticket->comments_count,
+                'count' => $this->ticketMessagesCount($ticket),
                 'sort_at' => $ticket->updated_at,
             ];
         });
@@ -366,7 +366,7 @@ class QuickChatDrawer extends Component
             'subtitle' => trim((string) ($ticket->tenant?->display_name ?? '')) ?: 'Арендатор',
             'description' => trim((string) $ticket->description),
             'meta' => 'Обновлено: ' . $this->formatDateTime($ticket->updated_at),
-            'count' => (int) $ticket->comments_count,
+            'count' => $this->ticketMessagesCount($ticket),
         ];
     }
 
@@ -508,6 +508,13 @@ class QuickChatDrawer extends Component
 
         return (int) ($user->market_id ?? 0) > 0
             && (int) ($user->market_id ?? 0) === (int) $ticket->market_id;
+    }
+
+    private function ticketMessagesCount(Ticket $ticket): int
+    {
+        $initialMessageCount = trim((string) $ticket->description) !== '' ? 1 : 0;
+
+        return $initialMessageCount + (int) ($ticket->comments_count ?? 0);
     }
 
     private function scopeMarket(Builder $query, User $user): void

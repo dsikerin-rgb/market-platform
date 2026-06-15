@@ -43,6 +43,11 @@
             outline: none;
         }
 
+        body:has(#database-notifications.fi-modal-open) .quick-chat__launcher,
+        body:has(#database-notifications.fi-modal-open) .staff-presence {
+            display: none !important;
+        }
+
         .quick-chat__badge {
             display: inline-flex;
             align-items: center;
@@ -221,6 +226,15 @@
             font-size: 0.75rem;
             line-height: 1.25;
             min-width: 0;
+        }
+
+        .quick-chat__item-meta > span {
+            min-width: 0;
+        }
+
+        .quick-chat__item-meta > span:nth-child(3) {
+            flex: 0 0 auto;
+            white-space: nowrap;
         }
 
         .quick-chat__item-preview {
