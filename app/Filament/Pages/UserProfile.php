@@ -23,6 +23,14 @@ class UserProfile extends EditProfile
                     ->schema([
                         $this->getNameFormComponent(),
                         $this->getEmailFormComponent(),
+                        Forms\Components\TextInput::make('phone')
+                            ->label('Телефон')
+                            ->tel()
+                            ->maxLength(32)
+                            ->nullable()
+                            ->placeholder('+7 900 000-00-00')
+                            ->helperText('Необязательный номер для связи. Его смогут видеть другие сотрудники.')
+                            ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null),
                     ])
                     ->columns(2),
 

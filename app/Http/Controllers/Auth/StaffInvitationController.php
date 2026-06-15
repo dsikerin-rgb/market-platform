@@ -54,12 +54,14 @@ class StaffInvitationController extends Controller
         } else {
             $validated = $request->validate([
                 'name' => ['required', 'string', 'max:255'],
+                'phone' => ['nullable', 'string', 'max:32'],
                 'password' => ['required', 'confirmed', Password::min(8)],
             ]);
 
             $user = User::query()->create([
                 'name' => trim((string) $validated['name']),
                 'email' => (string) $invitation->email,
+                'phone' => $this->normalizePhone($validated['phone'] ?? null),
                 'password' => (string) $validated['password'],
                 'market_id' => (int) $invitation->market_id,
                 'tenant_id' => null,
@@ -131,5 +133,12 @@ class StaffInvitationController extends Controller
         if ($existingRoleNames !== []) {
             $user->syncRoles($existingRoleNames);
         }
+    }
+
+    private function normalizePhone(mixed $value): ?string
+    {
+        $phone = trim((string) $value);
+
+        return $phone !== '' ? $phone : null;
     }
 }
