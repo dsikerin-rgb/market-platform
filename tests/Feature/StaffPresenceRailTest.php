@@ -51,7 +51,7 @@ class StaffPresenceRailTest extends TestCase
             ->assertDontSee('System Agent');
     }
 
-    public function test_unread_staff_messages_are_visible_on_presence_rail(): void
+    public function test_staff_presence_avatar_opens_quick_chat_drawer(): void
     {
         $market = Market::query()->create([
             'name' => 'Test Market',
@@ -85,10 +85,8 @@ class StaffPresenceRailTest extends TestCase
 
         Livewire::test(OnlineStaffRail::class)
             ->assertSeeHtml('staff-presence__unread-badge')
-            ->call('openStaffModal', (int) $sender->id)
-            ->assertSee('Unread internal message')
-            ->call('markSelectedStaffMessagesRead')
-            ->assertDontSee('Unread internal message');
+            ->assertSee('Message Sender')
+            ->assertSeeHtml("type: 'staff', id: " . (int) $sender->id);
     }
 
     public function test_presence_rail_poll_refreshes_current_user_presence(): void

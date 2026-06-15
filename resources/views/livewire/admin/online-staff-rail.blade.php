@@ -191,6 +191,16 @@
             filter: saturate(0.9);
         }
 
+        .staff-presence__avatar:disabled {
+            cursor: default;
+            opacity: 0.86;
+            transform: none;
+        }
+
+        .staff-presence__avatar:disabled:hover {
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.10);
+        }
+
         html.dark .staff-presence__avatar::after {
             border-color: #0f172a;
         }
@@ -475,14 +485,18 @@
             @php
                 $personAvatarUrl = $avatarUrl($person);
                 $unreadCount = (int) ($person->unread_staff_messages_count ?? 0);
+                $isCurrentUser = (int) $person->id === (int) \Filament\Facades\Filament::auth()->id();
             @endphp
 
             <button
                 type="button"
                 class="staff-presence__avatar"
-                title="{{ $person->name }} · онлайн"
+                title="{{ $isCurrentUser ? $person->name . ' · это вы' : $person->name . ' · открыть диалог' }}"
                 style="--staff-avatar-color: {{ $avatarColor($person) }}"
-                wire:click="openStaffModal({{ (int) $person->id }})"
+                @if (! $isCurrentUser)
+                    x-on:click="window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'staff', id: {{ (int) $person->id }} } }))"
+                @endif
+                @disabled($isCurrentUser)
             >
                 @if ($personAvatarUrl)
                     <img class="staff-presence__avatar-image" src="{{ $personAvatarUrl }}" alt="{{ $person->name }}" loading="lazy">
@@ -508,14 +522,18 @@
             @php
                 $personAvatarUrl = $avatarUrl($person);
                 $unreadCount = (int) ($person->unread_staff_messages_count ?? 0);
+                $isCurrentUser = (int) $person->id === (int) \Filament\Facades\Filament::auth()->id();
             @endphp
 
             <button
                 type="button"
                 class="staff-presence__avatar staff-presence__avatar--offline"
-                title="{{ $person->name }} · офлайн"
+                title="{{ $isCurrentUser ? $person->name . ' · это вы' : $person->name . ' · открыть диалог' }}"
                 style="--staff-avatar-color: {{ $avatarColor($person) }}"
-                wire:click="openStaffModal({{ (int) $person->id }})"
+                @if (! $isCurrentUser)
+                    x-on:click="window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'staff', id: {{ (int) $person->id }} } }))"
+                @endif
+                @disabled($isCurrentUser)
             >
                 @if ($personAvatarUrl)
                     <img class="staff-presence__avatar-image" src="{{ $personAvatarUrl }}" alt="{{ $person->name }}" loading="lazy">
