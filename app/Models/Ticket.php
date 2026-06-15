@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Support\TicketChatNotificationRouter;
+use App\Support\UserNotificationPreferences;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -59,6 +60,7 @@ class Ticket extends Model
                         title: 'Вам назначена заявка',
                         body: "Заявка #{$ticket->id}: {$ticket->subject}",
                         url: self::getFilamentTicketUrl($ticket),
+                        topic: 'requests',
                     );
                 }
             }
@@ -86,6 +88,7 @@ class Ticket extends Model
                             title: 'Вам назначена заявка',
                             body: "Заявка #{$ticket->id}: {$ticket->subject}",
                             url: self::getFilamentTicketUrl($ticket),
+                            topic: 'requests',
                         );
                     }
                 }
@@ -103,14 +106,31 @@ class Ticket extends Model
                         title: 'Изменён статус заявки',
                         body: "Заявка #{$ticket->id}: {$oldStatus} → {$newStatus}",
                         url: self::getFilamentTicketUrl($ticket),
+                        topic: 'requests',
                     );
                 }
             }
         });
     }
 
-    protected static function sendInAppNotification(User $recipient, string $title, string $body, ?string $url = null): void
-    {
+    protected static function sendInAppNotification(
+        User $recipient,
+        string $title,
+        string $body,
+        ?string $url = null,
+        string $topic = UserNotificationPreferences::TOPIC_MESSAGES,
+    ): void {
+        $preferences = app(UserNotificationPreferences::class);
+
+        if (! $preferences->isTopicEnabled($recipient, $topic)) {
+            return;
+        }
+
+        $channelsOverride = $preferences->channelsOverride($recipient);
+        if ($channelsOverride !== null && ! in_array('database', $channelsOverride, true)) {
+            return;
+        }
+
         $notification = Notification::make()
             ->title($title)
             ->body($body);

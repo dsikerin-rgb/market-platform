@@ -60,7 +60,13 @@ class TicketChatNotification extends Notification implements ShouldQueue
             ]);
         }
 
-        return $notification->getDatabaseMessage();
+        return array_merge($notification->getDatabaseMessage(), [
+            'event_type' => $this->eventType,
+            'topic' => $this->eventType === self::EVENT_REQUEST_CREATED
+                ? 'requests'
+                : 'messages',
+            'url' => $this->url,
+        ]);
     }
 
     /**

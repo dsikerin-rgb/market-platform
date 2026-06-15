@@ -8,6 +8,7 @@ use App\Models\User;
 
 class UserNotificationPreferences
 {
+    public const TOPIC_MESSAGES = 'messages';
     public const TOPIC_SECURITY = 'security';
     public const TOPIC_ONE_C_INTEGRATIONS = 'one_c_integrations';
 
@@ -17,7 +18,7 @@ class UserNotificationPreferences
     public const TOPICS = [
         'calendar',
         'requests',
-        'messages',
+        self::TOPIC_MESSAGES,
         'tasks',
         'reminders',
         self::TOPIC_SECURITY,
@@ -56,10 +57,7 @@ class UserNotificationPreferences
     {
         return $user->isSuperAdmin()
             ? self::TOPICS
-            : array_values(array_diff(self::TOPICS, [
-                self::TOPIC_SECURITY,
-                self::TOPIC_ONE_C_INTEGRATIONS,
-            ]));
+            : [self::TOPIC_MESSAGES];
     }
 
     /**
@@ -70,10 +68,7 @@ class UserNotificationPreferences
     {
         return in_array('super-admin', $roleNames, true)
             ? self::TOPICS
-            : array_values(array_diff(self::TOPICS, [
-                self::TOPIC_SECURITY,
-                self::TOPIC_ONE_C_INTEGRATIONS,
-            ]));
+            : [self::TOPIC_MESSAGES];
     }
 
     /**
