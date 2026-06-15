@@ -11,6 +11,8 @@ use App\Models\StaffConversationMessage;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -59,6 +61,47 @@ class QuickChatDrawerTest extends TestCase
             ->call('selectChat', 'staff', (int) $staff->id)
             ->assertSee('First body')
             ->assertSee('Second body');
+    }
+
+    public function test_staff_message_can_be_sent_with_attachment(): void
+    {
+        Storage::fake('public');
+
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+        $staff = User::factory()->create([
+            'name' => 'Attachment Receiver',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'attachment-receiver-quick-chat@example.test',
+        ]);
+
+        $this->createConversation($market, $staff, $admin, 'Files', now());
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer')
+            ->call('selectChat', 'staff', (int) $staff->id)
+            ->set('messageBody', '')
+            ->set('messageAttachments', [
+                UploadedFile::fake()->create('invoice.pdf', 12, 'application/pdf'),
+            ])
+            ->call('sendMessage')
+            ->assertHasNoErrors()
+            ->assertSee('invoice.pdf');
+
+        $message = StaffConversationMessage::query()
+            ->where('user_id', (int) $admin->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertSame('', (string) $message->body);
+        $this->assertIsArray($message->attachments);
+        $this->assertSame('invoice.pdf', $message->attachments[0]['name'] ?? null);
     }
 
     private function actingAsMarketAdmin(Market $market): User

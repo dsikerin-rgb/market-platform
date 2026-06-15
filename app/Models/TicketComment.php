@@ -14,7 +14,15 @@ class TicketComment extends Model
         'ticket_id',
         'user_id',
         'body',
+        'attachments',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'attachments' => 'array',
+        ];
+    }
 
     protected static function booted(): void
     {
