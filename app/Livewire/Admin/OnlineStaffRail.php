@@ -214,7 +214,13 @@ class OnlineStaffRail extends Component
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->where('market_id', $marketId);
+        return $query->where(function (Builder $marketScoped) use ($marketId): void {
+            $marketScoped
+                ->where('market_id', $marketId)
+                ->orWhereHas('roles', function (Builder $roleQuery): void {
+                    $roleQuery->where('name', 'super-admin');
+                });
+        });
     }
 
     private function attachUnreadCounts(Collection $staff, User $user): Collection

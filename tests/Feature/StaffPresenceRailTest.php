@@ -108,6 +108,31 @@ class StaffPresenceRailTest extends TestCase
         $this->assertTrue($admin->refresh()->last_seen_at->greaterThan(now()->subMinute()));
     }
 
+    public function test_market_staff_can_see_online_super_admin_without_market_id(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        Role::findOrCreate('super-admin', 'web');
+
+        $superAdmin = User::factory()->create([
+            'name' => 'Visible Super Admin',
+            'market_id' => null,
+            'tenant_id' => null,
+            'email' => 'visible-super-admin@example.test',
+            'last_seen_at' => now(),
+        ]);
+        $superAdmin->assignRole('super-admin');
+
+        Livewire::test(OnlineStaffRail::class)
+            ->assertSee('Visible Super Admin');
+    }
+
     private function actingAsMarketAdmin(Market $market): User
     {
         Role::findOrCreate('market-admin', 'web');
