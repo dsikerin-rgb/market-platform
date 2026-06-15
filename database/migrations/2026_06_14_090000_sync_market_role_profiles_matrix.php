@@ -26,6 +26,7 @@ return new class extends Migration {
             'marketplace.slides.create',
             'marketplace.slides.update',
             'marketplace.slides.delete',
+            'markets.view',
             'contracts.update',
             'finance.1c.view',
             'finance.accruals.view',
@@ -105,7 +106,10 @@ return new class extends Migration {
 
         $rolePermissions = [
             'market-owner' => [
+                'markets.view',
                 ...$marketplaceViewPermissions,
+                'staff.viewAny',
+                'staff.view',
                 ...$financePermissions,
             ],
             'market-owner-director' => [
