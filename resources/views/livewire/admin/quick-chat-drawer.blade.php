@@ -89,6 +89,8 @@
             z-index: 100;
             background: rgba(15, 23, 42, 0.32);
             backdrop-filter: blur(4px);
+            animation: quick-chat-backdrop-in 180ms ease-out both;
+            will-change: opacity;
         }
 
         .quick-chat__drawer {
@@ -105,6 +107,31 @@
             overflow: hidden;
             background: #f8fafc;
             box-shadow: -24px 0 70px rgba(15, 23, 42, 0.24);
+            animation: quick-chat-drawer-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+            transform: translate3d(0, 0, 0);
+            will-change: transform, opacity;
+        }
+
+        @keyframes quick-chat-backdrop-in {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes quick-chat-drawer-in {
+            from {
+                opacity: 0.78;
+                transform: translate3d(2rem, 0, 0);
+            }
+
+            to {
+                opacity: 1;
+                transform: translate3d(0, 0, 0);
+            }
         }
 
         .quick-chat__header {
@@ -492,6 +519,14 @@
 
         html.dark .quick-chat__bubble--own {
             background: rgba(22, 101, 52, 0.82);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .quick-chat__launcher .quick-chat__badge,
+            .quick-chat__backdrop,
+            .quick-chat__drawer {
+                animation: none;
+            }
         }
 
         @media (max-width: 1023px) {
