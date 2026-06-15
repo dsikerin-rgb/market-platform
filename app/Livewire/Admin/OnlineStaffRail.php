@@ -11,6 +11,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 
@@ -22,12 +23,40 @@ class OnlineStaffRail extends Component
 
     public function render(): View
     {
+        $this->touchCurrentUserPresence();
+
         return view('livewire.admin.online-staff-rail', [
             'onlineStaff' => $this->onlineStaff(),
             'offlineStaff' => $this->offlineStaff(),
             'selectedStaff' => $this->selectedStaff(),
             'selectedStaffUnreadMessages' => $this->selectedStaffUnreadMessages(),
         ]);
+    }
+
+    private function touchCurrentUserPresence(): void
+    {
+        if (! Schema::hasColumn('users', 'last_seen_at')) {
+            return;
+        }
+
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return;
+        }
+
+        $lastSeenAt = $user->last_seen_at;
+        if ($lastSeenAt && $lastSeenAt->greaterThan(now()->subMinute())) {
+            return;
+        }
+
+        $now = now();
+
+        DB::table('users')
+            ->where('id', $user->getAuthIdentifier())
+            ->update(['last_seen_at' => $now]);
+
+        $user->forceFill(['last_seen_at' => $now]);
     }
 
     private function onlineStaff(): Collection

@@ -35,7 +35,7 @@
     };
 @endphp
 
-<div class="staff-presence" wire:poll.30s aria-label="Сотрудники">
+<div class="staff-presence" wire:poll.10s aria-label="Сотрудники">
     <style>
         .staff-presence {
             --staff-presence-gutter: 5.75rem;
