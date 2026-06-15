@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\Auth\PortalAccessService;
 use App\Services\Marketplace\MarketplaceDemoContentService;
 use App\Services\Marketplace\MarketplaceContextService;
+use App\Support\MarketplaceSettingsValue;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -116,13 +117,13 @@ abstract class BaseMarketplaceController extends Controller
             : 7000;
 
         return [
-            'brand_name' => trim((string) ($raw['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
-            'logo_path' => trim((string) ($raw['logo_path'] ?? '')),
-            'hero_title' => trim((string) ($raw['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
-            'hero_subtitle' => trim((string) ($raw['hero_subtitle'] ?? '')) ?: 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
-            'public_phone' => trim((string) ($raw['public_phone'] ?? config('marketplace.brand.public_phone', ''))),
-            'public_email' => trim((string) ($raw['public_email'] ?? config('marketplace.brand.public_email', ''))),
-            'public_address' => trim((string) ($raw['public_address'] ?? ($market->address ?? config('marketplace.brand.public_address', '')))),
+            'brand_name' => MarketplaceSettingsValue::string($raw['brand_name'] ?? null, 'Маркетплейс Экоярмарки') ?: 'Маркетплейс Экоярмарки',
+            'logo_path' => MarketplaceSettingsValue::string($raw['logo_path'] ?? null),
+            'hero_title' => MarketplaceSettingsValue::string($raw['hero_title'] ?? null, 'Покупки на Экоярмарке в одном месте') ?: 'Покупки на Экоярмарке в одном месте',
+            'hero_subtitle' => MarketplaceSettingsValue::string($raw['hero_subtitle'] ?? null, 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.') ?: 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
+            'public_phone' => MarketplaceSettingsValue::string($raw['public_phone'] ?? null, config('marketplace.brand.public_phone', '')),
+            'public_email' => MarketplaceSettingsValue::string($raw['public_email'] ?? null, config('marketplace.brand.public_email', '')),
+            'public_address' => MarketplaceSettingsValue::string($raw['public_address'] ?? null, $market->address ?? config('marketplace.brand.public_address', '')),
             'slider_enabled' => array_key_exists('slider_enabled', $raw) ? (bool) $raw['slider_enabled'] : true,
             'slider_autoplay_enabled' => array_key_exists('slider_autoplay_enabled', $raw) ? (bool) $raw['slider_autoplay_enabled'] : true,
             'slider_autoplay_interval_ms' => max(4000, min($interval, 20000)),
@@ -143,7 +144,7 @@ abstract class BaseMarketplaceController extends Controller
      */
     protected function resolveMarketplaceLogoUrl(array $settings): string
     {
-        $value = trim((string) ($settings['logo_path'] ?? ''));
+        $value = MarketplaceSettingsValue::string($settings['logo_path'] ?? null);
 
         if ($value === '') {
             return asset('marketplace/brand/eko-fair-logo.svg');
