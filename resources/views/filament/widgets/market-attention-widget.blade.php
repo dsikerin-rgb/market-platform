@@ -207,8 +207,18 @@
             animation: market-attention-toast-in 780ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
         }
 
+        .market-attention-widget__card--toast[data-tone="info"] {
+            border-color: rgba(14, 165, 233, 0.26);
+            background: linear-gradient(180deg, rgba(240, 249, 255, 0.98), rgba(224, 242, 254, 0.92));
+        }
+
         .dark .market-attention-widget__card--toast {
             background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.92));
+        }
+
+        .dark .market-attention-widget__card--toast[data-tone="info"] {
+            border-color: rgba(56, 189, 248, 0.35);
+            background: linear-gradient(180deg, rgba(12, 74, 110, 0.52), rgba(15, 23, 42, 0.95));
         }
 
         .market-attention-widget__card--toast:hover {
@@ -681,6 +691,13 @@
                                         'icon' => 'text-success-600 dark:text-success-300',
                                         'style' => '--attention-accent:#22c55e;--attention-glow:rgba(34,197,94,0.18);',
                                     ],
+                                    'info' => [
+                                        'chip' => 'bg-sky-500/12 text-sky-700 ring-sky-500/20 dark:bg-sky-400/12 dark:text-sky-200 dark:ring-sky-400/20',
+                                        'status' => 'bg-sky-500/10 text-sky-700 dark:bg-sky-400/10 dark:text-sky-200',
+                                        'cta' => 'bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400',
+                                        'icon' => 'text-sky-600 dark:text-sky-300',
+                                        'style' => '--attention-accent:#0ea5e9;--attention-glow:rgba(14,165,233,0.24);',
+                                    ],
                                     default => [
                                         'chip' => 'bg-gray-500/10 text-gray-700 ring-gray-500/15 dark:bg-gray-400/10 dark:text-gray-200 dark:ring-gray-400/15',
                                         'status' => 'bg-gray-500/10 text-gray-700 dark:bg-gray-400/10 dark:text-gray-200',
@@ -734,6 +751,7 @@
                                 x-show="open"
                                 x-bind:class="{ 'market-attention-widget__card--toast-dismissing': closing }"
                                 class="market-attention-widget__card market-attention-widget__card--toast group no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                                data-tone="{{ $tone }}"
                                 style="{{ $accentClasses['style'] }}"
                                 role="link"
                                 tabindex="0"
@@ -812,6 +830,13 @@
                                         'cta' => 'bg-success-600 text-white hover:bg-success-500 dark:bg-success-500 dark:hover:bg-success-400',
                                         'icon' => 'text-success-600 dark:text-success-300',
                                         'style' => '--attention-accent:#22c55e;--attention-glow:rgba(34,197,94,0.18);',
+                                    ],
+                                    'info' => [
+                                        'chip' => 'bg-sky-500/12 text-sky-700 ring-sky-500/20 dark:bg-sky-400/12 dark:text-sky-200 dark:ring-sky-400/20',
+                                        'status' => 'bg-sky-500/10 text-sky-700 dark:bg-sky-400/10 dark:text-sky-200',
+                                        'cta' => 'bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400',
+                                        'icon' => 'text-sky-600 dark:text-sky-300',
+                                        'style' => '--attention-accent:#0ea5e9;--attention-glow:rgba(14,165,233,0.24);',
                                     ],
                                     default => [
                                         'chip' => 'bg-gray-500/10 text-gray-700 ring-gray-500/15 dark:bg-gray-400/10 dark:text-gray-200 dark:ring-gray-400/15',

@@ -12,9 +12,12 @@ use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Models\IntegrationExchange;
 use App\Models\Market;
+use App\Models\StaffConversationMessage;
 use App\Models\TenantContract;
 use App\Models\Task;
 use App\Models\TenantRequest;
+use App\Models\User;
+use App\Notifications\TicketChatNotification;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -110,6 +113,21 @@ class MarketAttentionWidget extends Widget
         $isMarketOperator = method_exists($user, 'hasRole') && $user->hasRole('market-operator');
 
         $items = [];
+
+        $unreadMessages = $this->countUnreadIncomingMessages($user, $marketId);
+
+        if ($unreadMessages > 0) {
+            $items[] = $this->makeItem(
+                title: 'Новые сообщения',
+                value: (string) $unreadMessages,
+                tone: 'info',
+                icon: 'heroicon-m-chat-bubble-left-right',
+                category: 'Сообщения',
+                description: 'Есть непрочитанные сообщения от сотрудников или арендаторов.',
+                actionLabel: 'Открыть сообщения',
+                actionUrl: $this->unreadMessagesUrl($user),
+            );
+        }
 
         if ($isSuperAdmin || $isMarketOperator) {
             $recentExchangeErrors = $this->countRecentIntegrationErrors($marketId, $tz);
@@ -384,6 +402,61 @@ class MarketAttentionWidget extends Widget
     private function countTenantsWithCriticalDebt(int $marketId): int
     {
         return TenantResource::countActiveTenantsWithCriticalDebt($marketId);
+    }
+
+    private function countUnreadIncomingMessages(User $user, int $marketId): int
+    {
+        return $this->countUnreadStaffMessages($user)
+            + $this->countUnreadTenantMessageNotifications($user, $marketId);
+    }
+
+    private function countUnreadStaffMessages(User $user): int
+    {
+        if (
+            ! Schema::hasTable('staff_conversations')
+            || ! Schema::hasTable('staff_conversation_messages')
+            || ! Schema::hasColumn('staff_conversation_messages', 'read_at')
+        ) {
+            return 0;
+        }
+
+        return StaffConversationMessage::query()
+            ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+            ->whereNull('staff_conversation_messages.read_at')
+            ->where('staff_conversation_messages.user_id', '<>', (int) $user->id)
+            ->where(function ($query) use ($user): void {
+                $query
+                    ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                    ->orWhere('staff_conversations.recipient_user_id', (int) $user->id);
+            })
+            ->count('staff_conversation_messages.id');
+    }
+
+    private function countUnreadTenantMessageNotifications(User $user, int $marketId): int
+    {
+        if (! Schema::hasTable('notifications')) {
+            return 0;
+        }
+
+        return (int) DB::table('notifications')
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', (int) $user->id)
+            ->whereNull('read_at')
+            ->where('type', TicketChatNotification::class)
+            ->where('data->event_type', TicketChatNotification::EVENT_MESSAGE_CREATED)
+            ->when($marketId > 0, function ($query) use ($marketId) {
+                return $query->where('data->market_id', $marketId);
+            })
+            ->count();
+    }
+
+    private function unreadMessagesUrl(User $user): string
+    {
+        if ($this->countUnreadStaffMessages($user) > 0) {
+            return '/admin/requests?' . http_build_query(['channel' => 'staff']);
+        }
+
+        return Requests::getUrl();
     }
 
     /**
