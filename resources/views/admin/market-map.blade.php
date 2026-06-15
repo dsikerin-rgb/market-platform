@@ -8442,7 +8442,7 @@
               // UI для привязки непривязанной фигуры к месту (MVP) - вне actions
               let bindShapeHtml = '';
               const isUnboundShape = (!hitSpaceId || hitSpaceId <= 0) && shapeId && Number.isFinite(shapeId) && shapeId > 0;
-              if (isUnboundShape && CAN_EDIT) {
+              if (isUnboundShape && CAN_EDIT && editMode) {
                 // Если drawingSpace выбран — предзаполняем input
                 const hasDrawingSpace = drawingSpace && Number(drawingSpace.id) > 0;
                 const drawingSpaceLabel = hasDrawingSpace
@@ -8520,7 +8520,9 @@
                 if (hit.market_space_id) {
                   btns.push('<button type="button" data-action="set-chosen-space" data-space-id="' + String(hit.market_space_id) + '">Выбрать это место</button>');
                 }
+              }
 
+              if (CAN_EDIT && editMode && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
                 btns.push('<button type="button" data-action="delete-shape" data-shape-id="' + String(shapeId) + '">Удалить разметку</button>');
               }
 
@@ -8579,7 +8581,7 @@
                   bindShapeHtml +
                   actions +
                 '</div>',
-                isUnboundShape && CAN_EDIT
+                isUnboundShape && CAN_EDIT && editMode
               );
             } catch (err) {
               console.error(err);
