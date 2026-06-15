@@ -409,11 +409,9 @@ class QuickChatDrawer extends Component
 
         if ($this->isSuperAdmin($user)) {
             $marketId = $this->resolveMarketId($user);
-            if ($marketId <= 0) {
-                return collect();
+            if ($marketId > 0) {
+                $query->where('market_id', $marketId);
             }
-
-            $query->where('market_id', $marketId);
         } else {
             $query->where('market_id', (int) ($user->market_id ?? 0));
         }

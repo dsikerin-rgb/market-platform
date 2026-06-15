@@ -144,6 +144,30 @@ class QuickChatDrawerTest extends TestCase
         ]);
     }
 
+    public function test_super_admin_can_find_staff_dialog_candidate_without_selected_market(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        User::factory()->create([
+            'name' => 'Фриц Юрий Александрович',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'friz2009@example.test',
+        ]);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer')
+            ->set('search', 'Фри')
+            ->assertSee('Фриц Юрий Александрович')
+            ->assertSee('Новый диалог');
+    }
+
     private function actingAsMarketAdmin(Market $market): User
     {
         Role::findOrCreate('market-admin', 'web');
@@ -154,6 +178,23 @@ class QuickChatDrawerTest extends TestCase
             'email' => 'quick-chat-admin-' . uniqid('', true) . '@example.test',
         ]);
         $user->assignRole('market-admin');
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($user, Filament::getAuthGuard());
+
+        return $user;
+    }
+
+    private function actingAsSuperAdmin(): User
+    {
+        Role::findOrCreate('super-admin', 'web');
+
+        $user = User::factory()->create([
+            'market_id' => null,
+            'tenant_id' => null,
+            'email' => 'quick-chat-super-admin-' . uniqid('', true) . '@example.test',
+        ]);
+        $user->assignRole('super-admin');
 
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $this->actingAs($user, Filament::getAuthGuard());
