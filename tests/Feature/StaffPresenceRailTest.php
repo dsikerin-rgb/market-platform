@@ -91,6 +91,23 @@ class StaffPresenceRailTest extends TestCase
             ->assertDontSee('Unread internal message');
     }
 
+    public function test_presence_rail_poll_refreshes_current_user_presence(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+        $admin->forceFill(['last_seen_at' => now()->subMinutes(10)])->save();
+
+        Livewire::test(OnlineStaffRail::class)
+            ->assertOk();
+
+        $this->assertTrue($admin->refresh()->last_seen_at->greaterThan(now()->subMinute()));
+    }
+
     private function actingAsMarketAdmin(Market $market): User
     {
         Role::findOrCreate('market-admin', 'web');
