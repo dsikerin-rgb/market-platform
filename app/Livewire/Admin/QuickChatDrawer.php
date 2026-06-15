@@ -37,7 +37,7 @@ class QuickChatDrawer extends Component
 
         if ($requestedType === 'staff') {
             $this->selectedType = 'staff';
-            $this->selectedId = max(0, (int) request('conversation_id'));
+            $this->selectedId = $this->resolveStaffPeerIdFromConversationId(max(0, (int) request('conversation_id')));
             $this->isOpen = $this->selectedId > 0;
 
             return;
@@ -53,8 +53,8 @@ class QuickChatDrawer extends Component
 
         if ((string) request('channel', '') === 'staff' && (int) request('conversation_id') > 0) {
             $this->selectedType = 'staff';
-            $this->selectedId = (int) request('conversation_id');
-            $this->isOpen = true;
+            $this->selectedId = $this->resolveStaffPeerIdFromConversationId((int) request('conversation_id'));
+            $this->isOpen = $this->selectedId > 0;
 
             return;
         }
@@ -129,13 +129,13 @@ class QuickChatDrawer extends Component
                 return;
             }
 
-            $conversation = StaffConversation::query()->whereKey($id)->first();
+            $peer = User::query()->whereKey($id)->first();
 
-            if (! $conversation || ! app(StaffConversationService::class)->canAccessConversation($user, $conversation)) {
+            if (! $peer || ! $this->canAccessStaffPeer($user, $peer)) {
                 return;
             }
 
-            app(StaffConversationService::class)->markConversationRead($conversation, $user);
+            $this->markStaffPeerRead($user, (int) $peer->id);
         } else {
             $ticket = Ticket::query()->whereKey($id)->first();
 
@@ -179,16 +179,23 @@ class QuickChatDrawer extends Component
                 return;
             }
 
-            $conversation = StaffConversation::query()->whereKey((int) $this->selectedId)->first();
+            $peer = User::query()->whereKey((int) $this->selectedId)->first();
 
-            if (! $conversation || ! $service->canAccessConversation($user, $conversation)) {
+            if (! $peer || ! $this->canAccessStaffPeer($user, $peer)) {
                 $this->addError('messageBody', 'Диалог недоступен.');
 
                 return;
             }
 
-            $service->addMessage($conversation, $user, $body);
-            $service->markConversationRead($conversation, $user);
+            $conversation = $this->latestStaffConversationWithPeer($user, (int) $peer->id);
+
+            if ($conversation) {
+                $service->addMessage($conversation, $user, $body);
+            } else {
+                $conversation = $service->startConversation($user, $peer, '', $body);
+            }
+
+            $this->markStaffPeerRead($user, (int) $peer->id);
         } else {
             $ticket = Ticket::query()->whereKey((int) $this->selectedId)->first();
 
@@ -295,36 +302,52 @@ class QuickChatDrawer extends Component
             ->withCount('messages')
             ->latest('last_message_at')
             ->latest('updated_at')
-            ->limit(20);
+            ->limit(100);
 
         $this->scopeStaffConversations($query, $user);
         $this->scopeStaffSearch($query);
 
-        return $query->get()->map(function (StaffConversation $conversation) use ($user): array {
-            $counterparty = (int) $conversation->created_by_user_id === (int) $user->id
-                ? $conversation->recipient
-                : $conversation->starter;
+        return $query->get()
+            ->groupBy(fn (StaffConversation $conversation): int => $this->staffPeerId($conversation, $user))
+            ->filter(fn (Collection $conversations, mixed $peerId): bool => (int) $peerId > 0 && $conversations->isNotEmpty())
+            ->map(function (Collection $conversations, mixed $peerId) use ($user): array {
+                $peerId = (int) $peerId;
 
-            $counterpartyName = trim((string) ($counterparty?->name ?? ''));
-            if ($counterpartyName === '') {
-                $counterpartyName = 'Сотрудник';
-            }
+                /** @var StaffConversation $latestConversation */
+                $latestConversation = $conversations->sortByDesc(
+                    fn (StaffConversation $conversation): mixed => $conversation->last_message_at ?: $conversation->updated_at
+                )->first();
 
-            $subject = trim((string) $conversation->subject) !== ''
-                ? trim((string) $conversation->subject)
-                : 'Внутренний диалог';
+                $counterparty = (int) $latestConversation->created_by_user_id === (int) $user->id
+                    ? $latestConversation->recipient
+                    : $latestConversation->starter;
 
-            return [
-                'type' => 'staff',
-                'id' => (int) $conversation->id,
-                'title' => $subject,
-                'subtitle' => $counterpartyName,
-                'preview' => 'Переписка сотрудников',
-                'meta' => $this->formatDateTime($conversation->last_message_at ?: $conversation->updated_at),
-                'count' => (int) $conversation->messages_count,
-                'sort_at' => $conversation->last_message_at ?: $conversation->updated_at,
-            ];
-        });
+                $counterpartyName = trim((string) ($counterparty?->name ?? ''));
+                if ($counterpartyName === '') {
+                    $counterpartyName = 'Сотрудник';
+                }
+
+                $latestMessage = $this->latestStaffMessageWithPeer($user, $peerId);
+                $preview = $latestMessage
+                    ? Str::limit(trim((string) $latestMessage->body), 110)
+                    : 'Переписка сотрудников';
+
+                $lastAt = $latestMessage?->created_at ?: ($latestConversation->last_message_at ?: $latestConversation->updated_at);
+
+                return [
+                    'type' => 'staff',
+                    'id' => $peerId,
+                    'title' => $counterpartyName,
+                    'subtitle' => 'Сотрудник',
+                    'preview' => $preview,
+                    'meta' => $this->formatListDateTime($lastAt),
+                    'count' => $conversations->sum(fn (StaffConversation $conversation): int => (int) $conversation->messages_count),
+                    'unread_count' => $this->unreadStaffMessagesCountForPeer($user, $peerId),
+                    'sort_at' => $lastAt,
+                ];
+            })
+            ->sortByDesc('sort_at')
+            ->values();
     }
 
     /**
@@ -379,29 +402,66 @@ class QuickChatDrawer extends Component
             return null;
         }
 
-        $conversation = StaffConversation::query()
-            ->with(['starter:id,name,email', 'recipient:id,name,email'])
-            ->withCount('messages')
-            ->whereKey((int) $this->selectedId)
-            ->first();
+        $peer = User::query()->whereKey((int) $this->selectedId)->first();
 
-        if (! $conversation || ! app(StaffConversationService::class)->canAccessConversation($user, $conversation)) {
+        if (! $peer || ! $this->canAccessStaffPeer($user, $peer)) {
             return null;
         }
 
-        $counterparty = (int) $conversation->created_by_user_id === (int) $user->id
-            ? $conversation->recipient
-            : $conversation->starter;
+        $latestConversation = $this->latestStaffConversationWithPeer($user, (int) $peer->id);
+
+        if (! $latestConversation) {
+            return null;
+        }
+
+        $messagesCount = (int) StaffConversationMessage::query()
+            ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+            ->where(function (Builder $pair) use ($user, $peer): void {
+                $pair
+                    ->where(function (Builder $direct) use ($user, $peer): void {
+                        $direct
+                            ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                            ->where('staff_conversations.recipient_user_id', (int) $peer->id);
+                    })
+                    ->orWhere(function (Builder $reverse) use ($user, $peer): void {
+                        $reverse
+                            ->where('staff_conversations.created_by_user_id', (int) $peer->id)
+                            ->where('staff_conversations.recipient_user_id', (int) $user->id);
+                    });
+            })
+            ->count('staff_conversation_messages.id');
 
         return [
             'type' => 'staff',
-            'id' => (int) $conversation->id,
-            'title' => trim((string) $conversation->subject) !== '' ? trim((string) $conversation->subject) : 'Внутренний диалог',
-            'subtitle' => trim((string) ($counterparty?->name ?? '')) ?: 'Сотрудник',
+            'id' => (int) $peer->id,
+            'title' => trim((string) $peer->name) !== '' ? trim((string) $peer->name) : 'Сотрудник',
+            'subtitle' => trim((string) $peer->email),
             'description' => '',
-            'meta' => 'Обновлено: ' . $this->formatDateTime($conversation->last_message_at ?: $conversation->updated_at),
-            'count' => (int) $conversation->messages_count,
+            'meta' => 'Обновлено: ' . $this->formatDateTime($latestConversation->last_message_at ?: $latestConversation->updated_at),
+            'count' => $messagesCount,
         ];
+    }
+
+    private function latestStaffConversationWithPeer(User $user, int $peerId): ?StaffConversation
+    {
+        return StaffConversation::query()
+            ->with(['starter:id,name,email', 'recipient:id,name,email'])
+            ->where(function (Builder $pair) use ($user, $peerId): void {
+                $pair
+                    ->where(function (Builder $direct) use ($user, $peerId): void {
+                        $direct
+                            ->where('created_by_user_id', (int) $user->id)
+                            ->where('recipient_user_id', $peerId);
+                    })
+                    ->orWhere(function (Builder $reverse) use ($user, $peerId): void {
+                        $reverse
+                            ->where('created_by_user_id', $peerId)
+                            ->where('recipient_user_id', (int) $user->id);
+                    });
+            })
+            ->latest('last_message_at')
+            ->latest('updated_at')
+            ->first();
     }
 
     /**
@@ -478,16 +538,30 @@ class QuickChatDrawer extends Component
             return collect();
         }
 
-        $conversation = StaffConversation::query()->whereKey((int) $this->selectedId)->first();
+        $peer = User::query()->whereKey((int) $this->selectedId)->first();
 
-        if (! $conversation || ! app(StaffConversationService::class)->canAccessConversation($user, $conversation)) {
+        if (! $peer || ! $this->canAccessStaffPeer($user, $peer)) {
             return collect();
         }
 
         return StaffConversationMessage::query()
             ->with(['user:id,name,email'])
-            ->where('staff_conversation_id', (int) $conversation->id)
-            ->oldest('created_at')
+            ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+            ->where(function (Builder $pair) use ($user, $peer): void {
+                $pair
+                    ->where(function (Builder $direct) use ($user, $peer): void {
+                        $direct
+                            ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                            ->where('staff_conversations.recipient_user_id', (int) $peer->id);
+                    })
+                    ->orWhere(function (Builder $reverse) use ($user, $peer): void {
+                        $reverse
+                            ->where('staff_conversations.created_by_user_id', (int) $peer->id)
+                            ->where('staff_conversations.recipient_user_id', (int) $user->id);
+                    });
+            })
+            ->orderBy('staff_conversation_messages.created_at')
+            ->select('staff_conversation_messages.*')
             ->get()
             ->map(fn (StaffConversationMessage $message): array => [
                 'id' => 'staff-message-' . (int) $message->id,
@@ -508,6 +582,141 @@ class QuickChatDrawer extends Component
 
         return (int) ($user->market_id ?? 0) > 0
             && (int) ($user->market_id ?? 0) === (int) $ticket->market_id;
+    }
+
+    private function canAccessStaffPeer(User $user, User $peer): bool
+    {
+        if ((int) $user->id === (int) $peer->id) {
+            return false;
+        }
+
+        if ($this->isSuperAdmin($user)) {
+            return true;
+        }
+
+        return (int) ($user->market_id ?? 0) > 0
+            && (int) ($user->market_id ?? 0) === (int) ($peer->market_id ?? 0);
+    }
+
+    private function staffPeerId(StaffConversation $conversation, User $user): int
+    {
+        if ((int) $conversation->created_by_user_id === (int) $user->id) {
+            return (int) $conversation->recipient_user_id;
+        }
+
+        if ((int) $conversation->recipient_user_id === (int) $user->id) {
+            return (int) $conversation->created_by_user_id;
+        }
+
+        return 0;
+    }
+
+    private function resolveStaffPeerIdFromConversationId(int $conversationId): ?int
+    {
+        if ($conversationId <= 0 || ! $this->staffTablesAvailable()) {
+            return null;
+        }
+
+        $user = $this->currentUser();
+        if (! $user) {
+            return null;
+        }
+
+        $conversation = StaffConversation::query()->whereKey($conversationId)->first();
+        if (! $conversation || ! app(StaffConversationService::class)->canAccessConversation($user, $conversation)) {
+            return null;
+        }
+
+        $peerId = $this->staffPeerId($conversation, $user);
+        if ($peerId <= 0) {
+            return null;
+        }
+
+        $this->markStaffPeerRead($user, $peerId);
+
+        return $peerId;
+    }
+
+    private function latestStaffMessageWithPeer(User $user, int $peerId): ?StaffConversationMessage
+    {
+        return StaffConversationMessage::query()
+            ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+            ->where(function (Builder $pair) use ($user, $peerId): void {
+                $pair
+                    ->where(function (Builder $direct) use ($user, $peerId): void {
+                        $direct
+                            ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                            ->where('staff_conversations.recipient_user_id', $peerId);
+                    })
+                    ->orWhere(function (Builder $reverse) use ($user, $peerId): void {
+                        $reverse
+                            ->where('staff_conversations.created_by_user_id', $peerId)
+                            ->where('staff_conversations.recipient_user_id', (int) $user->id);
+                    });
+            })
+            ->latest('staff_conversation_messages.created_at')
+            ->select('staff_conversation_messages.*')
+            ->first();
+    }
+
+    private function markStaffPeerRead(User $user, int $peerId): void
+    {
+        if (! Schema::hasColumn('staff_conversation_messages', 'read_at')) {
+            return;
+        }
+
+        $messageIds = StaffConversationMessage::query()
+            ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+            ->whereNull('staff_conversation_messages.read_at')
+            ->where('staff_conversation_messages.user_id', $peerId)
+            ->where(function (Builder $pair) use ($user, $peerId): void {
+                $pair
+                    ->where(function (Builder $direct) use ($user, $peerId): void {
+                        $direct
+                            ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                            ->where('staff_conversations.recipient_user_id', $peerId);
+                    })
+                    ->orWhere(function (Builder $reverse) use ($user, $peerId): void {
+                        $reverse
+                            ->where('staff_conversations.created_by_user_id', $peerId)
+                            ->where('staff_conversations.recipient_user_id', (int) $user->id);
+                    });
+            })
+            ->pluck('staff_conversation_messages.id');
+
+        if ($messageIds->isEmpty()) {
+            return;
+        }
+
+        StaffConversationMessage::query()
+            ->whereKey($messageIds)
+            ->update(['read_at' => now()]);
+    }
+
+    private function unreadStaffMessagesCountForPeer(User $user, int $peerId): int
+    {
+        if (! Schema::hasColumn('staff_conversation_messages', 'read_at')) {
+            return 0;
+        }
+
+        return (int) StaffConversationMessage::query()
+            ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+            ->whereNull('staff_conversation_messages.read_at')
+            ->where('staff_conversation_messages.user_id', $peerId)
+            ->where(function (Builder $pair) use ($user, $peerId): void {
+                $pair
+                    ->where(function (Builder $direct) use ($user, $peerId): void {
+                        $direct
+                            ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                            ->where('staff_conversations.recipient_user_id', $peerId);
+                    })
+                    ->orWhere(function (Builder $reverse) use ($user, $peerId): void {
+                        $reverse
+                            ->where('staff_conversations.created_by_user_id', $peerId)
+                            ->where('staff_conversations.recipient_user_id', (int) $user->id);
+                    });
+            })
+            ->count('staff_conversation_messages.id');
     }
 
     private function ticketMessagesCount(Ticket $ticket): int
@@ -534,16 +743,6 @@ class QuickChatDrawer extends Component
 
     private function scopeStaffConversations(Builder $query, User $user): void
     {
-        if ($this->isSuperAdmin($user)) {
-            $marketId = $this->resolveMarketId($user);
-
-            if ($marketId > 0) {
-                $query->where('market_id', $marketId);
-            }
-
-            return;
-        }
-
         $query->where(function (Builder $pair) use ($user): void {
             $pair
                 ->where('created_by_user_id', (int) $user->id)
@@ -637,6 +836,25 @@ class QuickChatDrawer extends Component
     private function isSuperAdmin(User $user): bool
     {
         return method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+    }
+
+    private function formatListDateTime(mixed $value): string
+    {
+        if (! $value) {
+            return '';
+        }
+
+        try {
+            $date = $value->timezone(config('app.timezone'));
+
+            if ($date->toDateString() === now()->toDateString()) {
+                return $date->format('H:i');
+            }
+
+            return $date->format('d.m.Y');
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     private function formatDateTime(mixed $value): string
