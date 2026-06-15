@@ -9,6 +9,7 @@ use App\Models\Ticket;
 use App\Models\TicketAttachment;
 use App\Models\TicketComment;
 use App\Models\User;
+use App\Support\MessageAttachmentStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -135,6 +136,7 @@ class RequestsController extends Controller
             ->firstOrFail();
 
         $comments = TicketComment::query()
+            ->with(['user:id,name'])
             ->where('ticket_id', $ticket->id)
             ->orderBy('created_at')
             ->get();
@@ -170,13 +172,16 @@ class RequestsController extends Controller
             'attachments.*' => ['file', 'max:5120'],
         ]);
 
+        $attachments = $request->hasFile('attachments')
+            ? MessageAttachmentStorage::store($request->file('attachments', []), 'chat-attachments')
+            : [];
+
         TicketComment::create([
             'ticket_id' => $ticket->id,
             'user_id' => $request->user()->id,
             'body' => $validated['body'],
+            'attachments' => $attachments !== [] ? $attachments : null,
         ]);
-
-        $this->storeAttachments($request, $ticket);
 
         return redirect()
             ->route('cabinet.requests.show', $ticket->id)

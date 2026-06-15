@@ -410,6 +410,65 @@
             white-space: pre-wrap;
         }
 
+        .quick-chat__attachments {
+            display: grid;
+            gap: 0.45rem;
+            margin-top: 0.55rem;
+        }
+
+        .quick-chat__attachment {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            min-width: 0;
+            border: 1px solid rgba(14, 165, 233, 0.18);
+            border-radius: 0.72rem;
+            background: rgba(255, 255, 255, 0.68);
+            padding: 0.45rem;
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .quick-chat__attachment-thumb {
+            width: 3.4rem;
+            height: 2.5rem;
+            border-radius: 0.55rem;
+            object-fit: cover;
+            background: #e2e8f0;
+            flex-shrink: 0;
+        }
+
+        .quick-chat__attachment-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 0.62rem;
+            background: rgba(14, 165, 233, 0.12);
+            color: #0369a1;
+            flex-shrink: 0;
+        }
+
+        .quick-chat__attachment-name {
+            display: block;
+            min-width: 0;
+            overflow: hidden;
+            color: #0f172a;
+            font-size: 0.82rem;
+            font-weight: 800;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .quick-chat__attachment-meta {
+            display: block;
+            margin-top: 0.1rem;
+            color: #64748b;
+            font-size: 0.72rem;
+            line-height: 1.25;
+        }
+
         .quick-chat__composer {
             border-top: 1px solid rgba(148, 163, 184, 0.22);
             background: rgba(255, 255, 255, 0.92);
@@ -441,6 +500,75 @@
         .quick-chat__textarea:focus {
             border-color: rgba(14, 165, 233, 0.68);
             box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+        }
+
+        .quick-chat__selected-files {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.45rem;
+        }
+
+        .quick-chat__selected-file {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.28rem;
+            max-width: 12rem;
+            border-radius: 999px;
+            background: rgba(14, 165, 233, 0.12);
+            padding: 0.25rem 0.5rem;
+            color: #075985;
+            font-size: 0.74rem;
+            font-weight: 750;
+        }
+
+        .quick-chat__selected-file span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .quick-chat__composer-tools {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            margin-top: 0.45rem;
+        }
+
+        .quick-chat__file-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.32rem;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.06);
+            padding: 0.38rem 0.62rem;
+            color: #334155;
+            font-size: 0.78rem;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .quick-chat__file-label:hover,
+        .quick-chat__file-label:focus-within {
+            background: rgba(14, 165, 233, 0.14);
+            color: #075985;
+        }
+
+        .quick-chat__file-input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+        }
+
+        .quick-chat__uploading {
+            color: #64748b;
+            font-size: 0.76rem;
+            font-weight: 750;
         }
 
         .quick-chat__send {
@@ -515,6 +643,25 @@
         html.dark .quick-chat__bubble,
         html.dark .quick-chat__textarea {
             background: #111827;
+        }
+
+        html.dark .quick-chat__attachment {
+            border-color: rgba(148, 163, 184, 0.16);
+            background: rgba(15, 23, 42, 0.42);
+        }
+
+        html.dark .quick-chat__attachment-name {
+            color: #f8fafc;
+        }
+
+        html.dark .quick-chat__attachment-meta {
+            color: #94a3b8;
+        }
+
+        html.dark .quick-chat__file-label,
+        html.dark .quick-chat__selected-file {
+            background: rgba(30, 41, 59, 0.82);
+            color: #bae6fd;
         }
 
         html.dark .quick-chat__bubble--own {
@@ -691,7 +838,32 @@
                                                 <span>{{ $message['created_at'] }}</span>
                                             @endif
                                         </div>
-                                        <div class="quick-chat__bubble-text">{{ $message['body'] }}</div>
+                                        @if (filled($message['body']))
+                                            <div class="quick-chat__bubble-text">{{ $message['body'] }}</div>
+                                        @endif
+
+                                        @if (! empty($message['attachments']))
+                                            <div class="quick-chat__attachments">
+                                                @foreach ($message['attachments'] as $attachment)
+                                                    <a class="quick-chat__attachment" href="{{ $attachment['url'] }}" target="_blank" rel="noopener">
+                                                        @if (($attachment['is_image'] ?? false) && ! empty($attachment['preview_url']))
+                                                            <img class="quick-chat__attachment-thumb" src="{{ $attachment['preview_url'] }}" alt="{{ $attachment['name'] }}" loading="lazy">
+                                                        @else
+                                                            <span class="quick-chat__attachment-icon">
+                                                                <x-filament::icon icon="heroicon-o-document" class="h-5 w-5" />
+                                                            </span>
+                                                        @endif
+
+                                                        <span style="min-width: 0;">
+                                                            <span class="quick-chat__attachment-name">{{ $attachment['name'] }}</span>
+                                                            <span class="quick-chat__attachment-meta">
+                                                                {{ $attachment['mime'] }}@if (! empty($attachment['size_label'])) В· {{ $attachment['size_label'] }}@endif
+                                                            </span>
+                                                        </span>
+                                                    </a>
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
                             @empty
@@ -714,9 +886,40 @@
                                     @error('messageBody')
                                         <div class="quick-chat__error">{{ $message }}</div>
                                     @enderror
+
+                                    @error('messageAttachments')
+                                        <div class="quick-chat__error">{{ $message }}</div>
+                                    @enderror
+
+                                    @error('messageAttachments.*')
+                                        <div class="quick-chat__error">{{ $message }}</div>
+                                    @enderror
+
+                                    @if ($messageAttachments !== [])
+                                        <div class="quick-chat__selected-files">
+                                            @foreach ($messageAttachments as $file)
+                                                @if ($file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile)
+                                                    <span class="quick-chat__selected-file" title="{{ $file->getClientOriginalName() }}">
+                                                        <x-filament::icon icon="heroicon-o-paper-clip" class="h-4 w-4" />
+                                                        <span>{{ $file->getClientOriginalName() }}</span>
+                                                    </span>
+                                                @endif
+                                            @endforeach
+                                        </div>
+                                    @endif
+
+                                    <div class="quick-chat__composer-tools">
+                                        <label class="quick-chat__file-label" title="До 5 файлов, до 20 МБ каждый.">
+                                            <x-filament::icon icon="heroicon-o-paper-clip" class="h-4 w-4" />
+                                            Вложить файл
+                                            <input class="quick-chat__file-input" type="file" wire:model="messageAttachments" multiple>
+                                        </label>
+
+                                        <span class="quick-chat__uploading" wire:loading wire:target="messageAttachments">Загрузка...</span>
+                                    </div>
                                 </div>
 
-                                <button type="submit" class="quick-chat__send" wire:loading.attr="disabled" wire:target="sendMessage">
+                                <button type="submit" class="quick-chat__send" wire:loading.attr="disabled" wire:target="sendMessage,messageAttachments">
                                     <x-filament::icon icon="heroicon-o-paper-airplane" class="h-5 w-5" />
                                     <span>Отправить</span>
                                 </button>

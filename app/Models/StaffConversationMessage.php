@@ -16,12 +16,14 @@ class StaffConversationMessage extends Model
         'staff_conversation_id',
         'user_id',
         'body',
+        'attachments',
         'read_at',
     ];
 
     protected function casts(): array
     {
         return [
+            'attachments' => 'array',
             'read_at' => 'datetime',
         ];
     }

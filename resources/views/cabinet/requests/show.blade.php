@@ -36,6 +36,7 @@
         @forelse($comments as $comment)
             @php
                 $mine = (int) ($comment->user_id ?? 0) === (int) auth()->id();
+                $commentAttachments = \App\Support\MessageAttachmentStorage::present($comment->attachments);
             @endphp
             <article class="flex {{ $mine ? 'justify-end' : 'justify-start' }}">
                 <div class="max-w-[88%] rounded-2xl px-3.5 py-3 border {{ $mine ? 'bg-sky-600 text-white border-sky-600' : 'bg-white text-slate-800 border-slate-200' }}">
@@ -43,6 +44,26 @@
                         {{ $comment->user?->name ?? 'Администрация' }} · {{ $comment->created_at?->format('d.m.Y H:i') }}
                     </p>
                     <p class="mt-1 text-sm whitespace-pre-line">{{ (string) $comment->body }}</p>
+
+                    @if($commentAttachments !== [])
+                        <div class="mt-2 space-y-1.5">
+                            @foreach($commentAttachments as $file)
+                                <a class="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm {{ $mine ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-700' }}" href="{{ $file['url'] }}" target="_blank" rel="noreferrer">
+                                    @if(($file['is_image'] ?? false) && ! empty($file['preview_url']))
+                                        <img class="h-10 w-14 rounded-lg object-cover" src="{{ $file['preview_url'] }}" alt="{{ $file['name'] }}" loading="lazy">
+                                    @else
+                                        <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg {{ $mine ? 'bg-white/20' : 'bg-white' }}">
+                                            <x-filament::icon icon="heroicon-o-document" class="h-4 w-4" />
+                                        </span>
+                                    @endif
+                                    <span class="min-w-0">
+                                        <span class="block truncate font-semibold">{{ $file['name'] }}</span>
+                                        <span class="block text-xs opacity-75">{{ $file['mime'] }}@if(! empty($file['size_label'])) · {{ $file['size_label'] }}@endif</span>
+                                    </span>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
             </article>
         @empty

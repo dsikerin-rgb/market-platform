@@ -12,7 +12,10 @@ use Illuminate\Support\Facades\Schema;
 
 class StaffConversationService
 {
-    public function startConversation(User $author, User $recipient, string $subject, string $body): StaffConversation
+    /**
+     * @param list<array<string, mixed>> $attachments
+     */
+    public function startConversation(User $author, User $recipient, string $subject, string $body, array $attachments = []): StaffConversation
     {
         $resolvedSubject = $this->resolveSubject($subject, $body);
 
@@ -24,11 +27,11 @@ class StaffConversationService
             'last_message_at' => now(),
         ]);
 
-        $this->addMessage($conversation, $author, $body, notifyRecipient: false);
+        $this->addMessage($conversation, $author, $body, $attachments, notifyRecipient: false);
         $this->notifyRecipient(
             $recipient,
             'Новое сообщение от ' . ($author->name ?: 'сотрудника'),
-            trim($body) !== '' ? trim($body) : $resolvedSubject,
+            trim($body) !== '' ? trim($body) : ($attachments !== [] ? 'Вложение' : $resolvedSubject),
             $conversation,
             $author,
         );
@@ -36,16 +39,21 @@ class StaffConversationService
         return $conversation;
     }
 
+    /**
+     * @param list<array<string, mixed>> $attachments
+     */
     public function addMessage(
         StaffConversation $conversation,
         User $author,
         string $body,
+        array $attachments = [],
         bool $notifyRecipient = true,
     ): StaffConversationMessage {
         $message = StaffConversationMessage::query()->create([
             'staff_conversation_id' => (int) $conversation->id,
             'user_id' => (int) $author->id,
             'body' => trim($body),
+            'attachments' => $attachments !== [] ? $attachments : null,
         ]);
 
         $conversation->forceFill([
@@ -61,9 +69,11 @@ class StaffConversationService
                     'Новое сообщение от ' . ($author->name ?: 'сотрудника'),
                     trim($body) !== ''
                         ? trim($body)
-                        : (trim((string) $conversation->subject) !== ''
-                            ? trim((string) $conversation->subject)
-                            : 'Внутренний диалог'),
+                        : ($attachments !== []
+                            ? 'Вложение'
+                            : (trim((string) $conversation->subject) !== ''
+                                ? trim((string) $conversation->subject)
+                                : 'Внутренний диалог')),
                     $conversation,
                     $author,
                 );

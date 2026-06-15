@@ -10,6 +10,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
 use App\Support\StaffConversationService;
+use App\Support\MessageAttachmentStorage;
 use App\Support\TicketAccessService;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -19,9 +20,13 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
 class QuickChatDrawer extends Component
 {
+    use WithFileUploads;
+
     public bool $isOpen = false;
 
     public ?string $selectedType = null;
@@ -29,6 +34,11 @@ class QuickChatDrawer extends Component
     public ?int $selectedId = null;
 
     public string $messageBody = '';
+
+    /**
+     * @var array<int, TemporaryUploadedFile>
+     */
+    public array $messageAttachments = [];
 
     public string $search = '';
 
@@ -108,7 +118,8 @@ class QuickChatDrawer extends Component
     {
         $this->isOpen = false;
         $this->messageBody = '';
-        $this->resetErrorBag('messageBody');
+        $this->messageAttachments = [];
+        $this->resetErrorBag();
     }
 
     public function selectChat(string $type, int $id): void
@@ -148,17 +159,21 @@ class QuickChatDrawer extends Component
         $this->selectedType = $type;
         $this->selectedId = $id;
         $this->messageBody = '';
-        $this->resetErrorBag('messageBody');
+        $this->messageAttachments = [];
+        $this->resetErrorBag();
         $this->dispatch('quick-chat-updated');
     }
 
     public function sendMessage(StaffConversationService $service): void
     {
         $this->validate([
-            'messageBody' => ['required', 'string', 'min:1', 'max:5000'],
+            'messageBody' => ['nullable', 'string', 'max:5000'],
+            'messageAttachments' => ['nullable', 'array', 'max:5'],
+            'messageAttachments.*' => ['file', 'max:20480'],
         ], [
-            'messageBody.required' => 'Введите сообщение.',
             'messageBody.max' => 'Сообщение слишком длинное.',
+            'messageAttachments.max' => 'Можно прикрепить не больше 5 файлов.',
+            'messageAttachments.*.max' => 'Файл должен быть не больше 20 МБ.',
         ]);
 
         $user = $this->currentUser();
@@ -167,11 +182,18 @@ class QuickChatDrawer extends Component
         }
 
         $body = trim($this->messageBody);
-        if ($body === '') {
-            $this->addError('messageBody', 'Введите сообщение.');
+        $files = array_values(array_filter(
+            $this->messageAttachments,
+            static fn ($file): bool => $file instanceof TemporaryUploadedFile,
+        ));
+
+        if ($body === '' && $files === []) {
+            $this->addError('messageBody', 'Введите сообщение или прикрепите файл.');
 
             return;
         }
+
+        $attachments = MessageAttachmentStorage::store($files, 'chat-attachments');
 
         if ($this->selectedType === 'staff') {
             if (! $this->staffTablesAvailable()) {
@@ -191,9 +213,9 @@ class QuickChatDrawer extends Component
             $conversation = $this->latestStaffConversationWithPeer($user, (int) $peer->id);
 
             if ($conversation) {
-                $service->addMessage($conversation, $user, $body);
+                $service->addMessage($conversation, $user, $body, $attachments);
             } else {
-                $conversation = $service->startConversation($user, $peer, '', $body);
+                $conversation = $service->startConversation($user, $peer, '', $body, $attachments);
             }
 
             $this->markStaffPeerRead($user, (int) $peer->id);
@@ -212,6 +234,7 @@ class QuickChatDrawer extends Component
                 'ticket_id' => (int) $ticket->id,
                 'user_id' => (int) $user->id,
                 'body' => $body,
+                'attachments' => $attachments !== [] ? $attachments : null,
             ]);
 
             if ($statusBefore === 'new') {
@@ -223,6 +246,7 @@ class QuickChatDrawer extends Component
         }
 
         $this->messageBody = '';
+        $this->messageAttachments = [];
         $this->dispatch('quick-chat-updated');
 
         Notification::make()
@@ -331,7 +355,9 @@ class QuickChatDrawer extends Component
 
                 $latestMessage = $this->latestStaffMessageWithPeer($user, $peerId);
                 $preview = $latestMessage
-                    ? Str::limit(trim((string) $latestMessage->body), 110)
+                    ? (trim((string) $latestMessage->body) !== ''
+                        ? Str::limit(trim((string) $latestMessage->body), 110)
+                        : (MessageAttachmentStorage::present($latestMessage->attachments) !== [] ? 'Вложение' : 'Переписка сотрудников'))
                     : 'Переписка сотрудников';
 
                 $lastAt = $latestMessage?->created_at ?: ($latestConversation->last_message_at ?: $latestConversation->updated_at);
@@ -489,7 +515,7 @@ class QuickChatDrawer extends Component
         }
 
         $ticket = Ticket::query()
-            ->with(['tenant:id,name,short_name'])
+            ->with(['tenant:id,name,short_name', 'attachments:id,ticket_id,file_path,original_name'])
             ->whereKey((int) $this->selectedId)
             ->first();
 
@@ -509,6 +535,14 @@ class QuickChatDrawer extends Component
                 'created_at' => $this->formatDateTime($ticket->created_at),
                 'date_key' => optional($ticket->created_at)->toDateString(),
                 'date_label' => $this->formatDateLabel($ticket->created_at),
+                'attachments' => MessageAttachmentStorage::present(
+                    $ticket->attachments
+                        ->map(fn ($attachment): array => [
+                            'path' => (string) $attachment->file_path,
+                            'name' => (string) $attachment->original_name,
+                        ])
+                        ->all(),
+                ),
             ]);
         }
 
@@ -525,6 +559,7 @@ class QuickChatDrawer extends Component
                 'created_at' => $this->formatDateTime($comment->created_at),
                 'date_key' => optional($comment->created_at)->toDateString(),
                 'date_label' => $this->formatDateLabel($comment->created_at),
+                'attachments' => MessageAttachmentStorage::present($comment->attachments),
             ]);
 
         return $initial->merge($comments)->values();
@@ -573,6 +608,7 @@ class QuickChatDrawer extends Component
                 'created_at' => $this->formatDateTime($message->created_at),
                 'date_key' => optional($message->created_at)->toDateString(),
                 'date_label' => $this->formatDateLabel($message->created_at),
+                'attachments' => MessageAttachmentStorage::present($message->attachments),
             ]);
     }
 
