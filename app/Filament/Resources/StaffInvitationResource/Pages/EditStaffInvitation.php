@@ -7,6 +7,8 @@ use App\Filament\Resources\StaffInvitationResource;
 use App\Support\StaffInvitationSender;
 use Filament\Actions;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 
 class EditStaffInvitation extends BaseEditRecord
 {
@@ -59,5 +61,37 @@ class EditStaffInvitation extends BaseEditRecord
             ...parent::getPageClasses(),
             'fi-resource-invitations-edit-page',
         ];
+    }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $data['expires_at'] = $this->normalizeExpiresAt($data['expires_at'] ?? null);
+
+        return $data;
+    }
+
+    private function normalizeExpiresAt(mixed $value): Carbon
+    {
+        if (blank($value)) {
+            return now()->addDays(7);
+        }
+
+        try {
+            $expiresAt = $value instanceof \DateTimeInterface
+                ? Carbon::instance($value)
+                : Carbon::parse((string) $value);
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                'data.expires_at' => 'Укажите корректную дату окончания приглашения.',
+            ]);
+        }
+
+        if ($expiresAt->lte(now())) {
+            throw ValidationException::withMessages([
+                'data.expires_at' => 'Дата окончания приглашения должна быть в будущем.',
+            ]);
+        }
+
+        return $expiresAt;
     }
 }
