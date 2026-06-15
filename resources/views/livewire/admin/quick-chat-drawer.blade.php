@@ -7,9 +7,14 @@
     @if ($isOpen) wire:poll.15s @endif
     x-data
     x-on:mp-open-quick-chat.window="$wire.openDrawer($event.detail?.type || null, Number($event.detail?.id || 0) || null)"
-    x-on:keydown.escape.window="$wire.closeDrawer()"
+    x-on:keydown.escape.window="document.documentElement.classList.remove('quick-chat-open'); $wire.closeDrawer()"
 >
     <style>
+        html.quick-chat-open,
+        html.quick-chat-open body {
+            overflow: hidden;
+        }
+
         .quick-chat {
             pointer-events: none;
             position: relative;
@@ -62,6 +67,21 @@
             line-height: 1;
         }
 
+        .quick-chat__launcher .quick-chat__badge {
+            box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.38);
+            animation: quick-chat-badge-pulse 1.8s ease-out infinite;
+        }
+
+        @keyframes quick-chat-badge-pulse {
+            70% {
+                box-shadow: 0 0 0 0.55rem rgba(2, 132, 199, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(2, 132, 199, 0);
+            }
+        }
+
         .quick-chat__backdrop {
             pointer-events: auto;
             position: fixed;
@@ -81,6 +101,8 @@
             display: grid;
             grid-template-rows: auto 1fr;
             width: min(100vw, 58rem);
+            height: 100dvh;
+            overflow: hidden;
             background: #f8fafc;
             box-shadow: -24px 0 70px rgba(15, 23, 42, 0.24);
         }
@@ -162,18 +184,18 @@
             display: grid;
             max-height: calc(100vh - 7rem);
             overflow: auto;
-            padding: 0.25rem 0.55rem 1rem;
+            padding: 0.2rem 0.45rem 0.85rem;
         }
 
         .quick-chat__item {
             display: grid;
-            grid-template-columns: 2.5rem minmax(0, 1fr);
-            gap: 0.65rem;
+            grid-template-columns: 2.65rem minmax(0, 1fr);
+            gap: 0.58rem;
             width: 100%;
             border: 0;
-            border-radius: 0.85rem;
+            border-radius: 0.78rem;
             background: transparent;
-            padding: 0.65rem;
+            padding: 0.58rem;
             text-align: left;
             cursor: pointer;
         }
@@ -190,8 +212,8 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 2.5rem;
-            height: 2.5rem;
+            width: 2.65rem;
+            height: 2.65rem;
             border-radius: 999px;
             background: #e2e8f0;
             color: #334155;
@@ -251,7 +273,7 @@
             margin-left: auto;
             flex: 0 0 auto;
             border-radius: 999px;
-            background: #f1f5f9;
+            background: #e0f2fe;
             padding: 0.12rem 0.45rem;
             color: #0369a1;
             font-size: 0.68rem;
@@ -328,18 +350,18 @@
         }
 
         .quick-chat__bubble {
-            max-width: min(38rem, 78%);
+            max-width: min(34rem, 76%);
             border: 1px solid rgba(148, 163, 184, 0.16);
-            border-radius: 0.95rem 0.95rem 0.95rem 0.25rem;
+            border-radius: 0.75rem 0.75rem 0.75rem 0.25rem;
             background: #fff;
-            padding: 0.62rem 0.72rem;
+            padding: 0.54rem 0.66rem;
             color: #0f172a;
             box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
         }
 
         .quick-chat__bubble--own {
             border-color: rgba(34, 197, 94, 0.22);
-            border-radius: 0.95rem 0.95rem 0.25rem 0.95rem;
+            border-radius: 0.75rem 0.75rem 0.25rem 0.75rem;
             background: #dcfce7;
         }
 
@@ -364,7 +386,7 @@
         .quick-chat__composer {
             border-top: 1px solid rgba(148, 163, 184, 0.22);
             background: rgba(255, 255, 255, 0.92);
-            padding: 0.8rem 1rem 1rem;
+            padding: 0.65rem 0.9rem 0.8rem;
         }
 
         .quick-chat__composer-row {
@@ -376,16 +398,16 @@
 
         .quick-chat__textarea {
             width: 100%;
-            min-height: 3rem;
-            max-height: 8rem;
-            resize: vertical;
+            min-height: 2.75rem;
+            max-height: 6rem;
+            resize: none;
             border: 1px solid rgba(148, 163, 184, 0.28);
-            border-radius: 1rem;
+            border-radius: 0.9rem;
             background: #fff;
-            padding: 0.78rem 0.9rem;
+            padding: 0.68rem 0.82rem;
             color: #0f172a;
             font-size: 0.92rem;
-            line-height: 1.45;
+            line-height: 1.3;
             outline: none;
         }
 
@@ -525,16 +547,16 @@
     </button>
 
     @if ($isOpen)
-        <div class="quick-chat__backdrop" wire:click="closeDrawer"></div>
+        <div class="quick-chat__backdrop" x-on:click="document.documentElement.classList.remove('quick-chat-open')" wire:click="closeDrawer"></div>
 
-        <aside class="quick-chat__drawer" role="dialog" aria-modal="true" aria-label="Диалоги">
+        <aside class="quick-chat__drawer" role="dialog" aria-modal="true" aria-label="Диалоги" x-init="document.documentElement.classList.add('quick-chat-open')">
             <header class="quick-chat__header">
                 <div>
                     <h2 class="quick-chat__title">Диалоги</h2>
                     <div class="quick-chat__subtitle">Сообщения сотрудников и обращения арендаторов</div>
                 </div>
 
-                <button type="button" class="quick-chat__close" wire:click="closeDrawer" aria-label="Закрыть">
+                <button type="button" class="quick-chat__close" x-on:click="document.documentElement.classList.remove('quick-chat-open')" wire:click="closeDrawer" aria-label="Закрыть">
                     <x-filament::icon icon="heroicon-o-x-mark" class="h-5 w-5" />
                 </button>
             </header>
@@ -579,7 +601,11 @@
                                             <span>·</span>
                                             <span>{{ $chat['meta'] }}</span>
                                         @endif
-                                        <span class="quick-chat__count">{{ $chat['count'] }}</span>
+                                        @if (($chat['unread_count'] ?? 0) > 0)
+                                            <span class="quick-chat__count">{{ $chat['unread_count'] > 99 ? '99+' : $chat['unread_count'] }}</span>
+                                        @elseif ($chat['type'] === 'ticket')
+                                            <span class="quick-chat__count">{{ $chat['count'] }}</span>
+                                        @endif
                                     </span>
                                     @if ($chat['preview'])
                                         <span class="quick-chat__item-preview">{{ $chat['preview'] }}</span>
@@ -645,8 +671,11 @@
                                 <div>
                                     <textarea
                                         class="quick-chat__textarea"
-                                        wire:model.defer="messageBody"
+                                        wire:model.live.debounce.250ms="messageBody"
                                         placeholder="Сообщение..."
+                                        rows="1"
+                                        x-data
+                                        x-on:input="$el.style.height = 'auto'; $el.style.height = Math.min($el.scrollHeight, 96) + 'px'"
                                     ></textarea>
 
                                     @error('messageBody')
@@ -654,7 +683,7 @@
                                     @enderror
                                 </div>
 
-                                <button type="submit" class="quick-chat__send">
+                                <button type="submit" class="quick-chat__send" wire:loading.attr="disabled" wire:target="sendMessage">
                                     <x-filament::icon icon="heroicon-o-paper-airplane" class="h-5 w-5" />
                                     <span>Отправить</span>
                                 </button>
