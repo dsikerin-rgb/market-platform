@@ -110,6 +110,11 @@ class StaffInvitationForm
                         ->label('Действует до')
                         ->default(fn () => now()->addDays(7))
                         ->helperText('По умолчанию — 7 дней')
+                        ->minDate(fn () => now())
+                        ->rules(['nullable', 'date', 'after:now'])
+                        ->validationMessages([
+                            'after' => 'Дата окончания приглашения должна быть в будущем.',
+                        ])
                         ->seconds(false)
                         ->columnSpan(1),
                 ])
@@ -231,6 +236,11 @@ class StaffInvitationForm
 
                     Forms\Components\DateTimePicker::make('expires_at')
                         ->label('Действует до')
+                        ->minDate(fn () => now())
+                        ->rules(['nullable', 'date', 'after:now'])
+                        ->validationMessages([
+                            'after' => 'Дата окончания приглашения должна быть в будущем.',
+                        ])
                         ->seconds(false)
                         ->columnSpan(1),
 
