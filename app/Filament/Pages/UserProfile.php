@@ -10,6 +10,8 @@ use Filament\Forms;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class UserProfile extends EditProfile
 {
@@ -47,6 +49,7 @@ class UserProfile extends EditProfile
                             ->imageEditor()
                             ->imageEditorAspectRatios(['1:1'])
                             ->maxSize(5120)
+                            ->getUploadedFileUsing(fn (string $file): ?array => $this->getUploadedAvatarFile($file))
                             ->helperText('До 5 МБ. Файл хранится в облаке.'),
 
                         Forms\Components\ColorPicker::make('staff_avatar_color')
@@ -78,6 +81,61 @@ class UserProfile extends EditProfile
             : '#2563eb';
 
         return $data;
+    }
+
+    /**
+     * @return array{name: string, size: int, type: string, url: string}|null
+     */
+    protected function getUploadedAvatarFile(string $file): ?array
+    {
+        $path = trim($file);
+        if ($path === '') {
+            return null;
+        }
+
+        $metadata = $this->getAvatarFileMetadata($path);
+
+        return [
+            'name' => basename($path),
+            'size' => $metadata['size'],
+            'type' => $metadata['type'],
+            'url' => MarketplaceMediaStorage::previewUrl($path) ?? MarketplaceMediaStorage::url($path) ?? '',
+        ];
+    }
+
+    /**
+     * @return array{size: int, type: string}
+     */
+    private function getAvatarFileMetadata(string $path): array
+    {
+        $fallbackDisk = MarketplaceMediaStorage::fallbackDisk();
+        $disks = array_values(array_unique(array_filter([
+            MarketplaceMediaStorage::disk(),
+            $fallbackDisk,
+            's3',
+        ])));
+
+        foreach ($disks as $disk) {
+            try {
+                $storage = Storage::disk($disk);
+
+                if (! $storage->exists($path)) {
+                    continue;
+                }
+
+                return [
+                    'size' => (int) $storage->size($path),
+                    'type' => (string) ($storage->mimeType($path) ?: 'image/*'),
+                ];
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return [
+            'size' => 0,
+            'type' => 'image/*',
+        ];
     }
 
     protected function getNameFormComponent(): Component
