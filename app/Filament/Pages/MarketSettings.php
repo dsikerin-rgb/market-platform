@@ -56,6 +56,7 @@ class MarketSettings extends Page
     public ?string $rolesUrl = null;
     public ?string $integrationExchangesUrl = null;
     public ?string $userNotificationSettingsUrl = null;
+    public ?string $mailDiagnosticsUrl = null;
     public ?string $marketplaceSettingsUrl = null;
     public ?string $marketplaceSlidesUrl = null;
     public ?string $marketplacePublicUrl = null;
@@ -1249,6 +1250,14 @@ class MarketSettings extends Page
             $this->userNotificationSettingsUrl = \App\Filament\Pages\UserNotificationSettings::getUrl();
         } catch (\Throwable) {
             $this->userNotificationSettingsUrl = null;
+        }
+
+        try {
+            $this->mailDiagnosticsUrl = $this->isSuperAdmin
+                ? \App\Filament\Pages\MailDiagnostics::getUrl()
+                : null;
+        } catch (\Throwable) {
+            $this->mailDiagnosticsUrl = null;
         }
 
         try {

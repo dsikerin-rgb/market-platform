@@ -24,9 +24,14 @@ class MailDiagnostics extends Page
 
     protected static ?int $navigationSort = 30;
 
-    protected static ?string $slug = 'mail-diagnostics';
+    protected static ?string $slug = 'market-settings/mail';
 
     protected string $view = 'filament.pages.mail-diagnostics';
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public static function canAccess(): bool
     {

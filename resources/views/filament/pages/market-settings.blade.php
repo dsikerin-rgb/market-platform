@@ -59,6 +59,13 @@
                                     Маркетплейс
                                 </a>
                             @endif
+
+                            @if (! empty($mailDiagnosticsUrl))
+                                <a href="{{ $mailDiagnosticsUrl }}" class="aw-chip">
+                                    <x-filament::icon icon="heroicon-m-envelope" class="h-4 w-4" />
+                                    Почта
+                                </a>
+                            @endif
                         </div>
                     </div>
 
@@ -179,6 +186,16 @@
                                         <div>
                                             <p class="aw-link-title">Интеграции</p>
                                             <p class="aw-link-copy">Журнал обменов и результаты последних загрузок из 1С.</p>
+                                        </div>
+                                    </a>
+                                @endif
+
+                                @if (! empty($mailDiagnosticsUrl))
+                                    <a href="{{ $mailDiagnosticsUrl }}" class="aw-link-card">
+                                        <div class="aw-link-icon"><x-filament::icon icon="heroicon-m-envelope" class="h-5 w-5" /></div>
+                                        <div>
+                                            <p class="aw-link-title">Почта</p>
+                                            <p class="aw-link-copy">SMTP-конфигурация, тестовая отправка и диагностика email-канала.</p>
                                         </div>
                                     </a>
                                 @endif
