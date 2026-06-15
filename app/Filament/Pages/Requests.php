@@ -34,7 +34,7 @@ class Requests extends Page
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canAccess();
+        return false;
     }
 
     public function getHeading(): string|Htmlable|null

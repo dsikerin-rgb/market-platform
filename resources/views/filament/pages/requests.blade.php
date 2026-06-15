@@ -1360,9 +1360,284 @@
             margin-top: 0.7rem;
         }
 
+        .requests-layout {
+            gap: 1rem;
+            grid-template-columns: minmax(18rem, 21rem) minmax(0, 1fr);
+            min-height: min(47rem, calc(100vh - 12rem));
+        }
+
+        .requests-list-shell,
+        .requests-chat-shell {
+            min-height: 0;
+        }
+
+        .requests-list-shell > div,
+        .requests-chat-shell > div {
+            height: 100%;
+        }
+
+        .requests-list-shell .fi-section-content,
+        .requests-chat-shell .fi-section-content {
+            height: 100%;
+        }
+
+        .requests-list-shell .fi-section-content-ctn,
+        .requests-chat-shell .fi-section-content-ctn {
+            height: 100%;
+        }
+
+        .requests-list-shell .fi-section-header,
+        .requests-chat-shell .fi-section-header {
+            min-height: 3.9rem;
+            border-bottom: 1px solid var(--requests-border);
+        }
+
+        .requests-ticket-list {
+            gap: 0;
+            max-height: none;
+            height: 100%;
+            padding: 0;
+        }
+
+        .requests-ticket-card {
+            border-width: 0 0 1px;
+            border-radius: 0;
+            padding: 0.85rem 0.95rem;
+            box-shadow: none;
+        }
+
+        .requests-ticket-card:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .requests-ticket-card.is-selected {
+            border-color: rgba(14, 165, 233, 0.26);
+            background: #e0f2fe;
+            box-shadow: inset 3px 0 0 #0ea5e9;
+        }
+
+        .dark .requests-ticket-card.is-selected {
+            background: rgba(14, 116, 144, 0.24);
+            box-shadow: inset 3px 0 0 #38bdf8;
+        }
+
+        .requests-ticket-avatar {
+            width: 2.75rem;
+            height: 2.75rem;
+            border-radius: 999px;
+            background: #e2e8f0;
+        }
+
+        .requests-ticket-card.is-selected .requests-ticket-avatar {
+            background: #38bdf8;
+        }
+
+        .requests-ticket-head {
+            flex-wrap: nowrap;
+            gap: 0.5rem;
+        }
+
+        .requests-ticket-head-main {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .requests-ticket-head-side {
+            flex: 0 0 auto;
+        }
+
+        .requests-ticket-meta {
+            justify-content: space-between;
+            gap: 0.35rem;
+            font-size: 0.76rem;
+        }
+
+        .requests-ticket-subject {
+            margin-top: 0.12rem;
+            font-size: 0.95rem;
+            line-height: 1.25;
+        }
+
+        .requests-ticket-tags {
+            margin-top: 0.05rem;
+            font-size: 0.82rem;
+        }
+
+        .requests-ticket-preview {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 0.8rem;
+            line-height: 1.35;
+            color: var(--requests-muted);
+        }
+
+        .requests-chat-shell .fi-section-content {
+            padding: 0 !important;
+        }
+
+        .requests-details {
+            height: 100%;
+            min-height: min(47rem, calc(100vh - 12rem));
+            gap: 0;
+            background:
+                linear-gradient(rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.78)),
+                radial-gradient(circle at 18px 18px, rgba(14, 165, 233, 0.11) 0 1px, transparent 1px),
+                radial-gradient(circle at 56px 44px, rgba(34, 197, 94, 0.10) 0 1px, transparent 1px),
+                linear-gradient(135deg, #e0f2fe, #dcfce7 54%, #fef9c3);
+            background-size: auto, 44px 44px, 52px 52px, auto;
+        }
+
+        .dark .requests-details {
+            background:
+                linear-gradient(rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.82)),
+                radial-gradient(circle at 18px 18px, rgba(56, 189, 248, 0.12) 0 1px, transparent 1px),
+                radial-gradient(circle at 56px 44px, rgba(34, 197, 94, 0.10) 0 1px, transparent 1px),
+                linear-gradient(135deg, #0f172a, #164e63 56%, #365314);
+        }
+
+        .requests-details-card {
+            flex: 0 0 auto;
+            border-width: 0 0 1px;
+            border-radius: 0;
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: none;
+            padding: 0.9rem 1.05rem;
+        }
+
+        .dark .requests-details-card {
+            background: rgba(15, 23, 42, 0.90);
+            box-shadow: none;
+        }
+
+        .requests-details-title {
+            font-size: 1.05rem;
+            line-height: 1.25;
+        }
+
+        .requests-details-description {
+            max-height: 4.5rem;
+            overflow: auto;
+            font-size: 0.86rem;
+        }
+
+        .requests-thread {
+            display: flex;
+            flex: 1 1 auto;
+            min-height: 0;
+            flex-direction: column;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            padding: 0.85rem 1rem;
+        }
+
+        .requests-thread-head {
+            margin-bottom: 0.5rem;
+        }
+
+        .requests-thread-title {
+            font-size: 0.82rem;
+            color: var(--requests-muted-strong);
+        }
+
+        .requests-thread-count {
+            padding: 0.22rem 0.55rem;
+            background: rgba(255, 255, 255, 0.68);
+        }
+
+        .requests-thread-list {
+            flex: 1 1 auto;
+            max-height: none;
+            min-height: 16rem;
+            gap: 0.45rem;
+            padding: 0.25rem 0.15rem 0.6rem;
+            scroll-behavior: smooth;
+        }
+
+        .requests-thread-date {
+            align-self: center;
+            margin: 0.45rem 0;
+            padding: 0.24rem 0.72rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.78);
+            color: #475569;
+            font-size: 0.72rem;
+            font-weight: 600;
+            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
+        }
+
+        .dark .requests-thread-date {
+            background: rgba(15, 23, 42, 0.74);
+            color: #cbd5e1;
+        }
+
+        .requests-message {
+            max-width: min(38rem, 76%);
+            border-color: rgba(148, 163, 184, 0.20);
+            border-radius: 1rem 1rem 1rem 0.25rem;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+            padding: 0.58rem 0.72rem 0.52rem;
+        }
+
+        .requests-message.is-own {
+            border-color: rgba(125, 211, 252, 0.45);
+            border-radius: 1rem 1rem 0.25rem 1rem;
+            background: #dcfce7;
+        }
+
+        .requests-message-meta {
+            justify-content: flex-end;
+            margin-bottom: 0.28rem;
+            font-size: 0.72rem;
+        }
+
+        .requests-message-body {
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-size: 0.94rem;
+            line-height: 1.42;
+        }
+
+        .requests-composer {
+            flex: 0 0 auto;
+            border-width: 1px 0 0;
+            border-radius: 0;
+            box-shadow: none;
+            background: rgba(255, 255, 255, 0.96);
+            padding: 0.75rem 0.9rem;
+        }
+
+        .dark .requests-composer {
+            background: rgba(15, 23, 42, 0.94);
+        }
+
+        .requests-composer-head {
+            display: none;
+        }
+
+        .requests-composer textarea {
+            min-height: 3.25rem;
+            max-height: 9rem;
+            border-radius: 1rem;
+            background: #f8fafc;
+            padding: 0.8rem 0.95rem;
+        }
+
+        .requests-composer-actions {
+            margin-top: 0.5rem;
+        }
+
         @media (max-width: 1279px) {
             .requests-layout {
                 grid-template-columns: 1fr;
+                min-height: auto;
+            }
+
+            .requests-details {
+                min-height: 42rem;
             }
         }
 
@@ -1720,7 +1995,7 @@
         </div>
 
         <div class="requests-layout">
-            <x-filament::section>
+            <x-filament::section class="requests-list-shell">
                 <x-slot name="heading">
                     <div class="requests-section-heading">
                         <x-filament::icon icon="heroicon-m-inbox-stack" class="h-5 w-5 text-primary-500" />
@@ -1822,6 +2097,7 @@
                                 $category = (string) $ticket->category;
                                 $statusBadge = $statusMeta[$status] ?? ['icon' => 'heroicon-m-question-mark-circle', 'color' => 'gray'];
                                 $categoryBadge = $categoryMeta[$category] ?? $categoryMeta['other'];
+                                $previewText = trim((string) ($ticket->description ?? ''));
                             @endphp
 
                             <a
@@ -1844,6 +2120,9 @@
                                                 <div class="requests-ticket-subject">
                                                     {{ $ticket->subject ?: 'Без темы' }}
                                                 </div>
+                                                @if ($previewText !== '')
+                                                    <div class="requests-ticket-preview">{{ $previewText }}</div>
+                                                @endif
                                             </div>
 
                                             <div class="requests-ticket-head-side">
@@ -1877,7 +2156,7 @@
                 @endif
             </x-filament::section>
 
-            <x-filament::section>
+            <x-filament::section class="requests-chat-shell">
                 <x-slot name="heading">
                     <div class="requests-section-heading">
                         <x-filament::icon icon="heroicon-m-chat-bubble-left-right" class="h-5 w-5 text-primary-500" />
@@ -1951,10 +2230,27 @@
                                 </div>
 
                                 <div class="requests-thread-list">
+                                    @php
+                                        $lastMessageDate = null;
+                                    @endphp
+
                                     @forelse ($conversationMessages as $message)
                                         @php
                                             $isOwn = $user && (int) $message->user_id === (int) $user->id;
+                                            $messageDate = $message->created_at;
+                                            $messageDateKey = $messageDate?->toDateString() ?? 'unknown';
+                                            $messageDateLabel = match ($messageDateKey) {
+                                                now()->toDateString() => 'Сегодня',
+                                                now()->subDay()->toDateString() => 'Вчера',
+                                                default => $messageDate?->format('d.m.Y') ?? 'Без даты',
+                                            };
+                                            $shouldShowMessageDate = $messageDateKey !== $lastMessageDate;
+                                            $lastMessageDate = $messageDateKey;
                                         @endphp
+
+                                        @if ($shouldShowMessageDate)
+                                            <div class="requests-thread-date">{{ $messageDateLabel }}</div>
+                                        @endif
 
                                         <div class="requests-thread-row {{ $isOwn ? 'is-own' : '' }}">
                                             <div class="requests-message {{ $isOwn ? 'is-own' : '' }}">
@@ -2195,10 +2491,27 @@
                             </div>
 
                             <div class="requests-thread-list">
+                                @php
+                                    $lastCommentDate = null;
+                                @endphp
+
                                 @forelse ($comments as $comment)
                                     @php
                                         $isOwn = $user && (int) $comment->user_id === (int) $user->id;
+                                        $commentDate = $comment->created_at;
+                                        $commentDateKey = $commentDate?->toDateString() ?? 'unknown';
+                                        $commentDateLabel = match ($commentDateKey) {
+                                            now()->toDateString() => 'Сегодня',
+                                            now()->subDay()->toDateString() => 'Вчера',
+                                            default => $commentDate?->format('d.m.Y') ?? 'Без даты',
+                                        };
+                                        $shouldShowCommentDate = $commentDateKey !== $lastCommentDate;
+                                        $lastCommentDate = $commentDateKey;
                                     @endphp
+
+                                    @if ($shouldShowCommentDate)
+                                        <div class="requests-thread-date">{{ $commentDateLabel }}</div>
+                                    @endif
 
                                     <div class="requests-thread-row {{ $isOwn ? 'is-own' : '' }}">
                                         <div class="requests-message {{ $isOwn ? 'is-own' : '' }}">

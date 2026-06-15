@@ -86,6 +86,7 @@ class StaffMessageNotification extends Notification implements ShouldQueue
     private function conversationUrl(): string
     {
         return url('/admin/requests?' . http_build_query([
+            'quick_chat' => 'staff',
             'channel' => 'staff',
             'conversation_id' => (int) $this->conversation->id,
         ]));
