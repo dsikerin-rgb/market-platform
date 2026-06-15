@@ -235,6 +235,16 @@
             background: #e0f2fe;
         }
 
+        .quick-chat__item--candidate {
+            outline: 1px dashed rgba(14, 165, 233, 0.36);
+            outline-offset: -2px;
+            background: rgba(240, 249, 255, 0.72);
+        }
+
+        .quick-chat__item--candidate.quick-chat__item--selected {
+            background: #e0f2fe;
+        }
+
         .quick-chat__avatar {
             display: inline-flex;
             align-items: center;
@@ -640,6 +650,15 @@
             background: rgba(14, 165, 233, 0.22);
         }
 
+        html.dark .quick-chat__item--candidate {
+            outline-color: rgba(56, 189, 248, 0.32);
+            background: rgba(14, 165, 233, 0.1);
+        }
+
+        html.dark .quick-chat__item--candidate.quick-chat__item--selected {
+            background: rgba(14, 165, 233, 0.22);
+        }
+
         html.dark .quick-chat__bubble,
         html.dark .quick-chat__textarea {
             background: #111827;
@@ -759,16 +778,19 @@
                             @php
                                 $key = $chat['type'] . ':' . $chat['id'];
                                 $isSelected = $selectedKey === $key;
+                                $isCandidate = (bool) ($chat['is_candidate'] ?? false);
                             @endphp
 
                             <button
                                 type="button"
                                 wire:key="quick-chat-item-{{ $key }}"
                                 wire:click="selectChat('{{ $chat['type'] }}', {{ (int) $chat['id'] }})"
-                                class="quick-chat__item {{ $isSelected ? 'quick-chat__item--selected' : '' }}"
+                                class="quick-chat__item {{ $isSelected ? 'quick-chat__item--selected' : '' }} {{ $isCandidate ? 'quick-chat__item--candidate' : '' }}"
                             >
                                 <span class="quick-chat__avatar quick-chat__avatar--{{ $chat['type'] }}">
-                                    @if ($chat['type'] === 'staff')
+                                    @if ($isCandidate)
+                                        <x-filament::icon icon="heroicon-o-user-plus" class="h-5 w-5" />
+                                    @elseif ($chat['type'] === 'staff')
                                         <x-filament::icon icon="heroicon-o-user-group" class="h-5 w-5" />
                                     @else
                                         <x-filament::icon icon="heroicon-o-building-storefront" class="h-5 w-5" />
