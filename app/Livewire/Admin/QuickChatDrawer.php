@@ -272,8 +272,14 @@ class QuickChatDrawer extends Component
             return collect();
         }
 
+        $staffConversations = $this->recentStaffConversations($user);
+
         return $this->recentTickets($user)
-            ->merge($this->recentStaffConversations($user))
+            ->merge($staffConversations)
+            ->merge($this->staffSearchCandidates(
+                $user,
+                $staffConversations->pluck('id')->map(fn (mixed $id): int => (int) $id)->all(),
+            ))
             ->sortByDesc('sort_at')
             ->values()
             ->take(30);
@@ -379,6 +385,62 @@ class QuickChatDrawer extends Component
     }
 
     /**
+     * @param list<int> $existingPeerIds
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function staffSearchCandidates(User $user, array $existingPeerIds): Collection
+    {
+        $search = trim($this->search);
+        if ($search === '' || ! $this->staffTablesAvailable()) {
+            return collect();
+        }
+
+        $query = User::query()
+            ->select(['id', 'name', 'email', 'market_id', 'tenant_id'])
+            ->where('id', '<>', (int) $user->id)
+            ->whereNull('tenant_id')
+            ->whereNotIn('id', $existingPeerIds)
+            ->where(function (Builder $searchQuery) use ($search): void {
+                $this->scopeUserSearch($searchQuery, $search);
+            })
+            ->orderBy('name')
+            ->orderBy('email')
+            ->limit(10);
+
+        if ($this->isSuperAdmin($user)) {
+            $marketId = $this->resolveMarketId($user);
+            if ($marketId <= 0) {
+                return collect();
+            }
+
+            $query->where('market_id', $marketId);
+        } else {
+            $query->where('market_id', (int) ($user->market_id ?? 0));
+        }
+
+        return $query->get()
+            ->filter(fn (User $peer): bool => $this->canAccessStaffPeer($user, $peer))
+            ->map(function (User $peer): array {
+                $name = trim((string) $peer->name);
+                $email = trim((string) $peer->email);
+
+                return [
+                    'type' => 'staff',
+                    'id' => (int) $peer->id,
+                    'title' => $name !== '' ? $name : ($email !== '' ? $email : 'Сотрудник'),
+                    'subtitle' => 'Новый диалог',
+                    'preview' => 'Нажмите, чтобы начать переписку',
+                    'meta' => '',
+                    'count' => 0,
+                    'unread_count' => 0,
+                    'sort_at' => now(),
+                    'is_candidate' => true,
+                ];
+            })
+            ->values();
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
     private function selectedChat(): ?array
@@ -439,7 +501,15 @@ class QuickChatDrawer extends Component
         $latestConversation = $this->latestStaffConversationWithPeer($user, (int) $peer->id);
 
         if (! $latestConversation) {
-            return null;
+            return [
+                'type' => 'staff',
+                'id' => (int) $peer->id,
+                'title' => trim((string) $peer->name) !== '' ? trim((string) $peer->name) : 'Сотрудник',
+                'subtitle' => trim((string) $peer->email),
+                'description' => 'Напишите первое сообщение, чтобы начать переписку.',
+                'meta' => 'Новый диалог',
+                'count' => 0,
+            ];
         }
 
         $messagesCount = (int) StaffConversationMessage::query()

@@ -104,6 +104,46 @@ class QuickChatDrawerTest extends TestCase
         $this->assertSame('invoice.pdf', $message->attachments[0]['name'] ?? null);
     }
 
+    public function test_staff_dialog_can_be_started_from_search(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+        $staff = User::factory()->create([
+            'name' => 'Fresh Receiver',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'fresh-receiver-quick-chat@example.test',
+        ]);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer')
+            ->set('search', 'Fresh')
+            ->assertSee('Fresh Receiver')
+            ->assertSee('Новый диалог')
+            ->call('selectChat', 'staff', (int) $staff->id)
+            ->assertSee('Напишите первое сообщение, чтобы начать переписку.')
+            ->set('messageBody', 'Первое сообщение')
+            ->call('sendMessage')
+            ->assertHasNoErrors()
+            ->assertSee('Первое сообщение');
+
+        $this->assertDatabaseHas('staff_conversations', [
+            'market_id' => (int) $market->id,
+            'created_by_user_id' => (int) $admin->id,
+            'recipient_user_id' => (int) $staff->id,
+        ]);
+
+        $this->assertDatabaseHas('staff_conversation_messages', [
+            'user_id' => (int) $admin->id,
+            'body' => 'Первое сообщение',
+        ]);
+    }
+
     private function actingAsMarketAdmin(Market $market): User
     {
         Role::findOrCreate('market-admin', 'web');
