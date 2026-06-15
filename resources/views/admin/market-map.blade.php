@@ -8522,7 +8522,7 @@
                 }
               }
 
-              if (CAN_EDIT && editMode && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
+              if (CAN_EDIT && isEditMode && !isReviewMode() && shapeId && Number.isFinite(shapeId) && shapeId > 0) {
                 btns.push('<button type="button" data-action="delete-shape" data-shape-id="' + String(shapeId) + '">Удалить разметку</button>');
               }
 
@@ -8669,6 +8669,11 @@
             }
 
             if (action === 'delete-shape') {
+              if (!CAN_EDIT || !isEditMode || isReviewMode()) {
+                toast('Удаление разметки доступно только в режиме редактирования карты.');
+                return;
+              }
+
               const id = t.getAttribute('data-shape-id');
               deleteShape(id).then(() => hidePopover()).catch((err) => {
                 console.error(err);
