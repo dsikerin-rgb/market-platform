@@ -603,8 +603,6 @@
                                         @endif
                                         @if (($chat['unread_count'] ?? 0) > 0)
                                             <span class="quick-chat__count">{{ $chat['unread_count'] > 99 ? '99+' : $chat['unread_count'] }}</span>
-                                        @elseif ($chat['type'] === 'ticket')
-                                            <span class="quick-chat__count">{{ $chat['count'] }}</span>
                                         @endif
                                     </span>
                                     @if ($chat['preview'])
