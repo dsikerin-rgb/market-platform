@@ -5,13 +5,15 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\StaffInvitationResource\Pages;
 use App\Filament\Resources\StaffInvitationResource\Schemas\StaffInvitationForm;
 use App\Models\StaffInvitation;
+use App\Support\RoleScenarioCatalog;
 use Filament\Facades\Filament;
 use App\Filament\Resources\BaseResource;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
 
 class StaffInvitationResource extends BaseResource
 {
@@ -104,26 +106,53 @@ class StaffInvitationResource extends BaseResource
                     ->dateTime()
                     ->sortable(),
 
-                IconColumn::make('roles')
+                TextColumn::make('invitation_status')
+                    ->label('Статус')
+                    ->getStateUsing(fn (StaffInvitation $record): string => static::invitationStatus($record))
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        'accepted' => 'Принято',
+                        'expired' => 'Истекло',
+                        default => 'Ожидает',
+                    })
+                    ->badge()
+                    ->color(fn (?string $state): string => match ($state) {
+                        'accepted' => 'success',
+                        'expired' => 'danger',
+                        default => 'warning',
+                    }),
+
+                TextColumn::make('roles')
                     ->label('Роли')
-                    ->boolean(fn ($state) => ! empty($state)),
+                    ->getStateUsing(fn (StaffInvitation $record): array => static::invitationRoleNames($record))
+                    ->formatStateUsing(fn (?string $state): string => static::roleLabel((string) $state))
+                    ->badge()
+                    ->separator(', ')
+                    ->wrap(),
             ])
-            ->recordUrl(fn (StaffInvitation $record): ?string => static::canEdit($record)
+            ->recordUrl(fn (StaffInvitation $record): ?string => static::canEdit($record) && ! $record->accepted_at
                 ? static::getUrl('edit', ['record' => $record])
                 : null);
 
         $actions = [];
 
         if (class_exists(\Filament\Actions\EditAction::class)) {
-            $actions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
+            $actions[] = \Filament\Actions\EditAction::make()
+                ->label('Редактировать')
+                ->visible(fn (StaffInvitation $record): bool => ! $record->accepted_at);
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $actions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
+            $actions[] = \Filament\Tables\Actions\EditAction::make()
+                ->label('Редактировать')
+                ->visible(fn (StaffInvitation $record): bool => ! $record->accepted_at);
         }
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Actions\DeleteAction::make()->label('Удалить');
+            $actions[] = \Filament\Actions\DeleteAction::make()
+                ->label('Удалить')
+                ->visible(fn (StaffInvitation $record): bool => ! $record->accepted_at);
         } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
-            $actions[] = \Filament\Tables\Actions\DeleteAction::make()->label('Удалить');
+            $actions[] = \Filament\Tables\Actions\DeleteAction::make()
+                ->label('Удалить')
+                ->visible(fn (StaffInvitation $record): bool => ! $record->accepted_at);
         }
 
         if (! empty($actions)) {
@@ -136,6 +165,68 @@ class StaffInvitationResource extends BaseResource
     public static function getRelations(): array
     {
         return [];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function invitationRoleNames(StaffInvitation $record): array
+    {
+        $roles = array_values(array_filter(array_map(
+            static fn (mixed $role): string => trim((string) $role),
+            (array) ($record->roles ?? []),
+        )));
+
+        return $roles !== [] ? $roles : ['staff'];
+    }
+
+    private static function roleLabel(string $roleName): string
+    {
+        static $labels = null;
+
+        if ($labels === null) {
+            $labels = Role::query()
+                ->select(['name', 'label_ru'])
+                ->get()
+                ->mapWithKeys(static fn (Role $role): array => [
+                    (string) $role->name => trim((string) ($role->label_ru ?? '')),
+                ])
+                ->all();
+        }
+
+        if (isset($labels[$roleName]) && $labels[$roleName] !== '') {
+            return $labels[$roleName];
+        }
+
+        $slug = Str::of($roleName)
+            ->trim()
+            ->lower()
+            ->replace('_', '-')
+            ->replace(' ', '-')
+            ->replace('--', '-')
+            ->toString();
+
+        $key = "roles.{$slug}";
+        $translated = __($key);
+
+        if ($translated !== $key) {
+            return $translated;
+        }
+
+        return RoleScenarioCatalog::labelForSlug($slug, $roleName);
+    }
+
+    private static function invitationStatus(StaffInvitation $record): string
+    {
+        if ($record->accepted_at) {
+            return 'accepted';
+        }
+
+        if ($record->expires_at && $record->expires_at->isPast()) {
+            return 'expired';
+        }
+
+        return 'pending';
     }
 
     public static function getPages(): array
