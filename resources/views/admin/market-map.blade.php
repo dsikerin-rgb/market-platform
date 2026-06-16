@@ -6785,7 +6785,7 @@
                 const inheritedSourceShape = inheritedSourceId > 0 && Array.isArray(shapes)
                   ? shapes.find(shape => Number(shape?.market_space_id || shape?.space_id || 0) === inheritedSourceId) || null
                   : null;
-                fill = CAN_VIEW_FINANCE ? (inheritedSourceShape?.fill_color || s.fill_color || '#00A3FF') : '#eef7e8';
+                fill = CAN_VIEW_FINANCE ? (inheritedSourceShape?.fill_color || s.fill_color || '#00A3FF') : '#e1f6df';
                 stroke = BORDER_COLOR;
                 fo = !CAN_VIEW_FINANCE
                   ? 0.92

@@ -103,7 +103,7 @@ class ListTenants extends ListRecords
         ];
 
         if (! $this->canViewFinanceTabs()) {
-            return $tabs;
+            return [];
         }
 
         return [
