@@ -29,6 +29,7 @@ use Filament\Pages\Dashboard as BaseDashboard;
 use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema as DbSchema;
 
@@ -309,10 +310,7 @@ class Dashboard extends BaseDashboard
             $maintenanceSpaces = (int) $spaceMetrics['maintenance_spaces'];
             $maintenanceArea = (float) $spaceMetrics['maintenance_area_sqm'];
 
-            $openRequests = TenantRequest::query()
-                ->where('market_id', $marketId)
-                ->whereNotIn('status', ['resolved', 'closed'])
-                ->count();
+            $openRequests = $this->countOpenTenantRequests($marketId);
 
             $overdueTasks = Task::query()
                 ->where('market_id', $marketId)
@@ -1124,6 +1122,27 @@ class Dashboard extends BaseDashboard
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function countOpenTenantRequests(int $marketId): int
+    {
+        $closedStatuses = ['resolved', 'closed', 'cancelled'];
+        $query = TenantRequest::query()
+            ->where('market_id', $marketId)
+            ->whereNotIn('status', $closedStatuses);
+
+        if (DbSchema::hasColumn((new TenantRequest())->getTable(), 'ticket_id')) {
+            $query->where(function (Builder $requestQuery) use ($closedStatuses): void {
+                $requestQuery
+                    ->whereNull('ticket_id')
+                    ->orWhereDoesntHave('ticket')
+                    ->orWhereHas('ticket', function (Builder $ticketQuery) use ($closedStatuses): void {
+                        $ticketQuery->whereNotIn('status', $closedStatuses);
+                    });
+            });
+        }
+
+        return $query->count();
     }
 
     /**
