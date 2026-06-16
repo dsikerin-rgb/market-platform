@@ -225,6 +225,7 @@
             padding: 0.58rem;
             text-align: left;
             cursor: pointer;
+            touch-action: manipulation;
         }
 
         .quick-chat__item:hover {
@@ -717,11 +718,11 @@
             }
 
             .quick-chat__items {
-                grid-auto-flow: column;
-                grid-auto-columns: minmax(13rem, 16rem);
-                max-height: none;
-                overflow-x: auto;
-                overflow-y: hidden;
+                grid-auto-flow: row;
+                grid-auto-columns: auto;
+                max-height: min(34dvh, 18rem);
+                overflow-x: hidden;
+                overflow-y: auto;
                 padding-bottom: 0.75rem;
             }
 
@@ -784,7 +785,7 @@
                             <button
                                 type="button"
                                 wire:key="quick-chat-item-{{ $key }}"
-                                wire:click="selectChat('{{ $chat['type'] }}', {{ (int) $chat['id'] }})"
+                                wire:click.prevent="selectChat(@js($chat['type']), {{ (int) $chat['id'] }})"
                                 class="quick-chat__item {{ $isSelected ? 'quick-chat__item--selected' : '' }} {{ $isCandidate ? 'quick-chat__item--candidate' : '' }}"
                             >
                                 <span class="quick-chat__avatar quick-chat__avatar--{{ $chat['type'] }}">
