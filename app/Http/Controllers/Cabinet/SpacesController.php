@@ -136,13 +136,18 @@ class SpacesController extends Controller
                 ->with('error', 'Нельзя добавить сотрудника: у арендатора нет торговых мест.');
         }
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
-            'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
-            'space_ids' => ['required', 'array', 'min:1'],
-            'space_ids.*' => ['integer'],
-        ]);
+        $validated = $request->validate(
+            [
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'email', 'max:255'],
+                'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
+                'space_ids' => ['required', 'array', 'min:1'],
+                'space_ids.*' => ['integer'],
+            ],
+            [
+                'password.confirmed' => 'Пароль и подтверждение не совпадают.',
+            ],
+        );
 
         $email = Str::lower(trim((string) ($validated['email'] ?? '')));
         $name = trim((string) ($validated['name'] ?? ''));

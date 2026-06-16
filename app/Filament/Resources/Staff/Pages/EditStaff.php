@@ -170,6 +170,9 @@ class EditStaff extends BaseEditRecord
                                 ->revealable()
                                 ->required()
                                 ->same('password')
+                                ->validationMessages([
+                                    'same' => 'Пароль и подтверждение не совпадают.',
+                                ])
                                 ->autocomplete('new-password')
                                 ->dehydrated(false),
                         ]),

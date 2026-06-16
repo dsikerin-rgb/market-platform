@@ -98,11 +98,16 @@ class BuyerAuthController extends BaseMarketplaceController
     {
         $market = $this->resolveMarketOrFail($marketSlug);
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'confirmed', Password::min(8)],
-        ]);
+        $validated = $request->validate(
+            [
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+                'password' => ['required', 'confirmed', Password::min(8)],
+            ],
+            [
+                'password.confirmed' => 'Пароль и подтверждение не совпадают.',
+            ],
+        );
 
         $user = User::query()->create([
             'name' => trim((string) $validated['name']),
