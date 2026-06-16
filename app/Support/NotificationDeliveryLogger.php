@@ -18,7 +18,7 @@ class NotificationDeliveryLogger
     public function logSent(NotificationSent $event): void
     {
         $this->safeLog(function () use ($event): void {
-            NotificationDelivery::query()->create([
+            $this->persistDelivery([
                 'notification_id' => $this->extractNotificationId($event->notification),
                 'notification_type' => $event->notification::class,
                 'channel' => $this->normalizeChannel($event->channel),
@@ -37,7 +37,7 @@ class NotificationDeliveryLogger
     public function logFailed(NotificationFailed $event): void
     {
         $this->safeLog(function () use ($event): void {
-            NotificationDelivery::query()->create([
+            $this->persistDelivery([
                 'notification_id' => $this->extractNotificationId($event->notification),
                 'notification_type' => $event->notification::class,
                 'channel' => $this->normalizeChannel($event->channel),
@@ -47,10 +47,46 @@ class NotificationDeliveryLogger
                 'market_id' => $this->extractMarketId($event->notifiable),
                 'queued' => $event->notification instanceof ShouldQueue,
                 'payload' => $this->normalizeValue($event->data),
-                'error' => $this->truncate((string) ($event->exception?->getMessage() ?? 'Notification failed')),
+                'error' => $this->failureMessage($event),
                 'sent_at' => now(),
             ]);
         });
+    }
+
+    /**
+     * @param array{
+     *     notification_id:?string,
+     *     notification_type:string,
+     *     channel:string,
+     *     status:string,
+     *     notifiable_type:string,
+     *     notifiable_id:?int,
+     *     market_id:?int,
+     *     queued:bool,
+     *     payload:mixed,
+     *     error:?string,
+     *     sent_at:\Illuminate\Support\Carbon
+     * } $attributes
+     */
+    private function persistDelivery(array $attributes): void
+    {
+        if (! filled($attributes['notification_id'])) {
+            NotificationDelivery::query()->create($attributes);
+
+            return;
+        }
+
+        NotificationDelivery::query()->updateOrCreate(
+            [
+                'notification_id' => $attributes['notification_id'],
+                'notification_type' => $attributes['notification_type'],
+                'channel' => $attributes['channel'],
+                'status' => $attributes['status'],
+                'notifiable_type' => $attributes['notifiable_type'],
+                'notifiable_id' => $attributes['notifiable_id'],
+            ],
+            $attributes,
+        );
     }
 
     private function safeLog(\Closure $callback): void
@@ -151,6 +187,22 @@ class NotificationDeliveryLogger
         }
 
         return mb_substr($value, 0, $max - 3) . '...';
+    }
+
+    private function failureMessage(NotificationFailed $event): string
+    {
+        $exception = $event->data['exception'] ?? null;
+
+        if ($exception instanceof \Throwable) {
+            return $this->truncate($exception->getMessage());
+        }
+
+        $message = $event->data['message'] ?? $event->data['error'] ?? null;
+        if (is_scalar($message) && trim((string) $message) !== '') {
+            return $this->truncate((string) $message);
+        }
+
+        return 'Notification failed';
     }
 
     private function normalizeChannel(mixed $channel): string
