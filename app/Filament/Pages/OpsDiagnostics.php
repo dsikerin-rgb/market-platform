@@ -1295,7 +1295,8 @@ class OpsDiagnostics extends Page
      *         location_name:string,
      *         status:string,
      *         space_group_role:string,
-     *         edit_url:string|null
+     *         edit_url:string|null,
+     *         map_url:string|null
      *     }>
      * }
      */
@@ -1326,6 +1327,11 @@ class OpsDiagnostics extends Page
                     'status' => (string) ($space->status ?? ''),
                     'space_group_role' => (string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
                     'edit_url' => MarketSpaceResource::getUrl('edit', ['record' => $space->id]),
+                    'map_url' => route('filament.admin.market-map', [
+                        'mode' => 'review',
+                        'market_space_id' => $space->id,
+                        'return_url' => request()->fullUrl(),
+                    ]),
                 ];
             })
             ->values()
@@ -1374,7 +1380,8 @@ class OpsDiagnostics extends Page
      *         location_name:string,
      *         status:string,
      *         space_group_role:string,
-     *         edit_url:string|null
+     *         edit_url:string|null,
+     *         map_url:string|null
      *     }>
      * }
      */

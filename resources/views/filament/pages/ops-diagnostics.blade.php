@@ -1450,6 +1450,11 @@
                                                         Открыть место
                                                     </x-filament::button>
                                                 @endif
+                                                @if (! empty($space['map_url']))
+                                                    <x-filament::button color="gray" tag="a" href="{{ $space['map_url'] }}" size="sm">
+                                                        Показать на карте
+                                                    </x-filament::button>
+                                                @endif
                                             </div>
                                             @error('spaceAreaDrafts.' . $space['id'])
                                                 <div style="font-size:.75rem; color:#dc2626;">{{ $message }}</div>
