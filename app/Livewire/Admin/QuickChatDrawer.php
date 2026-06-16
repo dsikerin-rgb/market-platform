@@ -62,23 +62,7 @@ class QuickChatDrawer extends Component
             return;
         }
 
-        if ((string) request('channel', '') === 'staff' && (int) request('conversation_id') > 0) {
-            $this->selectedType = 'staff';
-            $this->selectedId = $this->resolveStaffPeerIdFromConversationId((int) request('conversation_id'));
-            $this->isOpen = $this->selectedId > 0;
-
-            return;
-        }
-
-        if ((int) request('ticket_id') > 0) {
-            $this->selectedType = 'ticket';
-            $this->selectedId = (int) request('ticket_id');
-            $this->isOpen = true;
-
-            return;
-        }
-
-        $this->isOpen = trim((string) request()->path(), '/') === 'admin/requests';
+        $this->isOpen = false;
     }
 
     public function render(): View

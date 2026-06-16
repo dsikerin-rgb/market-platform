@@ -8,6 +8,7 @@ use App\Livewire\Admin\QuickChatDrawer;
 use App\Models\Market;
 use App\Models\StaffConversation;
 use App\Models\StaffConversationMessage;
+use App\Models\Ticket;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -20,6 +21,65 @@ use Tests\TestCase;
 class QuickChatDrawerTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_regular_requests_page_ticket_query_does_not_auto_open_drawer(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        $ticket = Ticket::query()->create([
+            'market_id' => (int) $market->id,
+            'subject' => 'Tenant request',
+            'description' => 'Tenant request body',
+            'category' => 'other',
+            'priority' => 'normal',
+            'status' => 'new',
+        ]);
+
+        Livewire::withQueryParams([
+            'channel' => 'tenants',
+            'ticket_id' => (int) $ticket->id,
+        ])
+            ->test(QuickChatDrawer::class)
+            ->assertSet('isOpen', false)
+            ->assertSet('selectedType', null)
+            ->assertSet('selectedId', null);
+    }
+
+    public function test_explicit_quick_chat_ticket_query_auto_opens_drawer(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        $ticket = Ticket::query()->create([
+            'market_id' => (int) $market->id,
+            'subject' => 'Tenant request',
+            'description' => 'Tenant request body',
+            'category' => 'other',
+            'priority' => 'normal',
+            'status' => 'new',
+        ]);
+
+        Livewire::withQueryParams([
+            'quick_chat' => 'ticket',
+            'channel' => 'tenants',
+            'ticket_id' => (int) $ticket->id,
+        ])
+            ->test(QuickChatDrawer::class)
+            ->assertSet('isOpen', true)
+            ->assertSet('selectedType', 'ticket')
+            ->assertSet('selectedId', (int) $ticket->id);
+    }
 
     public function test_staff_conversations_are_grouped_by_counterparty(): void
     {
