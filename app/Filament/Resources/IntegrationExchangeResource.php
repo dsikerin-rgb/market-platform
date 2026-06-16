@@ -88,6 +88,46 @@ class IntegrationExchangeResource extends BaseResource
         return filled($value) ? $value : $default;
     }
 
+    private static function entityTypeLabel(?string $state): string
+    {
+        return match ($state) {
+            'accruals' => 'Начисления',
+            'contracts' => 'Договоры',
+            'contract_debts' => 'Долги (1С)',
+            'payments' => 'Оплаты',
+            'settlements' => 'Расчеты/сальдо',
+            default => (string) ($state ?: '—'),
+        };
+    }
+
+    private static function payloadScope(IntegrationExchange $record): string
+    {
+        $payload = $record->payload;
+        $periodFrom = static::payloadString($payload, 'period_from');
+        $periodTo = static::payloadString($payload, 'period_to');
+        $calculatedAt = static::payloadString($payload, 'calculated_at');
+        $account = static::payloadString($payload, 'account');
+        $endpoint = static::payloadString($payload, 'endpoint');
+
+        $parts = [];
+
+        if ($periodFrom !== null || $periodTo !== null) {
+            $from = $periodFrom ?? $periodTo;
+            $to = $periodTo ?? $periodFrom;
+            $parts[] = $from === $to ? "Период {$from}" : "{$from} - {$to}";
+        } elseif ($calculatedAt !== null) {
+            $parts[] = "Снимок {$calculatedAt}";
+        } elseif ($endpoint !== null) {
+            $parts[] = trim((string) basename($endpoint), '/');
+        }
+
+        if ($account !== null) {
+            $parts[] = "Счет {$account}";
+        }
+
+        return $parts === [] ? '—' : implode(' · ', $parts);
+    }
+
     private static function resolveTimezone(?string $marketTimezone): string
     {
         $tz = trim((string) $marketTimezone);
@@ -251,11 +291,14 @@ class IntegrationExchangeResource extends BaseResource
                     ->searchable()
                     ->badge()
                     ->formatStateUsing(static function (?string $state): string {
-                        return match ($state) {
-                            'contract_debts' => 'Долги (1С)',
-                            default => (string) ($state ?: '—'),
-                        };
+                        return static::entityTypeLabel($state);
                     }),
+
+                TextColumn::make('payload_scope')
+                    ->label('Пакет')
+                    ->state(static fn (IntegrationExchange $record): string => static::payloadScope($record))
+                    ->limit(32)
+                    ->tooltip(static fn (IntegrationExchange $record): string => static::payloadScope($record)),
 
                 TextColumn::make('direction')
                     ->label('Напр.')
