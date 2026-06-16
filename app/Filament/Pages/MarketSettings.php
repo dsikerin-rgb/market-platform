@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Debt\DebtDecisionPolicy;
 use App\Support\AdminCapabilities;
 use App\Support\MarketplaceSettingsValue;
+use App\Support\TestingModeNoticeSettings;
 use App\Support\UserNotificationPreferences;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -99,6 +100,7 @@ class MarketSettings extends Page
         'notification_channels_tasks' => ['database'],
         'notification_channels_reminders' => ['database'],
         'dashboard_enabled_widgets' => [],
+        'testing_mode_notice_enabled' => true,
         'personal_notification_channels' => ['database'],
         'personal_notification_topics' => [],
         'brand_name' => 'Маркетплейс Экоярмарки',
@@ -282,6 +284,7 @@ class MarketSettings extends Page
             'dashboard_enabled_widgets' => $this->normalizeDashboardWidgetSelection(
                 data_get($settings, 'dashboard.enabled_widgets')
             ),
+            'testing_mode_notice_enabled' => app(TestingModeNoticeSettings::class)->enabledForMarket($this->market),
             'personal_notification_channels' => $personalChannels,
             'personal_notification_topics' => $personalTopics,
             'brand_name' => trim((string) ($marketplaceSettings['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
@@ -377,6 +380,19 @@ class MarketSettings extends Page
                                 'lg' => 4,
                             ]),
                     ])
+                    ->columns(12),
+
+                Section::make('Тестовый режим')
+                    ->description('Управляет предупреждением о тестовом режиме при входе в сервис.')
+                    ->schema([
+                        Forms\Components\Toggle::make('testing_mode_notice_enabled')
+                            ->label('Показывать предупреждение о тестовом режиме')
+                            ->helperText('Если включено, пользователи увидят модальное предупреждение при каждом новом входе в сервис.')
+                            ->default(true)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpanFull(),
+                    ])
+                    ->visible(fn (): bool => $this->isSuperAdmin)
                     ->columns(12),
 
                 Section::make('Настройки кабинета уведомлений')
@@ -929,6 +945,11 @@ class MarketSettings extends Page
                 ),
             ],
         );
+        if ($this->isSuperAdmin) {
+            $settings[TestingModeNoticeSettings::SETTINGS_KEY] = [
+                TestingModeNoticeSettings::ENABLED_KEY => (bool) ($state['testing_mode_notice_enabled'] ?? true),
+            ];
+        }
         $settings['marketplace'] = [
             'brand_name' => trim((string) ($state['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
             'logo_path' => MarketplaceSettingsValue::nullablePath($state['logo_path'] ?? null),

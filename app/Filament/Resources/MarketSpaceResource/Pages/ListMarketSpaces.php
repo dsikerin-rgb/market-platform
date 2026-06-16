@@ -8,6 +8,8 @@ use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Widgets\MarketSpacesWorkspaceWidget;
 use App\Models\MarketSpace;
 use App\Models\TenantContract;
+use App\Support\AdminCapabilities;
+use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,6 +37,10 @@ class ListMarketSpaces extends ListRecords
 
         if (filled($legacyTab) && blank($currentTab)) {
             $this->activeTab = (string) $legacyTab;
+        }
+
+        if (! $this->canViewFinanceTabs() && $this->activeTab === 'missing-1c-link') {
+            $this->activeTab = 'all';
         }
 
         if (request()->boolean('only_vacant')) {
@@ -98,7 +104,7 @@ class ListMarketSpaces extends ListRecords
     {
         $tabClass = static::resolveTabClass();
 
-        return [
+        $tabs = [
             'all' => $tabClass::make('Все'),
             'vacant' => $this->makeTab(
                 $tabClass,
@@ -144,12 +150,25 @@ class ListMarketSpaces extends ListRecords
                     });
                 })
             ),
+        ];
+
+        if (! $this->canViewFinanceTabs()) {
+            return $tabs;
+        }
+
+        return [
+            ...$tabs,
             'missing-1c-link' => $this->makeTab(
                 $tabClass,
                 'Без точной связи 1С',
                 fn (Builder $query) => $this->applyMissingFinancialLinkScope($query)
             ),
         ];
+    }
+
+    private function canViewFinanceTabs(): bool
+    {
+        return AdminCapabilities::canViewFinance(Filament::auth()->user());
     }
 
     private function applyMissingFinancialLinkScope(Builder $query): Builder

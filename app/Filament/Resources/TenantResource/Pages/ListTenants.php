@@ -4,6 +4,8 @@ namespace App\Filament\Resources\TenantResource\Pages;
 
 use App\Filament\Resources\TenantResource;
 use App\Filament\Widgets\TenantsWorkspaceWidget;
+use App\Support\AdminCapabilities;
+use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,6 +31,12 @@ class ListTenants extends ListRecords
     public function mount(): void
     {
         parent::mount();
+
+        if (! $this->canViewFinanceTabs()) {
+            $this->activeTab = 'all';
+
+            return;
+        }
 
         if (request()->boolean('with_red_debt')) {
             $currentCriticalValue = $this->tableFilters['has_critical_debt']['value'] ?? null;
@@ -90,8 +98,16 @@ class ListTenants extends ListRecords
     {
         $tabClass = static::resolveTabClass();
 
-        return [
+        $tabs = [
             'all' => $tabClass::make('Все'),
+        ];
+
+        if (! $this->canViewFinanceTabs()) {
+            return $tabs;
+        }
+
+        return [
+            ...$tabs,
             'with_debt' => $this->makeTab(
                 $tabClass,
                 'Есть задолженность',
@@ -108,6 +124,11 @@ class ListTenants extends ListRecords
                 fn (Builder $query) => TenantResource::applyHasDebtFilter($query, false)
             ),
         ];
+    }
+
+    private function canViewFinanceTabs(): bool
+    {
+        return AdminCapabilities::canViewFullTenantProfile(Filament::auth()->user());
     }
 
     protected static function resolveTabClass(): string

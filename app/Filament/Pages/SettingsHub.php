@@ -7,6 +7,8 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\MarketplaceSlideResource;
 use App\Filament\Resources\ReportResource;
 use App\Filament\Resources\Roles\RoleResource;
+use App\Support\AdminCapabilities;
+use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 
@@ -28,6 +30,12 @@ class SettingsHub extends Page
 
     public static function canAccess(): bool
     {
+        $user = Filament::auth()->user();
+
+        if (! AdminCapabilities::canViewFinance($user) && ! MarketSettings::canAccess()) {
+            return false;
+        }
+
         return MarketSettings::canAccess()
             || MailDiagnostics::canAccess()
             || MarketplaceSettings::canAccess()

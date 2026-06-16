@@ -7,6 +7,8 @@ namespace App\Filament\Widgets;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
+use App\Support\AdminCapabilities;
+use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
 
 class MarketSpacesWorkspaceWidget extends Widget
@@ -26,7 +28,9 @@ class MarketSpacesWorkspaceWidget extends Widget
     {
         return [
             'createUrl' => MarketSpaceResource::canCreate() ? MarketSpaceResource::getUrl('create') : null,
-            'contractsUrl' => TenantContractResource::getUrl('index'),
+            'contractsUrl' => AdminCapabilities::canViewFinance(Filament::auth()->user())
+                ? TenantContractResource::getUrl('index')
+                : null,
             'tenantsUrl' => TenantResource::getUrl('index'),
         ];
     }

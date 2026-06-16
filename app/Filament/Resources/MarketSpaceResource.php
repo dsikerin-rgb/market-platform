@@ -1088,7 +1088,7 @@ class MarketSpaceResource extends BaseResource
             $items[] = static::renderPrioritySummaryItem('Свободно / занято', $availabilityValue, $availabilityMeta, $availabilityTone);
         }
 
-        if (! $hasSharedUseTenants && ! $isMaintenance) {
+        if (static::canViewFinance($record) && ! $hasSharedUseTenants && ! $isMaintenance) {
             $items[] = static::renderPrioritySummaryItem('Ставка', $rentValue, implode(' • ', $rentMetaParts));
         }
 
@@ -1988,7 +1988,8 @@ class MarketSpaceResource extends BaseResource
 
                             ])
                             ->collapsible()
-                            ->visible(fn (?MarketSpace $record): bool => (string) ($record?->status ?? '') !== 'maintenance'),
+                            ->visible(fn (?MarketSpace $record): bool => static::canViewFinance($record)
+                                && (string) ($record?->status ?? '') !== 'maintenance'),
 
                         Section::make('Примечания')
                             ->schema([
@@ -2016,7 +2017,8 @@ class MarketSpaceResource extends BaseResource
                             ->collapsible(),
                     ]),
                 Tab::make('Финансы')
-                    ->visible(fn (?MarketSpace $record): bool => (string) ($record?->status ?? '') !== 'maintenance')
+                    ->visible(fn (?MarketSpace $record): bool => static::canViewFinance($record)
+                        && (string) ($record?->status ?? '') !== 'maintenance')
                     ->schema([
                         Section::make('Сводка')
                             ->description('Итог по ОСВ, начисления и оплаты по этому месту за выбранный период.')
@@ -3326,6 +3328,7 @@ class MarketSpaceResource extends BaseResource
 
                 TextColumn::make('one_c_financial_status')
                     ->label('Финансы 1С')
+                    ->visible(fn (): bool => static::canViewFinance())
                     ->state(fn (MarketSpace $record): string => static::tableFinancialStatusMeta($record)['label'])
                     ->badge()
                     ->color(fn (MarketSpace $record): string => static::tableFinancialStatusMeta($record)['color'])
@@ -3616,6 +3619,13 @@ class MarketSpaceResource extends BaseResource
         $user = Filament::auth()->user();
 
         return AdminCapabilities::canViewMarketDirectory($user);
+    }
+
+    public static function canViewFinance(?MarketSpace $record = null): bool
+    {
+        $marketId = $record?->market_id ? (int) $record->market_id : null;
+
+        return AdminCapabilities::canViewFinance(Filament::auth()->user(), $marketId);
     }
 
     public static function canCreate(): bool

@@ -8,6 +8,8 @@
 
     $hasMap   = isset($hasMap) ? (bool) $hasMap : true;
     $canEdit  = isset($canEdit) ? (bool) $canEdit : false;
+    $canViewFinanceMap = isset($canViewFinance) ? (bool) $canViewFinance : true;
+    $canUseMapSearch = $canEdit || ! $canViewFinanceMap;
     $marketSpaceNotLinked = isset($marketSpaceNotLinked) ? (bool) $marketSpaceNotLinked : false;
     $canOpenPdf = isset($canOpenPdf) ? (bool) $canOpenPdf : false;
 
@@ -2925,7 +2927,7 @@
                 @endif
               </div>
 
-              @if ($canEdit)
+              @if ($canUseMapSearch)
                 <div class="toolbar-group--hero-bottom">
                   <div class="spacePicker" id="spacePicker">
                     <svg class="spacePickerIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -2971,6 +2973,7 @@
                     </div>
                   @endif
 
+                  @if ($canViewFinanceMap)
                   <div class="toolbar-group toolbar-group--accent toolbar-group--segmented">
                     <span class="toolbar-label" id="layerToolbarLabel">Слои</span>
                     <button
@@ -2988,6 +2991,7 @@
                       aria-label="Слой показывает относительную ставку по занятым местам."
                     >Арендная ставка</button>
                   </div>
+                  @endif
                 </div>
 
               </div>
@@ -3195,6 +3199,7 @@
         </div>
 
         <div class="legend-stack">
+        @if ($canViewFinanceMap)
         <!-- Легенда карты -->
         <div class="legend toolbar-group toolbar-group--accent" id="legendDebt">
           <div class="legend-items">
@@ -3278,6 +3283,7 @@
             </div>
           </div>
         </div>
+        @endif
         <div class="legend toolbar-group toolbar-group--accent" id="legendReview" hidden>
           <div class="legend-items">
             <div class="legend-item">
@@ -3516,6 +3522,7 @@
         const CREATE_SPACE_URL = @json(\App\Filament\Resources\MarketSpaceResource::getUrl('create'), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         const CAN_EDIT  = @json((bool) $canEdit);
+        const CAN_VIEW_FINANCE = @json((bool) $canViewFinanceMap);
         const CAN_BIND_CONTRACTS = @json((bool) ($canBindContracts ?? false));
         const INITIAL_MAP_MODE = @json($mapMode ?? 'map');
         const MARKET_ID = @json((int) $marketId);
@@ -3647,7 +3654,7 @@
         let isEditMode = false;
         let currentScenario = INITIAL_MAP_MODE === 'review' ? 'review' : 'map';
         let reviewProgressState = INITIAL_REVIEW_PROGRESS || {};
-        let currentLayer = 'debt';
+        let currentLayer = CAN_VIEW_FINANCE ? 'debt' : 'default';
         let redrawShapesRef = null;
         let loadShapesRef = null;
         let reviewNavItems = [];
@@ -5327,6 +5334,7 @@
         }
 
         function normalizeLayerMode(value) {
+          if (!CAN_VIEW_FINANCE) return 'default';
           return value === 'rent' ? 'rent' : 'debt';
         }
 
@@ -5334,7 +5342,7 @@
           try {
             currentLayer = normalizeLayerMode(localStorage.getItem(LS_KEY_LAYER));
           } catch {
-            currentLayer = 'debt';
+            currentLayer = CAN_VIEW_FINANCE ? 'debt' : 'default';
           }
         }
 
@@ -5414,8 +5422,8 @@
           const reviewMode = isReviewMode();
           const editModeActive = isEditMode && !reviewMode;
 
-          if (legendDebt) legendDebt.hidden = editModeActive || reviewMode || currentLayer !== 'debt';
-          if (legendRent) legendRent.hidden = editModeActive || reviewMode || currentLayer !== 'rent';
+          if (legendDebt) legendDebt.hidden = !CAN_VIEW_FINANCE || editModeActive || reviewMode || currentLayer !== 'debt';
+          if (legendRent) legendRent.hidden = !CAN_VIEW_FINANCE || editModeActive || reviewMode || currentLayer !== 'rent';
           if (legendReview) legendReview.hidden = editModeActive || !reviewMode;
           if (editHintRow) {
             editHintRow.hidden = !editModeActive;
@@ -5424,8 +5432,8 @@
           if (editHint) {
             editHint.style.display = editModeActive ? 'inline-flex' : 'none';
           }
-          layerDebtBtn?.classList.toggle('is-active', currentLayer === 'debt');
-          layerRentBtn?.classList.toggle('is-active', currentLayer === 'rent');
+          layerDebtBtn?.classList.toggle('is-active', CAN_VIEW_FINANCE && currentLayer === 'debt');
+          layerRentBtn?.classList.toggle('is-active', CAN_VIEW_FINANCE && currentLayer === 'rent');
           syncLayerButtonHelp();
         }
 
@@ -6722,10 +6730,10 @@
               } else if (!hasTenant) {
                 // Место есть, но арендатора нет — свободно
                 fillStyle = 'vacant';
-              } else if (currentLayer === 'rent') {
+              } else if (CAN_VIEW_FINANCE && currentLayer === 'rent') {
                 rentFill = rentRateColors[rentRateBand] || rentRateColors.none;
                 fillStyle = rentRateBand === 'none' ? 'rent-missing' : 'rent';
-              } else if (debtStatus && debtColors[debtStatus]) {
+              } else if (CAN_VIEW_FINANCE && debtStatus && debtColors[debtStatus]) {
                 // Есть арендатор и financial/debt status — используем финансовый цвет
                 if (debtStatus === 'red') {
                   const redPalette = debtColors.red;
@@ -8922,6 +8930,15 @@
                 actions = '<div class="act">' + btns.join('') + '</div>';
               }
               const line5ExtraClass = [line5Class, isTenantFallback ? 'row-warning' : ''].filter(Boolean).join(' ');
+              const financialRows = CAN_VIEW_FINANCE
+                ? (
+                  buildPopoverRow(line4, line4Class, line4HelpText) +
+                  buildPopoverRow(line5, line5ExtraClass, line5HelpText) +
+                  buildPopoverRow(line6, line6Class, line6HelpText) +
+                  buildPopoverRow(line7) +
+                  buildPopoverRow(line8)
+                )
+                : '';
 
               showPopoverAt(
                 e.clientX, e.clientY,
@@ -8929,12 +8946,8 @@
                   '<div class="t">' + title + '</div>' +
                   buildPopoverRow(line2) +
                   buildPopoverRow(line3) +
-                  buildPopoverRow(groupContextLine, 'row-group-context', 'Это дочернее место. Договоры 1С, начисления и общий финансовый статус должны проверяться по основной группе.') +
-                  buildPopoverRow(line4, line4Class, line4HelpText) +
-                  buildPopoverRow(line5, line5ExtraClass, line5HelpText) +
-                  buildPopoverRow(line6, line6Class, line6HelpText) +
-                  buildPopoverRow(line7) +
-                  buildPopoverRow(line8) +
+                  buildPopoverRow(groupContextLine, 'row-group-context', CAN_VIEW_FINANCE ? 'Это дочернее место. Договоры 1С, начисления и общий финансовый статус должны проверяться по основной группе.' : '') +
+                  financialRows +
                   (line1 ? '<div class="row row-meta muted">' + escapeHtml(line1) + '</div>' : '') +
                   reviewNotice +
                   bindShapeHtml +

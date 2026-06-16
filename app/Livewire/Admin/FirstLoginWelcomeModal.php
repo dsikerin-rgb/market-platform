@@ -15,16 +15,15 @@ class FirstLoginWelcomeModal extends Component
 
     public function mount(FirstLoginWelcomeNotice $notice): void
     {
-        $this->shouldShow = $notice->shouldShow(Filament::auth()->user());
+        $this->shouldShow = $notice->shouldShow(
+            Filament::auth()->user(),
+            session()->boolean(FirstLoginWelcomeNotice::SESSION_KEY),
+        );
     }
 
-    public function acknowledge(FirstLoginWelcomeNotice $notice): void
+    public function acknowledge(): void
     {
-        $user = Filament::auth()->user();
-
-        if ($user) {
-            $notice->markSeen($user);
-        }
+        session()->put(FirstLoginWelcomeNotice::SESSION_KEY, true);
 
         $this->shouldShow = false;
     }
