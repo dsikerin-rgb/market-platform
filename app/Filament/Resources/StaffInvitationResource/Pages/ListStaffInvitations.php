@@ -12,6 +12,11 @@ class ListStaffInvitations extends ListRecords
 
     protected static ?string $title = 'Приглашения';
 
+    public function getBreadcrumbs(): array
+    {
+        return [];
+    }
+
     public function getBreadcrumb(): string
     {
         return 'Приглашения';
