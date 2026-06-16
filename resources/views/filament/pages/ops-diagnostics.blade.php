@@ -1027,7 +1027,7 @@
             <div class="ops-tablist" role="tablist" aria-label="Разделы диагностики">
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'overview'" @click="tab = 'overview'">Обзор</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'signals'" @click="tab = 'signals'">Сигналы</button>
-                <button type="button" class="ops-tabbutton" :data-active="tab === 'areas'" @click="tab = 'areas'">???????</button>
+                <button type="button" class="ops-tabbutton" :data-active="tab === 'areas'" @click="tab = 'areas'">Площади</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'onec-debt-preview'" @click="tab = 'onec-debt-preview'">Аудит карты</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'maintenance'" @click="tab = 'maintenance'">Обслуживание</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'backups'" @click="tab = 'backups'">Бэкапы</button>
@@ -1357,13 +1357,13 @@
 
             <div class="ops-tabpanel" x-show="tab === 'areas'">
                 <x-filament::section
-                    heading="??????? ????"
-                    description="???????? ???? ??? ???????. Child-????? ????????? ????????????: ??? ?????????? ????? ??????? ? ???????? ??? ???????? ?????."
+                    heading="Площади мест"
+                    description="Проверка мест без площади. Child-места считаются отдельно: для статистики важна площадь у родителя или обычного места."
                 >
                     <div class="ops-signal-grid">
                         <div style="display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
                             <x-filament::badge :color="$selectedMarketIdLocal > 0 ? 'success' : 'warning'">
-                                {{ $selectedMarketIdLocal > 0 ? 'ID ?????: ' . $selectedMarketIdLocal : '????? ?? ??????' }}
+                                {{ $selectedMarketIdLocal > 0 ? 'ID рынка: ' . $selectedMarketIdLocal : 'Рынок не выбран' }}
                             </x-filament::badge>
 
                             @if ($selectedMarketNameLocal !== '')
@@ -1373,39 +1373,39 @@
 
                         <div style="display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(16rem, 1fr));">
                             <div class="ops-stat-card">
-                                <p class="ops-stat-label">??? ???????</p>
+                                <p class="ops-stat-label">Без площади</p>
                                 <p class="ops-stat-value">{{ (int) ($spaceAreaInspectionLocal['total_missing'] ?? 0) }}</p>
-                                <p class="ops-stat-subtext">??????? ? parent-?????, ??????? ????? ?????????</p>
+                                <p class="ops-stat-subtext">Родители и обычные места, которые надо исправить</p>
                             </div>
 
                             <div class="ops-stat-card">
-                                <p class="ops-stat-label">????????????</p>
+                                <p class="ops-stat-label">Родительские</p>
                                 <p class="ops-stat-value">{{ (int) ($spaceAreaInspectionLocal['parent_missing'] ?? 0) }}</p>
-                                <p class="ops-stat-subtext">??????, ??? ??????? ?????? ???? ? parent</p>
+                                <p class="ops-stat-subtext">Группы, где площадь должна быть у parent</p>
                             </div>
 
                             <div class="ops-stat-card">
-                                <p class="ops-stat-label">??????? ?????</p>
+                                <p class="ops-stat-label">Обычные места</p>
                                 <p class="ops-stat-value">{{ (int) ($spaceAreaInspectionLocal['standalone_missing'] ?? 0) }}</p>
-                                <p class="ops-stat-subtext">?? ?????? ? ?????? ? ??????? ??????? ? ????????</p>
+                                <p class="ops-stat-subtext">Не входят в группу и требуют площади в карточке</p>
                             </div>
 
                             <div class="ops-stat-card">
-                                <p class="ops-stat-label">????????? child</p>
+                                <p class="ops-stat-label">Пропущены child</p>
                                 <p class="ops-stat-value">{{ (int) ($spaceAreaInspectionLocal['skipped_child_missing'] ?? 0) }}</p>
-                                <p class="ops-stat-subtext">?? ??????? ?? ???????????, ???? ??????? ???? ? ????????</p>
+                                <p class="ops-stat-subtext">Не попали в инспекцию, если площадь нужна у родителя</p>
                             </div>
                         </div>
 
                         @if ($selectedMarketIdLocal <= 0)
                             <div class="ops-empty-state">
-                                <p style="font-size:.875rem; font-weight:600;">??????? ???????? ????? ?? ?????? ??????????????.</p>
-                                <p style="font-size:.8125rem; color:#6b7280;">????? ?????? ????? ????? ???????? ?????? ???? ??? ???????.</p>
+                                <p style="font-size:.875rem; font-weight:600;">Сначала выберите рынок на панели диагностики.</p>
+                                <p style="font-size:.8125rem; color:#6b7280;">После выбора рынка здесь появятся места без площади.</p>
                             </div>
                         @elseif (($spaceAreaInspectionLocal['rows'] ?? []) === [])
                             <div class="ops-empty-state">
-                                <p style="font-size:.875rem; font-weight:600;">? ?????????? ????? ??? ??????? ??? parent-???? ??? ???????.</p>
-                                <p style="font-size:.8125rem; color:#6b7280;">Child-????? ?? ????????? ???????, ???? ?????????? ??????? ???????? ????????.</p>
+                                <p style="font-size:.875rem; font-weight:600;">В инспекции рынка нет мест без площади среди parent-мест или обычных.</p>
+                                <p style="font-size:.8125rem; color:#6b7280;">Child-места не требуют площади, если используется площадь родительской карточки.</p>
                             </div>
                         @else
                             <div style="display:grid; gap:1rem;">
@@ -1413,9 +1413,9 @@
                                     <div class="ops-signal-card" style="display:grid; gap:1rem; grid-template-columns:minmax(0, 1.2fr) minmax(14rem, .8fr); align-items:end;">
                                         <div style="display:grid; gap:.5rem;">
                                             <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;">
-                                                <span style="font-size:1rem; font-weight:700;">{{ ($space['number'] ?? '') !== '' ? $space['number'] : '??? ??????' }}</span>
+                                                <span style="font-size:1rem; font-weight:700;">{{ ($space['number'] ?? '') !== '' ? $space['number'] : 'Без номера' }}</span>
                                                 <x-filament::badge :color="($space['space_group_role'] ?? '') === 'parent' ? 'warning' : 'gray'" size="sm">
-                                                    {{ ($space['space_group_role'] ?? '') === 'parent' ? 'parent' : '??????? ?????' }}
+                                                    {{ ($space['space_group_role'] ?? '') === 'parent' ? 'parent' : 'обычное место' }}
                                                 </x-filament::badge>
                                                 @if (($space['status'] ?? '') !== '')
                                                     <x-filament::badge color="gray" size="sm">{{ $space['status'] }}</x-filament::badge>
@@ -1427,27 +1427,27 @@
                                             @endif
 
                                             <div class="ops-muted" style="font-size:.8125rem; line-height:1.5;">
-                                                ???????: {{ ($space['location_name'] ?? '') !== '' ? $space['location_name'] : '?' }} ? ID {{ $space['id'] ?? '?' }}
+                                                Локация: {{ ($space['location_name'] ?? '') !== '' ? $space['location_name'] : '?' }} · ID {{ $space['id'] ?? '?' }}
                                             </div>
                                         </div>
 
                                         <div style="display:grid; gap:.6rem;">
-                                            <label style="font-size:.75rem; font-weight:700; color:#475569;">???????, ??</label>
+                                            <label style="font-size:.75rem; font-weight:700; color:#475569;">Площадь, м²</label>
                                             <div style="display:flex; flex-wrap:wrap; gap:.6rem; align-items:center;">
                                                 <input
                                                     type="number"
                                                     min="0.01"
                                                     step="0.01"
                                                     wire:model.defer="spaceAreaDrafts.{{ $space['id'] }}"
-                                                    placeholder="????????: 12.5"
+                                                    placeholder="Например: 12.5"
                                                     style="width:min(100%, 12rem); border:1px solid rgba(0,0,0,.12); border-radius:.75rem; padding:.75rem .85rem; background:#fff;"
                                                 >
                                                 <x-filament::button wire:click="saveSpaceArea({{ (int) $space['id'] }})" size="sm">
-                                                    ?????????
+                                                    Сохранить
                                                 </x-filament::button>
                                                 @if (! empty($space['edit_url']))
                                                     <x-filament::button color="gray" tag="a" href="{{ $space['edit_url'] }}" size="sm">
-                                                        ??????? ?????
+                                                        Открыть место
                                                     </x-filament::button>
                                                 @endif
                                             </div>
