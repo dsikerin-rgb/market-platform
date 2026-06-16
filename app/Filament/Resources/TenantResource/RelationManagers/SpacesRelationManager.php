@@ -8,6 +8,7 @@ use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TenantContractResource;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
+use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -42,6 +43,7 @@ class SpacesRelationManager extends RelationManager
     {
         $owner = $this->getOwnerRecord();
         $marketId = $owner?->market_id ? (int) $owner->market_id : null;
+        $canViewFullTenantProfile = AdminCapabilities::canViewFullTenantProfile(Filament::auth()->user(), $marketId);
 
         return $table
             ->defaultSort('number')
@@ -63,6 +65,7 @@ class SpacesRelationManager extends RelationManager
 
                 TextColumn::make('primary_contract')
                     ->label('Основной договор')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->state(fn (MarketSpace $record): string => $this->primaryContractMetaForSpace((int) $record->id)['label'])
                     ->tooltip(fn (MarketSpace $record): ?string => $this->primaryContractMetaForSpace((int) $record->id)['tooltip'])
                     ->url(fn (MarketSpace $record): ?string => $this->primaryContractMetaForSpace((int) $record->id)['url'])
@@ -76,6 +79,7 @@ class SpacesRelationManager extends RelationManager
 
                 TextColumn::make('rent_rate_value')
                     ->label('Ставка')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->numeric(decimalPlaces: 2)
                     ->sortable()
                     ->placeholder('—')
@@ -83,6 +87,7 @@ class SpacesRelationManager extends RelationManager
 
                 TextColumn::make('last_period_accrual')
                     ->label('Начислено')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->state(fn (MarketSpace $record): string => $this->formatMoney($this->lastPeriodAmountForSpace((int) $record->id)))
                     ->tooltip(fn (): ?string => $this->lastPeriodAccrualMeta()['period_label'] !== '—'
                         ? ('Последний период: ' . $this->lastPeriodAccrualMeta()['period_label'])

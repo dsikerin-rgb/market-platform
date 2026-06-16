@@ -114,6 +114,7 @@ class TenantResource extends BaseResource
     public static function form(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
+        $canViewFullTenantProfile = AdminCapabilities::canViewFullTenantProfile($user);
 
         $tabs = Tabs::make('tenant_tabs')
             ->columnSpanFull();
@@ -124,7 +125,7 @@ class TenantResource extends BaseResource
 
         return $schema->components([
             Section::make()
-                ->visible(fn (?Tenant $record): bool => $record !== null)
+                ->visible(fn (?Tenant $record): bool => $record !== null && $canViewFullTenantProfile)
                 ->columns([
                     'default' => 1,
                     'md' => 2,
@@ -142,6 +143,7 @@ class TenantResource extends BaseResource
                 Tab::make('Основное')
                     ->schema([
                         Section::make('Карточка арендатора')
+                            ->disabled(fn (?Tenant $record): bool => ! static::canManageTenantRecord($record))
                             ->schema([
                                 Forms\Components\Select::make('market_id')
                                     ->label('Рынок')
@@ -205,6 +207,7 @@ class TenantResource extends BaseResource
                     ]),
 
                 Tab::make('Финансы')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->schema([
                         Section::make('Сводка')
                             ->description('Итог по ОСВ, начисления и оплаты по арендатору за выбранный период.')
@@ -271,6 +274,7 @@ class TenantResource extends BaseResource
                             ]),
 
                         Section::make('Расчеты по договорам')
+                            ->visible(fn (): bool => $canViewFullTenantProfile)
                             ->description('Начислено, оплачено и долг по последнему снимку 1С.')
                             ->collapsed()
                             ->schema([
@@ -300,6 +304,7 @@ class TenantResource extends BaseResource
                     ]),
 
                 Tab::make('Договоры')
+                    ->visible(fn (): bool => $canViewFullTenantProfile && AdminCapabilities::canViewTenantContracts($user))
                     ->schema([
                         Section::make('Договоры')
                             ->description('Реестр договоров арендатора с привязкой к торговым местам.')
@@ -321,20 +326,25 @@ class TenantResource extends BaseResource
                         Section::make('Контактные данные')
                             ->schema([
                                 Forms\Components\TextInput::make('phone')
-                                    ->label('Телефон'),
+                                    ->label('Телефон')
+                                    ->disabled(fn (?Tenant $record): bool => ! static::canManageTenantRecord($record)),
 
                                 Forms\Components\TextInput::make('email')
                                     ->label('Email')
-                                    ->autocomplete(false),
+                                    ->autocomplete(false)
+                                    ->disabled(fn (?Tenant $record): bool => ! static::canManageTenantRecord($record)),
 
                                 Forms\Components\TextInput::make('contact_person')
-                                    ->label('Контактное лицо'),
+                                    ->label('Контактное лицо')
+                                    ->disabled(fn (?Tenant $record): bool => ! static::canManageTenantRecord($record)),
                             ])
                             ->columns(2),
 
-                        static::cabinetAccessSection(),
+                        static::cabinetAccessSection()
+                            ->visible(fn (): bool => $canViewFullTenantProfile),
 
                         Section::make('Сотрудники по торговым местам')
+                            ->visible(fn (): bool => $canViewFullTenantProfile)
                             ->description('Здесь видно, какие дополнительные сотрудники уже назначены на конкретные торговые места. Основной аккаунт арендатора в этом обзоре не показывается.')
                             ->schema([
                                 Forms\Components\Placeholder::make('contacts_staff_by_spaces')
@@ -346,6 +356,7 @@ class TenantResource extends BaseResource
                             ->columns(1),
 
                         Section::make('Сотрудники')
+                            ->visible(fn (): bool => $canViewFullTenantProfile)
                             ->description('Добавляйте сотрудников, редактируйте логины и ограничивайте доступ конкретными торговыми местами.')
                             ->schema([
                                 static::cabinetAdditionalUsersRepeater(),
@@ -353,6 +364,7 @@ class TenantResource extends BaseResource
                     ]),
 
                 Tab::make('Реквизиты')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->schema([
                         Section::make('Реквизиты')
                             ->description('Минимальный набор для идентификации арендатора. Расширенные реквизиты добавим отдельным обновлением.')
@@ -374,6 +386,7 @@ class TenantResource extends BaseResource
                     ]),
 
                 Tab::make('Кабинет')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->schema([
                         Section::make('Витрина арендатора')
                             ->schema([
@@ -420,6 +433,7 @@ class TenantResource extends BaseResource
     public static function table(Table $table): Table
     {
         $user = Filament::auth()->user();
+        $canViewFullTenantProfile = AdminCapabilities::canViewFullTenantProfile($user);
 
         $toolbarActions = static::tenantToolbarActions();
 
@@ -445,6 +459,7 @@ class TenantResource extends BaseResource
         }
 
         $debtStatusColumn
+            ->visible(fn (): bool => $canViewFullTenantProfile)
             ->badge()
             ->color(fn (Tenant $record) => static::debtStatusColor(static::resolveDebtStatusForDisplay($record)['status']))
             ->description('По данным 1С');
@@ -509,6 +524,7 @@ class TenantResource extends BaseResource
 
                 TextColumn::make('financial_snapshot_at')
                     ->label('Снимок 1С')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->formatStateUsing(function ($state): string {
                         if (! filled($state)) {
                             return '—';
@@ -524,16 +540,19 @@ class TenantResource extends BaseResource
 
                 TextColumn::make('financial_accrued_sum')
                     ->label('Начислено (1С)')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->money('RUB', locale: 'ru')
                     ->sortable(),
 
                 TextColumn::make('financial_debt_sum')
                     ->label('Долг (1С)')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->money('RUB', locale: 'ru')
                     ->sortable(),
 
                 TextColumn::make('status')
                     ->label('Статус договора')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->formatStateUsing(fn (?string $state) => match ($state) {
                         'active' => 'В аренде',
                         'paused' => 'Приостановлено',
@@ -544,6 +563,24 @@ class TenantResource extends BaseResource
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 $debtStatusColumn,
+
+                TextColumn::make('contact_person')
+                    ->label('Контактное лицо')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: $canViewFullTenantProfile),
+
+                TextColumn::make('phone')
+                    ->label('Телефон')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: $canViewFullTenantProfile),
+
+                TextColumn::make('email')
+                    ->label('Email')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 IconColumn::make('is_active')
                     ->label('Карточка активна')
@@ -564,6 +601,7 @@ class TenantResource extends BaseResource
 
                 SelectFilter::make('status')
                     ->label('Статус договора')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->options([
                         'active' => 'В аренде',
                         'paused' => 'Приостановлено',
@@ -583,6 +621,7 @@ class TenantResource extends BaseResource
                     ]),
                 TernaryFilter::make('has_debt')
                     ->label('Есть долг (1С)')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->placeholder('Все')
                     ->trueLabel('Только с долгом')
                     ->falseLabel('Только без долга')
@@ -593,6 +632,7 @@ class TenantResource extends BaseResource
                     ),
                 TernaryFilter::make('has_critical_debt')
                     ->label('Критичная просрочка (1С)')
+                    ->visible(fn (): bool => $canViewFullTenantProfile)
                     ->placeholder('Все')
                     ->trueLabel('Только red')
                     ->falseLabel('Только без red')
@@ -602,7 +642,7 @@ class TenantResource extends BaseResource
                         blank: fn (Builder $query): Builder => $query,
                     ),
             ])
-            ->defaultSort('financial_debt_sum', 'desc')
+            ->defaultSort($canViewFullTenantProfile ? 'financial_debt_sum' : 'name', $canViewFullTenantProfile ? 'desc' : 'asc')
             ->toolbarActions($toolbarActions)
             ->recordUrl(fn (Tenant $record): string => static::getUrl('edit', ['record' => $record]));
     }
@@ -920,6 +960,10 @@ class TenantResource extends BaseResource
             $query = $query->where('market_id', $user->market_id);
         } else {
             return $query->whereRaw('1 = 0');
+        }
+
+        if (! AdminCapabilities::canViewFullTenantProfile($user)) {
+            return $query;
         }
 
         $query = static::withFinancialMetrics($query);
@@ -4184,7 +4228,7 @@ class TenantResource extends BaseResource
     {
         $user = Filament::auth()->user();
 
-        return AdminCapabilities::canViewMarketDirectory($user);
+        return AdminCapabilities::canViewTenantDirectory($user);
     }
 
     public static function canCreate(): bool
@@ -4203,6 +4247,28 @@ class TenantResource extends BaseResource
         }
 
         return AdminCapabilities::canManageMarketDirectory($user, (int) ($record->market_id ?? 0));
+    }
+
+    public static function canView($record): bool
+    {
+        if (! $record instanceof Tenant) {
+            return false;
+        }
+
+        $user = Filament::auth()->user();
+
+        return AdminCapabilities::canViewTenantDirectory($user, (int) ($record->market_id ?? 0));
+    }
+
+    public static function canManageTenantRecord(?Tenant $record): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        return AdminCapabilities::canManageMarketDirectory($user, (int) ($record?->market_id ?? 0));
     }
 
     public static function canDelete($record): bool

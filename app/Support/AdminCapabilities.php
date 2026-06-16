@@ -16,6 +16,25 @@ class AdminCapabilities
         'market-legal-admin',
     ];
 
+    private const TENANT_FULL_VIEWERS = [
+        'market-owner',
+        'market-owner-director',
+        'market-admin',
+        'market-manager',
+        'market-legal-admin',
+        'market-accountant',
+        'market-finance',
+    ];
+
+    private const TENANT_SERVICE_VIEWERS = [
+        'market-operator',
+        'market-maintenance',
+        'market-engineer',
+        'market-support',
+        'market-security',
+        'market-guard',
+    ];
+
     private const FINANCE_VIEWERS = [
         'market-owner',
         'market-owner-director',
@@ -58,6 +77,50 @@ class AdminCapabilities
         }
 
         return self::sameMarket($user, $marketId);
+    }
+
+    public static function canViewTenantDirectory(?User $user, ?int $marketId = null): bool
+    {
+        return self::canViewFullTenantProfile($user, $marketId)
+            || self::canViewTenantServiceContext($user, $marketId);
+    }
+
+    public static function canViewFullTenantProfile(?User $user, ?int $marketId = null): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if (self::isSuperAdmin($user)) {
+            return true;
+        }
+
+        if (! self::sameMarket($user, $marketId)) {
+            return false;
+        }
+
+        return self::hasAnyRole($user, self::TENANT_FULL_VIEWERS)
+            || self::can($user, 'markets.view')
+            || self::can($user, 'markets.viewAny')
+            || self::can($user, 'markets.update');
+    }
+
+    public static function canViewTenantServiceContext(?User $user, ?int $marketId = null): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if (self::isSuperAdmin($user)) {
+            return true;
+        }
+
+        if (! self::sameMarket($user, $marketId)) {
+            return false;
+        }
+
+        return self::hasAnyRole($user, self::TENANT_SERVICE_VIEWERS)
+            || self::can($user, 'tenants.service-view');
     }
 
     public static function canManageMarketDirectory(?User $user, ?int $marketId = null): bool

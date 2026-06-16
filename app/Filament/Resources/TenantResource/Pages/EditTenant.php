@@ -21,6 +21,13 @@ class EditTenant extends BaseEditRecord
 
     protected static string $resource = TenantResource::class;
 
+    protected function authorizeAccess(): void
+    {
+        if (! TenantResource::canView($this->record)) {
+            abort(403);
+        }
+    }
+
     public function getTitle(): string|Htmlable
     {
         $name = trim((string) ($this->record?->name ?? ''));
@@ -50,6 +57,10 @@ class EditTenant extends BaseEditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        if ($this->isReadOnly()) {
+            abort(403);
+        }
+
         $this->cabinetPayload = $this->pullCabinetPayloadFromForm($data);
         $this->validateCabinetPayload($this->cabinetPayload, $this->record);
 
@@ -58,6 +69,10 @@ class EditTenant extends BaseEditRecord
 
     protected function afterSave(): void
     {
+        if ($this->isReadOnly()) {
+            return;
+        }
+
         $this->syncCabinetPayload($this->record, $this->cabinetPayload);
     }
 
@@ -83,6 +98,17 @@ class EditTenant extends BaseEditRecord
 
     protected function getHeaderActions(): array
     {
+        $actions = [];
+        $isReadOnly = $this->isReadOnly();
+
+        if ($isReadOnly) {
+            $actions[] = Actions\Action::make('readonly_hint')
+                ->label('Только просмотр')
+                ->color('gray')
+                ->disabled()
+                ->action(fn () => null);
+        }
+
         $chatAction = Actions\Action::make('write_to_tenant')
             ->label('Написать арендатору')
             ->icon('heroicon-o-paper-airplane')
@@ -118,8 +144,7 @@ class EditTenant extends BaseEditRecord
                 'recordName' => trim((string) ($this->record?->name ?? '')),
             ]);
 
-        return [
-            Actions\Action::make('cabinet_impersonate')
+        $actions[] = Actions\Action::make('cabinet_impersonate')
                 ->label('Войти в кабинет')
                 ->icon('heroicon-o-arrow-right-on-rectangle')
                 ->color('gray')
@@ -134,9 +159,9 @@ class EditTenant extends BaseEditRecord
                 ->modalDescription('Кабинет арендатора откроется в новой вкладке. Текущая страница админки останется открытой.')
                 ->visible(fn (): bool => $this->canImpersonateCabinet())
                 ->url(fn (): string => route('filament.admin.tenants.cabinet-impersonate', ['tenant' => (int) $this->record->id]))
-                ->openUrlInNewTab(),
-            $chatAction,
-            Actions\DeleteAction::make()
+                ->openUrlInNewTab();
+        $actions[] = $chatAction;
+        $actions[] = Actions\DeleteAction::make()
                 ->label('Удалить')
                 ->icon('heroicon-o-trash')
                 ->size('lg')
@@ -145,9 +170,27 @@ class EditTenant extends BaseEditRecord
                 ->extraAttributes([
                     'class' => 'tenant-card-action tenant-card-action--danger',
                     'data-subtitle' => 'Арендатора без возврата',
-                ]),
-            $activeStateAction,
-        ];
+                ]);
+
+        if (! $isReadOnly) {
+            $actions[] = $activeStateAction;
+        }
+
+        return $actions;
+    }
+
+    protected function getFormActions(): array
+    {
+        if ($this->isReadOnly()) {
+            return [];
+        }
+
+        return parent::getFormActions();
+    }
+
+    protected function isReadOnly(): bool
+    {
+        return ! TenantResource::canManageTenantRecord($this->record);
     }
 
     public function getPageClasses(): array
