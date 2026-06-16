@@ -10,10 +10,14 @@ use App\Models\StaffConversation;
 use App\Models\StaffConversationMessage;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Notifications\TicketChatNotification;
+use App\Support\StaffConversationService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -201,6 +205,95 @@ class QuickChatDrawerTest extends TestCase
         $this->assertDatabaseHas('staff_conversation_messages', [
             'user_id' => (int) $admin->id,
             'body' => 'Первое сообщение',
+        ]);
+    }
+
+    public function test_tenant_message_notifications_are_counted_and_marked_read(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+
+        $ticket = Ticket::query()->create([
+            'market_id' => (int) $market->id,
+            'subject' => 'Tenant unread request',
+            'description' => 'Tenant request body',
+            'category' => 'other',
+            'priority' => 'normal',
+            'status' => 'new',
+        ]);
+
+        $notificationId = (string) Str::uuid();
+
+        DB::table('notifications')->insert([
+            'id' => $notificationId,
+            'type' => TicketChatNotification::class,
+            'notifiable_type' => User::class,
+            'notifiable_id' => (int) $admin->id,
+            'data' => json_encode([
+                'ticket_id' => (int) $ticket->id,
+                'market_id' => (int) $market->id,
+                'event_type' => TicketChatNotification::EVENT_MESSAGE_CREATED,
+                'title' => 'Новое сообщение в чате',
+                'message' => 'Арендатор написал сообщение',
+            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->assertSeeHtml('<span class="quick-chat__badge">1</span>')
+            ->call('openDrawer')
+            ->assertSee('Tenant unread request')
+            ->assertSeeHtml('<span class="quick-chat__count">1</span>')
+            ->call('selectChat', 'ticket', (int) $ticket->id)
+            ->assertHasNoErrors();
+
+        $this->assertNotNull(DB::table('notifications')->where('id', $notificationId)->value('read_at'));
+    }
+
+    public function test_staff_conversation_service_reuses_existing_thread(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+        $staff = User::factory()->create([
+            'name' => 'Existing Thread Peer',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'existing-thread-peer@example.test',
+        ]);
+
+        $conversation = $this->createConversation($market, $staff, $admin, 'Existing', now()->subHour());
+        StaffConversationMessage::query()->create([
+            'staff_conversation_id' => (int) $conversation->id,
+            'user_id' => (int) $staff->id,
+            'body' => 'Old message',
+            'read_at' => null,
+        ]);
+
+        $reused = app(StaffConversationService::class)->startConversation(
+            $admin,
+            $staff,
+            'New subject should not split',
+            'New message in same thread',
+        );
+
+        $this->assertSame((int) $conversation->id, (int) $reused->id);
+        $this->assertSame(1, StaffConversation::query()->count());
+        $this->assertDatabaseHas('staff_conversation_messages', [
+            'staff_conversation_id' => (int) $conversation->id,
+            'user_id' => (int) $admin->id,
+            'body' => 'New message in same thread',
         ]);
     }
 

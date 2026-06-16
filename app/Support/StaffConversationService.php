@@ -8,6 +8,7 @@ use App\Models\StaffConversation;
 use App\Models\StaffConversationMessage;
 use App\Models\User;
 use App\Notifications\StaffMessageNotification;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 
 class StaffConversationService
@@ -17,6 +18,14 @@ class StaffConversationService
      */
     public function startConversation(User $author, User $recipient, string $subject, string $body, array $attachments = []): StaffConversation
     {
+        $existingConversation = $this->latestConversationBetween($author, $recipient);
+
+        if ($existingConversation instanceof StaffConversation) {
+            $this->addMessage($existingConversation, $author, $body, $attachments);
+
+            return $existingConversation;
+        }
+
         $resolvedSubject = $this->resolveSubject($subject, $body);
 
         $conversation = StaffConversation::query()->create([
@@ -165,5 +174,26 @@ class StaffConversationService
         User $author,
     ): void {
         $recipient->notify(new StaffMessageNotification($conversation, $author, $title, $body));
+    }
+
+    private function latestConversationBetween(User $author, User $recipient): ?StaffConversation
+    {
+        return StaffConversation::query()
+            ->where(function (Builder $pair) use ($author, $recipient): void {
+                $pair
+                    ->where(function (Builder $direct) use ($author, $recipient): void {
+                        $direct
+                            ->where('created_by_user_id', (int) $author->id)
+                            ->where('recipient_user_id', (int) $recipient->id);
+                    })
+                    ->orWhere(function (Builder $reverse) use ($author, $recipient): void {
+                        $reverse
+                            ->where('created_by_user_id', (int) $recipient->id)
+                            ->where('recipient_user_id', (int) $author->id);
+                    });
+            })
+            ->latest('last_message_at')
+            ->latest('updated_at')
+            ->first();
     }
 }
