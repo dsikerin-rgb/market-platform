@@ -7,6 +7,8 @@ namespace App\Filament\Widgets;
 use App\Filament\Pages\Requests;
 use App\Filament\Resources\MarketHolidayResource;
 use App\Filament\Resources\TaskResource;
+use App\Support\AdminCapabilities;
+use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
 
 class TasksWorkspaceWidget extends Widget
@@ -42,7 +44,9 @@ class TasksWorkspaceWidget extends Widget
             'listUrl' => $this->urlForView('list'),
             'calendarUrl' => $this->urlForView('calendar'),
             'eventsUrl' => MarketHolidayResource::getUrl('index'),
-            'requestsUrl' => Requests::getUrl(),
+            'requestsUrl' => AdminCapabilities::canViewFullTenantProfile(Filament::auth()->user())
+                ? Requests::getUrl()
+                : null,
         ];
     }
 

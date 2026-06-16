@@ -46,6 +46,7 @@
                     </a>
                     @endif
 
+                    @if ($tenantsUrl)
                     <a href="{{ $tenantsUrl }}" class="aw-link-card aw-link-card--space-action">
                         <div class="aw-link-icon aw-link-icon--space-action">
                             <x-filament::icon icon="heroicon-o-users" class="h-5 w-5" />
@@ -56,6 +57,7 @@
                             <p class="aw-link-copy aw-link-copy--space-action">Перейти к арендаторам и занятости мест.</p>
                         </div>
                     </a>
+                    @endif
                 </div>
             </div>
         </section>

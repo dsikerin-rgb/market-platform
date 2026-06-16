@@ -31,7 +31,9 @@ class MarketSpacesWorkspaceWidget extends Widget
             'contractsUrl' => AdminCapabilities::canViewFinance(Filament::auth()->user())
                 ? TenantContractResource::getUrl('index')
                 : null,
-            'tenantsUrl' => TenantResource::getUrl('index'),
+            'tenantsUrl' => AdminCapabilities::canViewFullTenantProfile(Filament::auth()->user())
+                ? TenantResource::getUrl('index')
+                : null,
         ];
     }
 }
