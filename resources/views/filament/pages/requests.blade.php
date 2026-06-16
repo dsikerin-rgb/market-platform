@@ -389,6 +389,10 @@
     @endphp
 
     <style>
+        html {
+            scrollbar-gutter: stable;
+        }
+
         .requests-workspace {
             --requests-accent: #1d4ed8;
             --requests-accent-soft: rgba(37, 99, 235, 0.12);
@@ -1381,7 +1385,9 @@
 
         .requests-workspace {
             gap: 0;
-            max-width: min(100%, 88rem);
+            width: 100%;
+            max-width: none;
+            box-sizing: border-box;
             margin-inline: auto;
         }
 
