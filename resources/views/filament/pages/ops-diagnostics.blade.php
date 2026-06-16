@@ -942,6 +942,13 @@
         $selectedMarketNameLocal = (string) ($selectedMarketName ?? '');
         $tenantDuplicateSignalsLocal = is_array($tenantDuplicateSignals ?? null) ? $tenantDuplicateSignals : [];
         $spaceDuplicateSignalsLocal = is_array($spaceDuplicateSignals ?? null) ? $spaceDuplicateSignals : [];
+        $spaceAreaInspectionLocal = is_array($spaceAreaInspection ?? null) ? $spaceAreaInspection : [
+            'total_missing' => 0,
+            'parent_missing' => 0,
+            'standalone_missing' => 0,
+            'skipped_child_missing' => 0,
+            'rows' => [],
+        ];
         $groupEpisodesUrlLocal = $groupEpisodesUrl ?? null;
     @endphp
 
@@ -1020,6 +1027,7 @@
             <div class="ops-tablist" role="tablist" aria-label="Разделы диагностики">
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'overview'" @click="tab = 'overview'">Обзор</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'signals'" @click="tab = 'signals'">Сигналы</button>
+                <button type="button" class="ops-tabbutton" :data-active="tab === 'areas'" @click="tab = 'areas'">???????</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'onec-debt-preview'" @click="tab = 'onec-debt-preview'">Аудит карты</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'maintenance'" @click="tab = 'maintenance'">Обслуживание</button>
                 <button type="button" class="ops-tabbutton" :data-active="tab === 'backups'" @click="tab = 'backups'">Бэкапы</button>
@@ -1346,6 +1354,114 @@
                 </x-filament::section>
             </div>
 
+
+            <div class="ops-tabpanel" x-show="tab === 'areas'">
+                <x-filament::section
+                    heading="??????? ????"
+                    description="???????? ???? ??? ???????. Child-????? ????????? ????????????: ??? ?????????? ????? ??????? ? ???????? ??? ???????? ?????."
+                >
+                    <div class="ops-signal-grid">
+                        <div style="display:flex; flex-wrap:wrap; gap:.75rem; align-items:center;">
+                            <x-filament::badge :color="$selectedMarketIdLocal > 0 ? 'success' : 'warning'">
+                                {{ $selectedMarketIdLocal > 0 ? 'ID ?????: ' . $selectedMarketIdLocal : '????? ?? ??????' }}
+                            </x-filament::badge>
+
+                            @if ($selectedMarketNameLocal !== '')
+                                <span class="ops-muted" style="font-size:.8125rem;">{{ $selectedMarketNameLocal }}</span>
+                            @endif
+                        </div>
+
+                        <div style="display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(16rem, 1fr));">
+                            <div class="ops-stat-card">
+                                <p class="ops-stat-label">??? ???????</p>
+                                <p class="ops-stat-value">{{ (int) ($spaceAreaInspectionLocal['total_missing'] ?? 0) }}</p>
+                                <p class="ops-stat-subtext">??????? ? parent-?????, ??????? ????? ?????????</p>
+                            </div>
+
+                            <div class="ops-stat-card">
+                                <p class="ops-stat-label">????????????</p>
+                                <p class="ops-stat-value">{{ (int) ($spaceAreaInspectionLocal['parent_missing'] ?? 0) }}</p>
+                                <p class="ops-stat-subtext">??????, ??? ??????? ?????? ???? ? parent</p>
+                            </div>
+
+                            <div class="ops-stat-card">
+                                <p class="ops-stat-label">??????? ?????</p>
+                                <p class="ops-stat-value">{{ (int) ($spaceAreaInspectionLocal['standalone_missing'] ?? 0) }}</p>
+                                <p class="ops-stat-subtext">?? ?????? ? ?????? ? ??????? ??????? ? ????????</p>
+                            </div>
+
+                            <div class="ops-stat-card">
+                                <p class="ops-stat-label">????????? child</p>
+                                <p class="ops-stat-value">{{ (int) ($spaceAreaInspectionLocal['skipped_child_missing'] ?? 0) }}</p>
+                                <p class="ops-stat-subtext">?? ??????? ?? ???????????, ???? ??????? ???? ? ????????</p>
+                            </div>
+                        </div>
+
+                        @if ($selectedMarketIdLocal <= 0)
+                            <div class="ops-empty-state">
+                                <p style="font-size:.875rem; font-weight:600;">??????? ???????? ????? ?? ?????? ??????????????.</p>
+                                <p style="font-size:.8125rem; color:#6b7280;">????? ?????? ????? ????? ???????? ?????? ???? ??? ???????.</p>
+                            </div>
+                        @elseif (($spaceAreaInspectionLocal['rows'] ?? []) === [])
+                            <div class="ops-empty-state">
+                                <p style="font-size:.875rem; font-weight:600;">? ?????????? ????? ??? ??????? ??? parent-???? ??? ???????.</p>
+                                <p style="font-size:.8125rem; color:#6b7280;">Child-????? ?? ????????? ???????, ???? ?????????? ??????? ???????? ????????.</p>
+                            </div>
+                        @else
+                            <div style="display:grid; gap:1rem;">
+                                @foreach (($spaceAreaInspectionLocal['rows'] ?? []) as $space)
+                                    <div class="ops-signal-card" style="display:grid; gap:1rem; grid-template-columns:minmax(0, 1.2fr) minmax(14rem, .8fr); align-items:end;">
+                                        <div style="display:grid; gap:.5rem;">
+                                            <div style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;">
+                                                <span style="font-size:1rem; font-weight:700;">{{ ($space['number'] ?? '') !== '' ? $space['number'] : '??? ??????' }}</span>
+                                                <x-filament::badge :color="($space['space_group_role'] ?? '') === 'parent' ? 'warning' : 'gray'" size="sm">
+                                                    {{ ($space['space_group_role'] ?? '') === 'parent' ? 'parent' : '??????? ?????' }}
+                                                </x-filament::badge>
+                                                @if (($space['status'] ?? '') !== '')
+                                                    <x-filament::badge color="gray" size="sm">{{ $space['status'] }}</x-filament::badge>
+                                                @endif
+                                            </div>
+
+                                            @if (($space['display_name'] ?? '') !== '')
+                                                <div class="ops-muted" style="font-size:.875rem;">{{ $space['display_name'] }}</div>
+                                            @endif
+
+                                            <div class="ops-muted" style="font-size:.8125rem; line-height:1.5;">
+                                                ???????: {{ ($space['location_name'] ?? '') !== '' ? $space['location_name'] : '?' }} ? ID {{ $space['id'] ?? '?' }}
+                                            </div>
+                                        </div>
+
+                                        <div style="display:grid; gap:.6rem;">
+                                            <label style="font-size:.75rem; font-weight:700; color:#475569;">???????, ??</label>
+                                            <div style="display:flex; flex-wrap:wrap; gap:.6rem; align-items:center;">
+                                                <input
+                                                    type="number"
+                                                    min="0.01"
+                                                    step="0.01"
+                                                    wire:model.defer="spaceAreaDrafts.{{ $space['id'] }}"
+                                                    placeholder="????????: 12.5"
+                                                    style="width:min(100%, 12rem); border:1px solid rgba(0,0,0,.12); border-radius:.75rem; padding:.75rem .85rem; background:#fff;"
+                                                >
+                                                <x-filament::button wire:click="saveSpaceArea({{ (int) $space['id'] }})" size="sm">
+                                                    ?????????
+                                                </x-filament::button>
+                                                @if (! empty($space['edit_url']))
+                                                    <x-filament::button color="gray" tag="a" href="{{ $space['edit_url'] }}" size="sm">
+                                                        ??????? ?????
+                                                    </x-filament::button>
+                                                @endif
+                                            </div>
+                                            @error('spaceAreaDrafts.' . $space['id'])
+                                                <div style="font-size:.75rem; color:#dc2626;">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                </x-filament::section>
+            </div>
             <div class="ops-tabpanel" x-show="tab === 'onec-debt-preview'">
                 @livewire(\App\Filament\Pages\OneCDebtDecisionPreview::class, ['embedded' => true], key('ops-one-c-debt-decision-preview'))
             </div>

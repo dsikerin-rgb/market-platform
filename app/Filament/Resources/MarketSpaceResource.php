@@ -1899,6 +1899,9 @@ class MarketSpaceResource extends BaseResource
                                         ? 'Справочная площадь физического места, м²'
                                         : 'Площадь, м²')
                                     ->numeric()
+                                    ->required(fn ($get, ?MarketSpace $record): bool => ! static::hasSharedUseTenants($record)
+                                        && (string) ($get('space_group_role') ?? $record?->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE) !== MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                                    ->minValue(0.01)
                                     ->inputMode('decimal')
                                     ->placeholder('Например: 48')
                                     ->suffix('м²')

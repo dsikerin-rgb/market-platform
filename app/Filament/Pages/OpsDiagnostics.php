@@ -11,6 +11,7 @@ use App\Filament\Resources\MarketSpaceGroupEpisodeResource;
 use App\Filament\Resources\TenantResource;
 use App\Filament\Resources\IntegrationExchangeResource;
 use App\Models\Market;
+use App\Models\MarketSpace;
 use App\Services\MarketSpaces\MarketSpaceDuplicateSignalService;
 use App\Support\AdminPanelImpersonation;
 use App\Services\PostgresBackupService;
@@ -31,6 +32,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Validation\ValidationException;
 use Laravel\Telescope\Contracts\EntriesRepository;
 use Throwable;
 use UnitEnum;
@@ -95,6 +97,11 @@ class OpsDiagnostics extends Page
      * @var array<string, mixed>
      */
     public array $pgBackupLog = [];
+
+    /**
+     * @var array<int|string, mixed>
+     */
+    public array $spaceAreaDrafts = [];
 
     public static function canAccess(): bool
     {
@@ -266,6 +273,9 @@ class OpsDiagnostics extends Page
         $spaceDuplicateSignals = $selectedMarketId > 0
             ? $this->withSpaceUrls(app(MarketSpaceDuplicateSignalService::class)->signalsForMarket($selectedMarketId, 8))
             : [];
+        $spaceAreaInspection = $selectedMarketId > 0
+            ? $this->getSpaceAreaInspection($selectedMarketId)
+            : $this->emptySpaceAreaInspection();
 
         // Небольшая диагностика для карты (не ломает страницу, даже если таблицы нет)
         $mapStats = $this->getMapShapesStatsBestEffort();
@@ -293,6 +303,7 @@ class OpsDiagnostics extends Page
             'selectedMarketName' => $selectedMarketName,
             'tenantDuplicateSignals' => $tenantDuplicateSignals,
             'spaceDuplicateSignals' => $spaceDuplicateSignals,
+            'spaceAreaInspection' => $spaceAreaInspection,
 
             'telescopeInstalled' => $telescopeInstalled,
 
@@ -321,6 +332,68 @@ class OpsDiagnostics extends Page
             ),
             'pgBackupLog' => $this->pgBackupLog ?: $this->getLatestPgBackupLog(),
         ];
+    }
+
+    public function saveSpaceArea(int $spaceId): void
+    {
+        $this->ensureSuperAdmin();
+
+        $selectedMarketId = $this->selectedMarketId();
+
+        if ($selectedMarketId <= 0) {
+            Notification::make()
+                ->title('Сначала выберите рынок')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $rawValue = $this->spaceAreaDrafts[$spaceId] ?? null;
+
+        if (is_string($rawValue)) {
+            $rawValue = str_replace(',', '.', trim($rawValue));
+        }
+
+        $value = is_numeric($rawValue) ? (float) $rawValue : null;
+
+        if ($value === null || $value <= 0) {
+            throw ValidationException::withMessages([
+                "spaceAreaDrafts.{$spaceId}" => 'Укажите площадь больше 0.',
+            ]);
+        }
+
+        $space = MarketSpace::query()
+            ->whereKey($spaceId)
+            ->where('market_id', $selectedMarketId)
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('space_group_role')
+                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD);
+            })
+            ->first();
+
+        if (! $space) {
+            Notification::make()
+                ->title('Место не найдено')
+                ->body('Можно обновлять только родительские или обычные места выбранного рынка.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $space->forceFill([
+            'area_sqm' => round($value, 2),
+        ])->save();
+
+        unset($this->spaceAreaDrafts[$spaceId]);
+
+        Notification::make()
+            ->title('Площадь сохранена')
+            ->body('Карточка места обновлена.')
+            ->success()
+            ->send();
     }
 
     /**
@@ -1207,6 +1280,113 @@ class OpsDiagnostics extends Page
         } catch (Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @return array{
+     *     total_missing:int,
+     *     parent_missing:int,
+     *     standalone_missing:int,
+     *     skipped_child_missing:int,
+     *     rows:list<array{
+     *         id:int,
+     *         number:string,
+     *         display_name:string,
+     *         location_name:string,
+     *         status:string,
+     *         space_group_role:string,
+     *         edit_url:string|null
+     *     }>
+     * }
+     */
+    private function getSpaceAreaInspection(int $marketId): array
+    {
+        $rows = MarketSpace::query()
+            ->with('location:id,name')
+            ->where('market_id', $marketId)
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('area_sqm')
+                    ->orWhere('area_sqm', '<=', 0);
+            })
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('space_group_role')
+                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD);
+            })
+            ->orderByRaw("case when space_group_role = ? then 0 else 1 end", [MarketSpace::SPACE_GROUP_ROLE_PARENT])
+            ->orderBy('number')
+            ->get()
+            ->map(function (MarketSpace $space): array {
+                return [
+                    'id' => (int) $space->id,
+                    'number' => (string) ($space->number ?? ''),
+                    'display_name' => (string) ($space->display_name ?? ''),
+                    'location_name' => (string) ($space->location->name ?? ''),
+                    'status' => (string) ($space->status ?? ''),
+                    'space_group_role' => (string) ($space->space_group_role ?? MarketSpace::SPACE_GROUP_ROLE_NONE),
+                    'edit_url' => MarketSpaceResource::getUrl('edit', ['record' => $space->id]),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $parentMissing = 0;
+        $standaloneMissing = 0;
+
+        foreach ($rows as $row) {
+            if (($row['space_group_role'] ?? MarketSpace::SPACE_GROUP_ROLE_NONE) === MarketSpace::SPACE_GROUP_ROLE_PARENT) {
+                $parentMissing++;
+            } else {
+                $standaloneMissing++;
+            }
+        }
+
+        $skippedChildMissing = MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->where('space_group_role', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('area_sqm')
+                    ->orWhere('area_sqm', '<=', 0);
+            })
+            ->count();
+
+        return [
+            'total_missing' => count($rows),
+            'parent_missing' => $parentMissing,
+            'standalone_missing' => $standaloneMissing,
+            'skipped_child_missing' => $skippedChildMissing,
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     total_missing:int,
+     *     parent_missing:int,
+     *     standalone_missing:int,
+     *     skipped_child_missing:int,
+     *     rows:list<array{
+     *         id:int,
+     *         number:string,
+     *         display_name:string,
+     *         location_name:string,
+     *         status:string,
+     *         space_group_role:string,
+     *         edit_url:string|null
+     *     }>
+     * }
+     */
+    private function emptySpaceAreaInspection(): array
+    {
+        return [
+            'total_missing' => 0,
+            'parent_missing' => 0,
+            'standalone_missing' => 0,
+            'skipped_child_missing' => 0,
+            'rows' => [],
+        ];
     }
 
     private function selectedMarketId(): int
