@@ -13,6 +13,25 @@ class RoleCapabilityCatalog
         'market-legal-admin',
     ];
 
+    private const TENANT_SERVICE_VIEWER_ROLES = [
+        'market-operator',
+        'market-maintenance',
+        'market-engineer',
+        'market-support',
+        'market-security',
+        'market-guard',
+    ];
+
+    private const TENANT_FULL_VIEWER_ROLES = [
+        'market-owner',
+        'market-owner-director',
+        'market-admin',
+        'market-manager',
+        'market-legal-admin',
+        'market-accountant',
+        'market-finance',
+    ];
+
     private const FINANCE_VIEWER_ROLES = [
         'market-owner',
         'market-owner-director',
@@ -58,10 +77,18 @@ class RoleCapabilityCatalog
 
         $summary = [];
 
-        if (self::canViewMarketDirectory($role, $permissions)) {
-            $summary[] = self::canManageMarketDirectory($role, $permissions)
-                ? 'Места и арендаторы: управление'
-                : 'Места и арендаторы: просмотр';
+        if (self::canManageMarketDirectory($role, $permissions)) {
+            $summary[] = 'Места и арендаторы: управление';
+        } elseif (self::canViewMarketDirectory($role, $permissions)) {
+            $summary[] = 'Места: просмотр';
+        }
+
+        if (! self::canManageMarketDirectory($role, $permissions) && self::canViewFullTenantProfile($role, $permissions)) {
+            $summary[] = 'Арендаторы: просмотр';
+        }
+
+        if (self::canViewTenantServiceContext($role, $permissions)) {
+            $summary[] = 'Арендаторы: сервисный просмотр';
         }
 
         if (self::canViewFinance($role, $permissions)) {
@@ -206,6 +233,26 @@ class RoleCapabilityCatalog
         return $role === 'super-admin'
             || in_array($role, self::TENANT_CONTRACT_MANAGER_ROLES, true)
             || in_array('contracts.update', $permissions, true);
+    }
+
+    public static function canViewFullTenantProfile(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::TENANT_FULL_VIEWER_ROLES, true)
+            || in_array('markets.viewAny', $permissions, true)
+            || in_array('markets.view', $permissions, true)
+            || in_array('markets.update', $permissions, true);
+    }
+
+    public static function canViewTenantServiceContext(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::TENANT_SERVICE_VIEWER_ROLES, true)
+            || in_array('tenants.service-view', $permissions, true);
     }
 
     private static function canViewMarketDirectory(string $role, iterable $permissions = []): bool

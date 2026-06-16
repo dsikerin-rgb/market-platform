@@ -56,9 +56,9 @@ class AdminCapabilitiesAccessTest extends TestCase
     }
 
     /**
-     * @dataProvider restrictedOperationalRoles
+     * @dataProvider serviceTenantViewerRoles
      */
-    public function test_operational_roles_cannot_manage_places_tenants_or_place_types(string $roleName): void
+    public function test_service_roles_can_view_tenants_without_managing_places_tenants_or_place_types(string $roleName): void
     {
         $market = $this->createMarket();
         $user = $this->createMarketUser($market, $roleName);
@@ -69,8 +69,10 @@ class AdminCapabilitiesAccessTest extends TestCase
         $this->actingAsFilamentUser($user);
 
         self::assertFalse(AdminCapabilities::canManageMarketDirectory($user));
+        self::assertTrue(AdminCapabilities::canViewTenantServiceContext($user));
         self::assertTrue(MarketSpaceResource::canViewAny());
         self::assertTrue(TenantResource::canViewAny());
+        self::assertTrue(TenantResource::canView($tenant));
         self::assertTrue(MarketSpaceTypeResource::canViewAny());
 
         self::assertFalse(MarketSpaceResource::canCreate());
@@ -80,6 +82,24 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertFalse(MarketSpaceTypeResource::canCreate());
         self::assertFalse(MarketSpaceTypeResource::canEdit($spaceType));
         self::assertFalse(MarketSpaceTypeResource::canDelete($spaceType));
+    }
+
+    /**
+     * @dataProvider noTenantDirectoryRoles
+     */
+    public function test_roles_without_tenant_context_cannot_view_tenant_directory(string $roleName): void
+    {
+        $market = $this->createMarket();
+        $user = $this->createMarketUser($market, $roleName);
+        $tenant = $this->createTenant($market);
+
+        $this->actingAsFilamentUser($user);
+
+        self::assertTrue(MarketSpaceResource::canViewAny());
+        self::assertTrue(MarketSpaceTypeResource::canViewAny());
+        self::assertFalse(AdminCapabilities::canViewTenantDirectory($user));
+        self::assertFalse(TenantResource::canViewAny());
+        self::assertFalse(TenantResource::canView($tenant));
     }
 
     /**
@@ -221,6 +241,29 @@ class AdminCapabilitiesAccessTest extends TestCase
             'market-guard' => ['market-guard'],
             'market-security' => ['market-security'],
             'market-maintenance' => ['market-maintenance'],
+            'market-engineer' => ['market-engineer'],
+            'market-operator' => ['market-operator'],
+            'market-support' => ['market-support'],
+            'market-marketing' => ['market-marketing'],
+            'staff' => ['staff'],
+        ];
+    }
+
+    public static function serviceTenantViewerRoles(): array
+    {
+        return [
+            'market-guard' => ['market-guard'],
+            'market-security' => ['market-security'],
+            'market-maintenance' => ['market-maintenance'],
+            'market-engineer' => ['market-engineer'],
+            'market-operator' => ['market-operator'],
+            'market-support' => ['market-support'],
+        ];
+    }
+
+    public static function noTenantDirectoryRoles(): array
+    {
+        return [
             'market-marketing' => ['market-marketing'],
             'staff' => ['staff'],
         ];

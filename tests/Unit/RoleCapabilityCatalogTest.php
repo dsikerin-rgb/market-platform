@@ -23,7 +23,8 @@ class RoleCapabilityCatalogTest extends TestCase
     public function test_accountant_sees_finance_without_market_directory_management(): void
     {
         self::assertSame([
-            'Места и арендаторы: просмотр',
+            'Места: просмотр',
+            'Арендаторы: просмотр',
             'Финансы 1С',
             'Договоры: просмотр',
         ], RoleCapabilityCatalog::summaryForRole('market-accountant'));
@@ -37,7 +38,8 @@ class RoleCapabilityCatalogTest extends TestCase
     public function test_security_role_is_read_only_for_directory_and_has_no_finance(): void
     {
         self::assertSame([
-            'Места и арендаторы: просмотр',
+            'Места: просмотр',
+            'Арендаторы: сервисный просмотр',
         ], RoleCapabilityCatalog::summaryForRole('market-security'));
 
         self::assertContains('Финансы 1С скрыты', RoleCapabilityCatalog::limitationsForRole('market-security'));
@@ -59,7 +61,8 @@ class RoleCapabilityCatalogTest extends TestCase
     public function test_owner_and_legal_admin_profiles_have_distinct_capabilities(): void
     {
         self::assertSame([
-            'Места и арендаторы: просмотр',
+            'Места: просмотр',
+            'Арендаторы: просмотр',
             'Финансы 1С',
             'Договоры: просмотр',
         ], RoleCapabilityCatalog::summaryForRole('market-owner'));
