@@ -87,7 +87,15 @@ class RecentTenantRequestsWidget extends BaseTableWidget
         // Сортировка: urgent/high сверху, внутри — самые старые (created_at asc)
         return TenantRequest::query()
             ->where('market_id', $marketId)
-            ->whereNotIn('status', ['resolved', 'closed'])
+            ->whereNotIn('status', self::closedRequestStatuses())
+            ->where(function (Builder $query): void {
+                $query
+                    ->whereNull('ticket_id')
+                    ->orWhereDoesntHave('ticket')
+                    ->orWhereHas('ticket', function (Builder $ticketQuery): void {
+                        $ticketQuery->whereNotIn('status', self::closedRequestStatuses());
+                    });
+            })
             ->orderByRaw(
                 "CASE priority
                     WHEN 'urgent' THEN 1
@@ -207,5 +215,13 @@ class RecentTenantRequestsWidget extends BaseTableWidget
         }
 
         return $tz;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function closedRequestStatuses(): array
+    {
+        return ['resolved', 'closed', 'cancelled'];
     }
 }

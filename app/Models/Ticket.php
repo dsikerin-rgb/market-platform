@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\Schema;
 
 class Ticket extends Model
 {
@@ -95,6 +96,8 @@ class Ticket extends Model
             }
 
             if ($ticket->wasChanged('status')) {
+                self::syncTenantRequestStatus($ticket);
+
                 $assignee = $ticket->user()->first();
 
                 if ($assignee instanceof User) {
@@ -173,6 +176,41 @@ class Ticket extends Model
         }
 
         return null;
+    }
+
+    private static function syncTenantRequestStatus(self $ticket): void
+    {
+        if (! Schema::hasTable('tenant_requests') || ! Schema::hasColumn('tenant_requests', 'ticket_id')) {
+            return;
+        }
+
+        $status = trim((string) $ticket->status);
+        if ($status === '') {
+            return;
+        }
+
+        $isClosed = in_array($status, ['resolved', 'closed', 'cancelled'], true);
+        $updates = ['status' => $status];
+
+        if (Schema::hasColumn('tenant_requests', 'updated_at')) {
+            $updates['updated_at'] = now();
+        }
+
+        if (Schema::hasColumn('tenant_requests', 'is_active')) {
+            $updates['is_active'] = ! $isClosed;
+        }
+
+        if ($isClosed && Schema::hasColumn('tenant_requests', 'resolved_at')) {
+            $updates['resolved_at'] = now();
+        }
+
+        if ($isClosed && Schema::hasColumn('tenant_requests', 'closed_at')) {
+            $updates['closed_at'] = now();
+        }
+
+        TenantRequest::query()
+            ->where('ticket_id', (int) $ticket->id)
+            ->update($updates);
     }
 
     public function market(): BelongsTo
