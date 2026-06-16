@@ -6760,13 +6760,13 @@
                 fo = 1;
               } else if (fillStyle === 'vacant') {
                 // Свободно: плотная светло-серая заливка, чтобы не просвечивала подложка
-                fill = '#e5e7eb';
-                stroke = '#94a3b8';
+                fill = CAN_VIEW_FINANCE ? '#e5e7eb' : '#f5f7ef';
+                stroke = CAN_VIEW_FINANCE ? '#94a3b8' : '#9ca98f';
                 fo = 0.92;
               } else if (fillStyle === 'service') {
                 // Служебное: отдельная фиолетовая метка, чтобы не смешивать со свободными
-                fill = '#e9d5ff';
-                stroke = '#8b5cf6';
+                fill = CAN_VIEW_FINANCE ? '#e9d5ff' : '#dff2fb';
+                stroke = CAN_VIEW_FINANCE ? '#8b5cf6' : '#6faec6';
                 fo = 0.92;
               } else if (fillStyle === 'debt') {
                 // Debt status: закрашиваем цветом долга
@@ -6785,11 +6785,13 @@
                 const inheritedSourceShape = inheritedSourceId > 0 && Array.isArray(shapes)
                   ? shapes.find(shape => Number(shape?.market_space_id || shape?.space_id || 0) === inheritedSourceId) || null
                   : null;
-                fill = inheritedSourceShape?.fill_color || s.fill_color || '#00A3FF';
+                fill = CAN_VIEW_FINANCE ? (inheritedSourceShape?.fill_color || s.fill_color || '#00A3FF') : '#eef7e8';
                 stroke = BORDER_COLOR;
-                fo = typeof inheritedSourceShape?.fill_opacity === 'number'
+                fo = !CAN_VIEW_FINANCE
+                  ? 0.92
+                  : (typeof inheritedSourceShape?.fill_opacity === 'number'
                   ? inheritedSourceShape.fill_opacity
-                  : (typeof s.fill_opacity === 'number' ? s.fill_opacity : 0.12);
+                  : (typeof s.fill_opacity === 'number' ? s.fill_opacity : 0.12));
               }
 
               if (showReviewMarkers) {

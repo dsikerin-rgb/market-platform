@@ -17,7 +17,7 @@ class FirstLoginWelcomeModal extends Component
     {
         $this->shouldShow = $notice->shouldShow(
             Filament::auth()->user(),
-            session()->boolean(FirstLoginWelcomeNotice::SESSION_KEY),
+            (bool) session()->get(FirstLoginWelcomeNotice::SESSION_KEY, false),
         );
     }
 
