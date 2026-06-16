@@ -90,7 +90,10 @@ class StaffInvitationResource extends BaseResource
                     ->label('Рынок')
                     ->sortable()
                     ->searchable()
-                    ->visible(fn () => (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()),
+                    ->visible(fn () => (bool) $user
+                        && method_exists($user, 'isSuperAdmin')
+                        && $user->isSuperAdmin()
+                        && blank(static::selectedMarketIdFromSession())),
 
                 TextColumn::make('email')
                     ->label('Email')
@@ -137,21 +140,29 @@ class StaffInvitationResource extends BaseResource
 
         if (class_exists(\Filament\Actions\EditAction::class)) {
             $actions[] = \Filament\Actions\EditAction::make()
-                ->label('Редактировать')
+                ->label('')
+                ->tooltip('Редактировать')
+                ->iconButton()
                 ->visible(fn (StaffInvitation $record): bool => ! $record->accepted_at);
         } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
             $actions[] = \Filament\Tables\Actions\EditAction::make()
-                ->label('Редактировать')
+                ->label('')
+                ->tooltip('Редактировать')
+                ->iconButton()
                 ->visible(fn (StaffInvitation $record): bool => ! $record->accepted_at);
         }
 
         if (class_exists(\Filament\Actions\DeleteAction::class)) {
             $actions[] = \Filament\Actions\DeleteAction::make()
-                ->label('Удалить')
+                ->label('')
+                ->tooltip('Удалить')
+                ->iconButton()
                 ->visible(fn (StaffInvitation $record): bool => ! $record->accepted_at);
         } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
             $actions[] = \Filament\Tables\Actions\DeleteAction::make()
-                ->label('Удалить')
+                ->label('')
+                ->tooltip('Удалить')
+                ->iconButton()
                 ->visible(fn (StaffInvitation $record): bool => ! $record->accepted_at);
         }
 
