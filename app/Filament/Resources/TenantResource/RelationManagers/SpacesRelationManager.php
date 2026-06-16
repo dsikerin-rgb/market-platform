@@ -53,7 +53,7 @@ class SpacesRelationManager extends RelationManager
                     ->sortable()
                     ->searchable()
                     ->placeholder('—')
-                    ->url(fn (MarketSpace $record): ?string => MarketSpaceResource::canEdit($record)
+                    ->url(fn (MarketSpace $record): ?string => MarketSpaceResource::canView($record)
                         ? MarketSpaceResource::getUrl('edit', ['record' => $record])
                         : null),
 
@@ -158,7 +158,7 @@ class SpacesRelationManager extends RelationManager
                     ),
             ])
             ->striped()
-            ->recordUrl(fn ($record): ?string => $record && MarketSpaceResource::canEdit($record)
+            ->recordUrl(fn ($record): ?string => $record && MarketSpaceResource::canView($record)
                 ? MarketSpaceResource::getUrl('edit', ['record' => $record])
                 : null)
             ->recordActions([

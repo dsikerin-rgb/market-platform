@@ -190,7 +190,7 @@ class TenantAccrualsTable
                     ->sortable()
                     ->searchable()
                     ->placeholder('—')
-                    ->url(fn (TenantAccrual $record): ?string => $record->marketSpace && MarketSpaceResource::canEdit($record->marketSpace)
+                    ->url(fn (TenantAccrual $record): ?string => $record->marketSpace && MarketSpaceResource::canView($record->marketSpace)
                         ? MarketSpaceResource::getUrl('edit', ['record' => $record->marketSpace])
                         : null)
                     ->toggleable(),

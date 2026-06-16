@@ -71,6 +71,7 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertFalse(AdminCapabilities::canManageMarketDirectory($user));
         self::assertTrue(AdminCapabilities::canViewTenantServiceContext($user));
         self::assertTrue(MarketSpaceResource::canViewAny());
+        self::assertTrue(MarketSpaceResource::canView($space));
         self::assertTrue(TenantResource::canViewAny());
         self::assertTrue(TenantResource::canView($tenant));
         self::assertTrue(MarketSpaceTypeResource::canViewAny());
@@ -133,6 +134,7 @@ class AdminCapabilitiesAccessTest extends TestCase
         $this->actingAsFilamentUser($user);
 
         self::assertTrue(MarketSpaceResource::canViewAny());
+        self::assertTrue(MarketSpaceResource::canView($space));
         self::assertTrue(TenantResource::canViewAny());
         self::assertTrue(MarketSpaceTypeResource::canViewAny());
         self::assertTrue(AdminCapabilities::canViewFinance($user));
