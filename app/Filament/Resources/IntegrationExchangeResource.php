@@ -122,7 +122,7 @@ class IntegrationExchangeResource extends BaseResource
         }
 
         if ($account !== null) {
-            $parts[] = "Счет {$account}";
+            $parts[] = "сч. {$account}";
         }
 
         return $parts === [] ? '—' : implode(' · ', $parts);
@@ -297,7 +297,7 @@ class IntegrationExchangeResource extends BaseResource
                 TextColumn::make('payload_scope')
                     ->label('Пакет')
                     ->state(static fn (IntegrationExchange $record): string => static::payloadScope($record))
-                    ->limit(32)
+                    ->limit(48)
                     ->tooltip(static fn (IntegrationExchange $record): string => static::payloadScope($record)),
 
                 TextColumn::make('direction')
