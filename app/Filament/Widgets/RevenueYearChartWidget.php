@@ -8,6 +8,7 @@ namespace App\Filament\Widgets;
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use App\Models\MarketSpace;
+use App\Support\AdminCapabilities;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
@@ -132,6 +133,7 @@ class RevenueYearChartWidget extends ChartWidget
 
         // Строим данные для всех 13 месяцев (пустые месяцы будут с null)
         [$payableData, $coveragePctData] = $this->buildDebtSeries($marketId, $months, $totalSpaces);
+        $canViewFinance = AdminCapabilities::canViewFinance($user);
 
         // Проверяем, есть ли хоть какие-то данные
         $hasAnyData = false;
@@ -146,9 +148,24 @@ class RevenueYearChartWidget extends ChartWidget
             return $this->emptyChart('Нет данных 1С за выбранный период');
         }
 
-        return [
-            'labels' => $labels,
-            'datasets' => [
+        $datasets = [
+            [
+                'label' => 'Охват мест',
+                'data' => $coveragePctData,
+                'yAxisID' => 'y1',
+                'tension' => 0.25,
+                'fill' => false,
+                'borderColor' => '#60a5fa',
+                'backgroundColor' => '#60a5fa',
+                'pointRadius' => 2,
+                'borderWidth' => 2,
+                'spanGaps' => false,
+            ],
+        ];
+
+        if ($canViewFinance) {
+            array_unshift(
+                $datasets,
                 [
                     'label' => 'К оплате',
                     'data' => $payableData,
@@ -161,24 +178,19 @@ class RevenueYearChartWidget extends ChartWidget
                     'borderWidth' => 2,
                     'spanGaps' => false,
                 ],
-                [
-                    'label' => 'Охват мест, %',
-                    'data' => $coveragePctData,
-                    'yAxisID' => 'y1',
-                    'tension' => 0.25,
-                    'fill' => false,
-                    'borderColor' => '#60a5fa',
-                    'backgroundColor' => '#60a5fa',
-                    'pointRadius' => 2,
-                    'borderWidth' => 2,
-                    'spanGaps' => false,
-                ],
-            ],
+            );
+        }
+
+        return [
+            'labels' => $labels,
+            'datasets' => $datasets,
         ];
     }
 
     protected function getOptions(): array
     {
+        $canViewFinance = AdminCapabilities::canViewFinance(Filament::auth()->user());
+
         return [
             'responsive' => true,
             'maintainAspectRatio' => true,
@@ -216,6 +228,7 @@ class RevenueYearChartWidget extends ChartWidget
                     'grid' => ['display' => false],
                 ],
                 'y' => [
+                    'display' => $canViewFinance,
                     'beginAtZero' => true,
                     'position' => 'left',
                     'ticks' => ['font' => ['size' => 10]],
@@ -367,9 +380,24 @@ class RevenueYearChartWidget extends ChartWidget
 
     private function emptyTwoSeriesChart(array $labels, int $count): array
     {
-        return [
-            'labels' => $labels,
-            'datasets' => [
+        $datasets = [
+            [
+                'label' => 'Охват мест',
+                'data' => array_fill(0, $count, null),
+                'yAxisID' => 'y1',
+                'tension' => 0.25,
+                'fill' => false,
+                'borderColor' => '#60a5fa',
+                'backgroundColor' => '#60a5fa',
+                'pointRadius' => 2,
+                'borderWidth' => 2,
+                'spanGaps' => false,
+            ],
+        ];
+
+        if (AdminCapabilities::canViewFinance(Filament::auth()->user())) {
+            array_unshift(
+                $datasets,
                 [
                     'label' => 'К оплате',
                     'data' => array_fill(0, $count, null),
@@ -382,19 +410,12 @@ class RevenueYearChartWidget extends ChartWidget
                     'borderWidth' => 2,
                     'spanGaps' => false,
                 ],
-                [
-                    'label' => 'Охват мест, %',
-                    'data' => array_fill(0, $count, null),
-                    'yAxisID' => 'y1',
-                    'tension' => 0.25,
-                    'fill' => false,
-                    'borderColor' => '#60a5fa',
-                    'backgroundColor' => '#60a5fa',
-                    'pointRadius' => 2,
-                    'borderWidth' => 2,
-                    'spanGaps' => false,
-                ],
-            ],
+            );
+        }
+
+        return [
+            'labels' => $labels,
+            'datasets' => $datasets,
         ];
     }
 
