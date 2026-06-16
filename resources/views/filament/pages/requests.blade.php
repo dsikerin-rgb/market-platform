@@ -1332,6 +1332,9 @@
             background: var(--requests-composer);
             padding: 0.9rem;
             box-shadow: 0 18px 36px var(--requests-shadow);
+            position: sticky;
+            bottom: 0;
+            z-index: 5;
         }
 
         .requests-composer-head {
@@ -1374,6 +1377,9 @@
         .requests-composer-actions {
             display: flex;
             justify-content: flex-end;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
             margin-top: 0.7rem;
         }
 
@@ -1846,7 +1852,7 @@
             border-radius: 0;
             box-shadow: none;
             background: rgba(255, 255, 255, 0.96);
-            padding: 0.75rem 0.9rem;
+            padding: 0.75rem 0.9rem max(0.75rem, env(safe-area-inset-bottom));
         }
 
         .dark .requests-composer {
@@ -1928,6 +1934,14 @@
             .requests-thread-head {
                 flex-direction: column;
                 align-items: flex-start;
+            }
+
+            .requests-composer-actions {
+                justify-content: stretch;
+            }
+
+            .requests-composer-actions > * {
+                width: 100%;
             }
 
             .requests-modal-head {
