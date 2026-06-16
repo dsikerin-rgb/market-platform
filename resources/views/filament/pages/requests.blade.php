@@ -1531,6 +1531,68 @@
             border-bottom: 1px solid var(--requests-border);
         }
 
+        .requests-list-shell .fi-section-header {
+            display: none !important;
+        }
+
+        .requests-chat-shell .fi-section-header {
+            min-height: 4.85rem;
+            padding: 0.9rem 1.25rem !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+        }
+
+        .dark .requests-chat-shell .fi-section-header {
+            background: rgba(15, 23, 42, 0.94) !important;
+        }
+
+        .requests-chat-titlebar {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            min-width: 0;
+            width: 100%;
+        }
+
+        .requests-chat-title-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.55rem;
+            height: 2.55rem;
+            flex: 0 0 auto;
+            border-radius: 999px;
+            background: #e0f2fe;
+            color: #2563eb;
+        }
+
+        .dark .requests-chat-title-icon {
+            background: rgba(14, 116, 144, 0.28);
+            color: #7dd3fc;
+        }
+
+        .requests-chat-title-main {
+            min-width: 0;
+        }
+
+        .requests-chat-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--requests-heading);
+            font-size: 1.08rem;
+            font-weight: 850;
+            line-height: 1.25;
+        }
+
+        .requests-chat-subtitle {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--requests-muted);
+            font-size: 0.82rem;
+            line-height: 1.35;
+        }
+
         .requests-ticket-list {
             gap: 0;
             max-height: none;
@@ -1648,6 +1710,44 @@
         .dark .requests-details-card {
             background: rgba(15, 23, 42, 0.90);
             box-shadow: none;
+        }
+
+        .requests-details-card--summary {
+            display: none;
+        }
+
+        .requests-details-card--controls {
+            padding: 0.7rem 1rem;
+            background: rgba(255, 255, 255, 0.82);
+        }
+
+        .dark .requests-details-card--controls {
+            background: rgba(15, 23, 42, 0.80);
+        }
+
+        .requests-details-card--controls .requests-details-intro {
+            display: none;
+        }
+
+        .requests-details-card--controls .requests-meta-line {
+            font-size: 0.78rem;
+        }
+
+        .requests-details-card--controls .requests-management-form {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+            align-items: end;
+        }
+
+        .requests-details-card--controls .requests-actions-row {
+            margin-top: 0.65rem;
+            padding-top: 0;
+        }
+
+        .requests-details-card--controls .requests-assignee-select {
+            min-height: 2.35rem;
+            border-radius: 0.85rem;
         }
 
         .requests-details-title {
@@ -2297,9 +2397,36 @@
 
             <x-filament::section class="requests-chat-shell">
                 <x-slot name="heading">
-                    <div class="requests-section-heading">
-                        <x-filament::icon icon="heroicon-m-chat-bubble-left-right" class="h-5 w-5 text-primary-500" />
-                        <span>Переписка</span>
+                    @php
+                        $chatHeaderTitle = 'Переписка';
+                        $chatHeaderSubtitle = 'Выберите диалог слева';
+
+                        if ($channel === 'staff' && $selectedConversation) {
+                            $starterNameForHeader = trim((string) ($selectedConversation->starter?->name ?? 'Неизвестный отправитель'));
+                            $recipientNameForHeader = trim((string) ($selectedConversation->recipient?->name ?? 'Неизвестный получатель'));
+                            $chatHeaderTitle = trim((string) ($selectedConversation->subject ?: 'Без темы'));
+                            $chatHeaderSubtitle = $starterNameForHeader
+                                . ' -> '
+                                . $recipientNameForHeader
+                                . ' · Обновлено: '
+                                . optional($selectedConversation->last_message_at ?? $selectedConversation->updated_at)->format('d.m.Y H:i');
+                        } elseif ($channel === 'tenants' && $selectedTicket) {
+                            $tenantNameForHeader = trim((string) ($selectedTicket->tenant?->short_name ?? $selectedTicket->tenant?->name ?? 'Арендатор'));
+                            $chatHeaderTitle = trim((string) ($selectedTicket->subject ?: 'Без темы'));
+                            $chatHeaderSubtitle = $tenantNameForHeader
+                                . ' · Обновлено: '
+                                . $selectedTicket->updated_at?->format('d.m.Y H:i');
+                        }
+                    @endphp
+
+                    <div class="requests-chat-titlebar">
+                        <div class="requests-chat-title-icon">
+                            <x-filament::icon icon="heroicon-m-chat-bubble-left-right" class="h-5 w-5" />
+                        </div>
+                        <div class="requests-chat-title-main">
+                            <div class="requests-chat-title">{{ $chatHeaderTitle }}</div>
+                            <div class="requests-chat-subtitle">{{ $chatHeaderSubtitle }}</div>
+                        </div>
                     </div>
                 </x-slot>
 
@@ -2321,7 +2448,7 @@
                         @endphp
 
                         <div class="requests-details">
-                            <div class="requests-details-card">
+                            <div class="requests-details-card requests-details-card--summary">
                                 <div class="requests-details-top">
                                     <div class="requests-details-intro">
                                         <div class="requests-details-badges">
@@ -2501,7 +2628,7 @@
                     @endphp
 
                     <div class="requests-details">
-                        <div class="requests-details-card">
+                        <div class="requests-details-card requests-details-card--controls">
                             <div class="requests-details-top">
                                 <div class="requests-details-intro">
                                     <div class="requests-details-badges">
