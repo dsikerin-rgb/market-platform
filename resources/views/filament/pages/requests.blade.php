@@ -1389,6 +1389,7 @@
             max-width: none;
             box-sizing: border-box;
             margin-inline: auto;
+            --requests-page-offset: 13.5rem;
         }
 
         .requests-hero {
@@ -1508,7 +1509,8 @@
         .requests-layout {
             gap: 0;
             grid-template-columns: minmax(20rem, 24rem) minmax(0, 1fr);
-            min-height: min(50rem, calc(100vh - 10.5rem));
+            height: clamp(34rem, calc(100dvh - var(--requests-page-offset)), 50rem);
+            min-height: 0;
         }
 
         .requests-list-shell,
@@ -1603,6 +1605,7 @@
             gap: 0;
             max-height: none;
             height: 100%;
+            overflow-y: auto;
             padding: 0;
         }
 
@@ -1686,7 +1689,7 @@
 
         .requests-details {
             height: 100%;
-            min-height: min(47rem, calc(100vh - 12rem));
+            min-height: 0;
             gap: 0;
             background:
                 linear-gradient(rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.78)),
@@ -1795,7 +1798,7 @@
         .requests-thread-list {
             flex: 1 1 auto;
             max-height: none;
-            min-height: 16rem;
+            min-height: 0;
             gap: 0.45rem;
             padding: 0.25rem 0.15rem 0.6rem;
             scroll-behavior: smooth;
@@ -1878,11 +1881,13 @@
         @media (max-width: 1279px) {
             .requests-layout {
                 grid-template-columns: 1fr;
-                min-height: auto;
+                height: auto;
+                min-height: 0;
             }
 
             .requests-details {
-                min-height: 42rem;
+                height: clamp(31rem, calc(100dvh - 10rem), 46rem);
+                min-height: 0;
             }
         }
 
