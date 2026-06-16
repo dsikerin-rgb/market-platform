@@ -63,7 +63,7 @@ class StaffInvitationNotification extends Notification
             return MarketplaceMediaStorage::url($logoPath);
         }
 
-        $defaultLogoPath = 'marketplace/brand/eko-fair-logo.svg';
+        $defaultLogoPath = 'marketplace/brand/eko-yarmarka-logo-email.png';
 
         return file_exists(public_path($defaultLogoPath)) ? asset($defaultLogoPath) : null;
     }
