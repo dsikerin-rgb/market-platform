@@ -9,6 +9,7 @@ use App\Models\StaffConversationMessage;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
+use App\Notifications\TicketChatNotification;
 use App\Support\StaffConversationService;
 use App\Support\MessageAttachmentStorage;
 use App\Support\TicketAccessService;
@@ -17,6 +18,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Component;
@@ -59,6 +61,15 @@ class QuickChatDrawer extends Component
             $this->selectedId = max(0, (int) request('ticket_id'));
             $this->isOpen = $this->selectedId > 0;
 
+            $user = $this->currentUser();
+            $ticket = $this->selectedId > 0
+                ? Ticket::query()->whereKey((int) $this->selectedId)->first()
+                : null;
+
+            if ($user && $ticket && $this->canAccessTicket($user, $ticket)) {
+                $this->markTicketMessageNotificationsRead($user, (int) $ticket->id);
+            }
+
             return;
         }
 
@@ -74,7 +85,7 @@ class QuickChatDrawer extends Component
             'recentChats' => $recentChats,
             'selectedChat' => $selectedChat,
             'messages' => $selectedChat ? $this->selectedMessages() : collect(),
-            'unreadCount' => $this->unreadStaffMessagesCount(),
+            'unreadCount' => $this->unreadIncomingMessagesCount(),
         ]);
     }
 
@@ -138,6 +149,8 @@ class QuickChatDrawer extends Component
             if (! $ticket || ! $this->canAccessTicket($user, $ticket)) {
                 return;
             }
+
+            $this->markTicketMessageNotificationsRead($user, (int) $ticket->id);
         }
 
         $this->selectedType = $type;
@@ -299,6 +312,7 @@ class QuickChatDrawer extends Component
                 'preview' => Str::limit(trim((string) $ticket->description), 110),
                 'meta' => $this->formatDateTime($ticket->updated_at),
                 'count' => $this->ticketMessagesCount($ticket),
+                'unread_count' => $this->unreadTicketMessageNotificationsCount($user, (int) $ticket->id),
                 'sort_at' => $ticket->updated_at,
             ];
         });
@@ -895,6 +909,49 @@ class QuickChatDrawer extends Component
                     ->orWhere('staff_conversations.recipient_user_id', (int) $user->id);
             })
             ->count();
+    }
+
+    private function unreadIncomingMessagesCount(): int
+    {
+        $user = $this->currentUser();
+        if (! $user) {
+            return 0;
+        }
+
+        return $this->unreadStaffMessagesCount()
+            + $this->unreadTicketMessageNotificationsCount($user);
+    }
+
+    private function unreadTicketMessageNotificationsCount(User $user, ?int $ticketId = null): int
+    {
+        if (! Schema::hasTable('notifications')) {
+            return 0;
+        }
+
+        return (int) $this->ticketMessageNotificationsQuery($user, $ticketId)->count();
+    }
+
+    private function markTicketMessageNotificationsRead(User $user, int $ticketId): void
+    {
+        if (! Schema::hasTable('notifications')) {
+            return;
+        }
+
+        $this->ticketMessageNotificationsQuery($user, $ticketId)
+            ->update(['read_at' => now()]);
+    }
+
+    private function ticketMessageNotificationsQuery(User $user, ?int $ticketId = null)
+    {
+        return DB::table('notifications')
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', (int) $user->id)
+            ->whereNull('read_at')
+            ->where('type', TicketChatNotification::class)
+            ->where('data->event_type', TicketChatNotification::EVENT_MESSAGE_CREATED)
+            ->when($ticketId !== null, function ($query) use ($ticketId) {
+                return $query->where('data->ticket_id', $ticketId);
+            });
     }
 
     private function staffTablesAvailable(): bool
