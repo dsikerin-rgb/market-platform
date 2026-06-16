@@ -10,6 +10,7 @@ use App\Services\Debt\DebtDecisionPolicy;
 use App\Services\Debt\DebtDecisionPreviewReport;
 use App\Support\OneC\AccrualPaymentReconciliationReport;
 use App\Support\AdminCapabilities;
+use App\Support\Search\LooseSearch;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Illuminate\Support\Collection;
@@ -234,24 +235,22 @@ class OneCDebtDecisionPreview extends Page
      */
     private function applySearchFilter(Collection $rows, string $search): Collection
     {
-        $search = mb_strtolower(trim($search));
-
-        if ($search === '') {
+        if (trim($search) === '') {
             return $rows;
         }
 
         return $rows->filter(static function (array $row) use ($search): bool {
             $candidate = (array) ($row['osv_candidate'] ?? []);
-            $haystack = mb_strtolower(implode(' ', [
+            $haystack = implode(' ', [
                 $row['space_number'] ?? '',
                 $row['tenant_name'] ?? '',
                 $row['mismatch_reason'] ?? '',
                 $candidate['reason'] ?? '',
                 implode(' ', (array) ($candidate['contract_names'] ?? [])),
                 implode(' ', (array) ($candidate['contracts'] ?? [])),
-            ]));
+            ]);
 
-            return str_contains($haystack, $search);
+            return LooseSearch::matchesText($haystack, $search);
         })->values();
     }
 

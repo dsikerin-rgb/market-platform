@@ -11,6 +11,7 @@ use App\Models\TicketComment;
 use App\Models\User;
 use App\Support\StaffConversationService;
 use App\Support\MessageAttachmentStorage;
+use App\Support\Search\LooseSearch;
 use App\Support\TicketAccessService;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -844,16 +845,14 @@ class QuickChatDrawer extends Component
             return;
         }
 
-        $query->where(function (Builder $searchQuery) use ($search): void {
-            $searchQuery
-                ->where('subject', 'like', '%' . $search . '%')
-                ->orWhere('description', 'like', '%' . $search . '%')
-                ->orWhereHas('tenant', function (Builder $tenantQuery) use ($search): void {
-                    $tenantQuery
-                        ->where('name', 'like', '%' . $search . '%')
-                        ->orWhere('short_name', 'like', '%' . $search . '%');
+        LooseSearch::applySearch($query, $search, [
+            static function (Builder $searchQuery, array $termPatterns): void {
+                LooseSearch::orWhereMatchesColumns($searchQuery, ['subject', 'description'], $termPatterns);
+                $searchQuery->orWhereHas('tenant', function (Builder $tenantQuery) use ($termPatterns): void {
+                    LooseSearch::orWhereMatchesColumns($tenantQuery, ['name', 'short_name'], $termPatterns);
                 });
-        });
+            },
+        ]);
     }
 
     private function scopeStaffSearch(Builder $query): void
@@ -863,19 +862,27 @@ class QuickChatDrawer extends Component
             return;
         }
 
-        $query->where(function (Builder $searchQuery) use ($search): void {
-            $searchQuery
-                ->where('subject', 'like', '%' . $search . '%')
-                ->orWhereHas('starter', fn (Builder $userQuery): Builder => $this->scopeUserSearch($userQuery, $search))
-                ->orWhereHas('recipient', fn (Builder $userQuery): Builder => $this->scopeUserSearch($userQuery, $search));
-        });
+        LooseSearch::applySearch($query, $search, [
+            function (Builder $searchQuery, array $termPatterns): void {
+                LooseSearch::orWhereMatchesColumn($searchQuery, 'subject', $termPatterns);
+                $searchQuery->orWhereHas('starter', fn (Builder $userQuery): Builder => $this->scopeUserSearch($userQuery, $termPatterns));
+                $searchQuery->orWhereHas('recipient', fn (Builder $userQuery): Builder => $this->scopeUserSearch($userQuery, $termPatterns));
+            },
+        ]);
     }
 
-    private function scopeUserSearch(Builder $query, string $search): Builder
+    /**
+     * @param  string|array{normalized:list<string>,compact:list<string>}  $search
+     */
+    private function scopeUserSearch(Builder $query, string|array $search): Builder
     {
-        return $query
-            ->where('name', 'like', '%' . $search . '%')
-            ->orWhere('email', 'like', '%' . $search . '%');
+        if (is_string($search)) {
+            return LooseSearch::applySearchToColumns($query, $search, ['name', 'email']);
+        }
+
+        LooseSearch::orWhereMatchesColumns($query, ['name', 'email'], $search);
+
+        return $query;
     }
 
     private function unreadStaffMessagesCount(): int

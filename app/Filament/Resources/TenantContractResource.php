@@ -12,6 +12,7 @@ use App\Services\MarketSpaces\SpaceGroupResolver;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use App\Support\AdminCapabilities;
 use App\Support\MarketSpaces\MarketSpaceGroupEpisodeResolver;
+use App\Support\Search\LooseSearch;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Components\Placeholder;
@@ -1352,7 +1353,13 @@ class TenantContractResource extends BaseResource
                     ->tooltip('Арендатор по договору.')
                     ->headerTooltip('Арендатор по договору.')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => LooseSearch::applySearch($query, $search, [
+                        static function (Builder $searchQuery, array $termPatterns): void {
+                            $searchQuery->orWhereHas('tenant', function (Builder $tenantQuery) use ($termPatterns): void {
+                                LooseSearch::orWhereMatchesColumns($tenantQuery, ['name', 'short_name'], $termPatterns);
+                            });
+                        },
+                    ]))
                     ->placeholder('—')
                     ->description(fn (TenantContract $record): ?string => filled($record->tenant?->short_name) ? (string) $record->tenant?->short_name : null)
                     ->wrap(),
@@ -1362,7 +1369,7 @@ class TenantContractResource extends BaseResource
                     ->tooltip('Номер договора из 1С.')
                     ->headerTooltip('Номер договора из 1С.')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => LooseSearch::applySearchToColumns($query, $search, ['tenant_contracts.number', 'tenant_contracts.external_id']))
                     ->placeholder('—')
                     ->wrap(),
 

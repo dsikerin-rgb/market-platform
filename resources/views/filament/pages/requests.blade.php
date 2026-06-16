@@ -66,19 +66,14 @@
         }
 
         if ($searchQuery !== '') {
-            $escapedSearch = addcslashes($searchQuery, '\\%_');
-            $likeSearch = '%' . $escapedSearch . '%';
-
-            $ticketsQuery->where(function ($query) use ($likeSearch): void {
-                $query
-                    ->where('subject', 'like', $likeSearch)
-                    ->orWhere('description', 'like', $likeSearch)
-                    ->orWhereHas('tenant', function ($tenantQuery) use ($likeSearch): void {
-                        $tenantQuery
-                            ->where('name', 'like', $likeSearch)
-                            ->orWhere('short_name', 'like', $likeSearch);
+            \App\Support\Search\LooseSearch::applySearch($ticketsQuery, $searchQuery, [
+                static function ($query, array $termPatterns): void {
+                    \App\Support\Search\LooseSearch::orWhereMatchesColumns($query, ['subject', 'description'], $termPatterns);
+                    $query->orWhereHas('tenant', function ($tenantQuery) use ($termPatterns): void {
+                        \App\Support\Search\LooseSearch::orWhereMatchesColumns($tenantQuery, ['name', 'short_name'], $termPatterns);
                     });
-            });
+                },
+            ]);
         }
 
         $tickets = $ticketsQuery->limit(100)->get();
@@ -124,19 +119,14 @@
             }
 
             if ($searchQuery !== '') {
-                $escapedSearch = addcslashes($searchQuery, '\\%_');
-                $likeSearch = '%' . $escapedSearch . '%';
-
-                $singleTicketQuery->where(function ($query) use ($likeSearch): void {
-                    $query
-                        ->where('subject', 'like', $likeSearch)
-                        ->orWhere('description', 'like', $likeSearch)
-                        ->orWhereHas('tenant', function ($tenantQuery) use ($likeSearch): void {
-                            $tenantQuery
-                                ->where('name', 'like', $likeSearch)
-                                ->orWhere('short_name', 'like', $likeSearch);
+                \App\Support\Search\LooseSearch::applySearch($singleTicketQuery, $searchQuery, [
+                    static function ($query, array $termPatterns): void {
+                        \App\Support\Search\LooseSearch::orWhereMatchesColumns($query, ['subject', 'description'], $termPatterns);
+                        $query->orWhereHas('tenant', function ($tenantQuery) use ($termPatterns): void {
+                            \App\Support\Search\LooseSearch::orWhereMatchesColumns($tenantQuery, ['name', 'short_name'], $termPatterns);
                         });
-                });
+                    },
+                ]);
             }
 
             $selectedTicket = $singleTicketQuery->first();
@@ -278,15 +268,17 @@
             }
 
             if ($searchQuery !== '') {
-                $escapedSearch = addcslashes($searchQuery, '\\%_');
-                $likeSearch = '%' . $escapedSearch . '%';
-
-                $staffQuery->where(function ($query) use ($likeSearch): void {
-                    $query
-                        ->where('subject', 'like', $likeSearch)
-                        ->orWhereHas('starter', fn ($userQuery) => $userQuery->where('name', 'like', $likeSearch))
-                        ->orWhereHas('recipient', fn ($userQuery) => $userQuery->where('name', 'like', $likeSearch));
-                });
+                \App\Support\Search\LooseSearch::applySearch($staffQuery, $searchQuery, [
+                    static function ($query, array $termPatterns): void {
+                        \App\Support\Search\LooseSearch::orWhereMatchesColumn($query, 'subject', $termPatterns);
+                        $query->orWhereHas('starter', function ($userQuery) use ($termPatterns): void {
+                            \App\Support\Search\LooseSearch::orWhereMatchesColumn($userQuery, 'name', $termPatterns);
+                        });
+                        $query->orWhereHas('recipient', function ($userQuery) use ($termPatterns): void {
+                            \App\Support\Search\LooseSearch::orWhereMatchesColumn($userQuery, 'name', $termPatterns);
+                        });
+                    },
+                ]);
             }
 
             $conversations = $staffQuery->limit(100)->get();
@@ -325,15 +317,17 @@
                 }
 
                 if ($searchQuery !== '') {
-                    $escapedSearch = addcslashes($searchQuery, '\\%_');
-                    $likeSearch = '%' . $escapedSearch . '%';
-
-                    $singleStaffQuery->where(function ($query) use ($likeSearch): void {
-                        $query
-                            ->where('subject', 'like', $likeSearch)
-                            ->orWhereHas('starter', fn ($userQuery) => $userQuery->where('name', 'like', $likeSearch))
-                            ->orWhereHas('recipient', fn ($userQuery) => $userQuery->where('name', 'like', $likeSearch));
-                    });
+                    \App\Support\Search\LooseSearch::applySearch($singleStaffQuery, $searchQuery, [
+                        static function ($query, array $termPatterns): void {
+                            \App\Support\Search\LooseSearch::orWhereMatchesColumn($query, 'subject', $termPatterns);
+                            $query->orWhereHas('starter', function ($userQuery) use ($termPatterns): void {
+                                \App\Support\Search\LooseSearch::orWhereMatchesColumn($userQuery, 'name', $termPatterns);
+                            });
+                            $query->orWhereHas('recipient', function ($userQuery) use ($termPatterns): void {
+                                \App\Support\Search\LooseSearch::orWhereMatchesColumn($userQuery, 'name', $termPatterns);
+                            });
+                        },
+                    ]);
                 }
 
                 $selectedConversation = $singleStaffQuery->first();

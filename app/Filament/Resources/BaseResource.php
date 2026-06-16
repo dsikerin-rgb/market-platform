@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources;
 
+use App\Support\Search\LooseSearch;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
@@ -42,49 +43,36 @@ abstract class BaseResource extends Resource
             : [$search];
 
         foreach ($terms as $term) {
-            $variants = array_values(array_unique(array_filter([
-                $term,
-                mb_strtolower($term, 'UTF-8'),
-                mb_strtoupper($term, 'UTF-8'),
-                mb_convert_case($term, MB_CASE_TITLE, 'UTF-8'),
-            ], static fn ($value): bool => is_string($value) && $value !== '')));
+            $termPatterns = LooseSearch::termPatterns($term)[0] ?? null;
 
-            $query->where(function (Builder $termQuery) use ($attributesList, $variants): void {
-                foreach ($variants as $variant) {
-                    $pattern = "%{$variant}%";
+            if (! is_array($termPatterns)) {
+                continue;
+            }
 
-                    $termQuery->orWhere(function (Builder $variantQuery) use ($attributesList, $pattern): void {
-                        $isFirst = true;
+            $query->where(function (Builder $termQuery) use ($attributesList, $termPatterns): void {
+                foreach ($attributesList as $attributes) {
+                    foreach (Arr::wrap($attributes) as $attribute) {
+                        if (str_contains($attribute, '.')) {
+                            $relation = (string) str($attribute)->beforeLast('.');
+                            $column = (string) str($attribute)->afterLast('.');
 
-                        foreach ($attributesList as $attributes) {
-                            foreach (Arr::wrap($attributes) as $attribute) {
-                                if (str_contains($attribute, '.')) {
-                                    $relation = (string) str($attribute)->beforeLast('.');
-                                    $column = (string) str($attribute)->afterLast('.');
-                                    $method = $isFirst ? 'whereHas' : 'orWhereHas';
+                            $termQuery->orWhereHas($relation, function (Builder $relationQuery) use ($column, $termPatterns): void {
+                                LooseSearch::orWhereMatchesColumn(
+                                    $relationQuery,
+                                    $relationQuery->qualifyColumn($column),
+                                    $termPatterns,
+                                );
+                            });
 
-                                    $variantQuery->{$method}(
-                                        $relation,
-                                        fn (Builder $relationQuery) => $relationQuery->where(
-                                            $relationQuery->qualifyColumn($column),
-                                            'like',
-                                            $pattern,
-                                        ),
-                                    );
-                                } else {
-                                    $method = $isFirst ? 'where' : 'orWhere';
-
-                                    $variantQuery->{$method}(
-                                        $variantQuery->qualifyColumn($attribute),
-                                        'like',
-                                        $pattern,
-                                    );
-                                }
-
-                                $isFirst = false;
-                            }
+                            continue;
                         }
-                    });
+
+                        LooseSearch::orWhereMatchesColumn(
+                            $termQuery,
+                            $termQuery->qualifyColumn($attribute),
+                            $termPatterns,
+                        );
+                    }
                 }
             });
         }

@@ -7,6 +7,7 @@ namespace App\Support\OneC;
 use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Models\Market;
+use App\Support\Search\LooseSearch;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\DB;
@@ -110,27 +111,25 @@ class AccrualPaymentReconciliationReport
      */
     public function filterRows(array $rows, string $type = 'all', string $search = ''): array
     {
-        $search = mb_strtolower(trim($search));
-
         return array_values(array_filter($rows, static function (array $row) use ($type, $search): bool {
             if (in_array($type, ['accrual', 'payment'], true) && $row['type'] !== $type) {
                 return false;
             }
 
-            if ($search === '') {
+            if (trim($search) === '') {
                 return true;
             }
 
-            $haystack = mb_strtolower(implode(' ', [
+            $haystack = implode(' ', [
                 (string) $row['tenant_name'],
                 (string) $row['contract_label'],
                 (string) $row['document_number'],
                 (string) $row['basis'],
                 (string) $row['organization_name'],
                 (string) $row['account'],
-            ]));
+            ]);
 
-            return str_contains($haystack, $search);
+            return LooseSearch::matchesText($haystack, $search);
         }));
     }
 
