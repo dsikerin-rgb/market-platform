@@ -487,6 +487,67 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->with('status', 'Статус обращения обновлён.');
     })->name('filament.admin.requests.status');
 
+    Route::post('/admin/requests/{ticket}/delete', function (Request $request, int $ticket) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $ticketModel = Ticket::query()
+            ->with('attachments')
+            ->whereKey($ticket)
+            ->firstOrFail();
+
+        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $sameMarket = (int) ($user->market_id ?? 0) === (int) $ticketModel->market_id;
+        abort_unless($isSuperAdmin || ($isMarketAdmin && $sameMarket), 403);
+
+        $validated = $request->validate([
+            'tenant_id' => ['nullable', 'integer'],
+            'status_redirect' => ['nullable', 'string'],
+            'q' => ['nullable', 'string'],
+        ]);
+
+        DB::transaction(function () use ($ticketModel): void {
+            foreach ($ticketModel->attachments as $attachment) {
+                $attachment->delete();
+            }
+
+            if (Schema::hasTable('tenant_requests') && Schema::hasColumn('tenant_requests', 'ticket_id')) {
+                DB::table('tenant_requests')
+                    ->where('ticket_id', (int) $ticketModel->id)
+                    ->delete();
+            }
+
+            $ticketModel->delete();
+        });
+
+        $params = [];
+
+        $tenantId = is_numeric($validated['tenant_id'] ?? null) ? (int) $validated['tenant_id'] : 0;
+        if ($tenantId > 0) {
+            $params['tenant_id'] = $tenantId;
+        }
+
+        $redirectStatus = trim((string) ($validated['status_redirect'] ?? ''));
+        if ($redirectStatus !== '' && $redirectStatus !== 'all') {
+            $params['status'] = $redirectStatus;
+        }
+
+        $search = trim((string) ($validated['q'] ?? ''));
+        if ($search !== '') {
+            $params['q'] = $search;
+        }
+
+        $target = '/admin/requests';
+        if ($params !== []) {
+            $target .= '?' . http_build_query($params);
+        }
+
+        return redirect()
+            ->to(url($target))
+            ->with('status', "\u{041e}\u{0431}\u{0440}\u{0430}\u{0449}\u{0435}\u{043d}\u{0438}\u{0435} \u{0443}\u{0434}\u{0430}\u{043b}\u{0435}\u{043d}\u{043e}.");
+    })->name('filament.admin.requests.delete');
+
     /**
      * Переключатель рынка для super-admin (используется в topbar-user-info.blade.php).
      * Сохраняет выбранный market_id в сессии.
