@@ -40,16 +40,16 @@ class TenantRequest extends Model
     protected static function booted(): void
     {
         static::saving(function (self $request): void {
-            if ($request->status === 'resolved' && ! $request->resolved_at) {
+            if (in_array($request->status, ['resolved', 'closed', 'cancelled'], true) && ! $request->resolved_at) {
                 $request->resolved_at = now();
             }
 
-            if ($request->status === 'closed' && ! $request->closed_at) {
-                if (! $request->resolved_at) {
-                    $request->resolved_at = now();
-                }
-
+            if (in_array($request->status, ['closed', 'cancelled'], true) && ! $request->closed_at) {
                 $request->closed_at = now();
+            }
+
+            if (in_array($request->status, ['resolved', 'closed', 'cancelled'], true)) {
+                $request->is_active = false;
             }
         });
     }

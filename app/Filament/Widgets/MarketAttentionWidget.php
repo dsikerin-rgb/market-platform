@@ -22,6 +22,7 @@ use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -354,11 +355,24 @@ class MarketAttentionWidget extends Widget
 
     private function countCriticalOpenRequests(int $marketId): int
     {
-        return TenantRequest::query()
+        $closedStatuses = ['resolved', 'closed', 'cancelled'];
+        $query = TenantRequest::query()
             ->where('market_id', $marketId)
-            ->whereNotIn('status', ['resolved', 'closed'])
-            ->whereIn('priority', ['high', 'urgent'])
-            ->count();
+            ->whereNotIn('status', $closedStatuses)
+            ->whereIn('priority', ['high', 'urgent']);
+
+        if (Schema::hasColumn((new TenantRequest())->getTable(), 'ticket_id')) {
+            $query->where(function (Builder $requestQuery) use ($closedStatuses): void {
+                $requestQuery
+                    ->whereNull('ticket_id')
+                    ->orWhereDoesntHave('ticket')
+                    ->orWhereHas('ticket', function (Builder $ticketQuery) use ($closedStatuses): void {
+                        $ticketQuery->whereNotIn('status', $closedStatuses);
+                    });
+            });
+        }
+
+        return $query->count();
     }
 
     private function countOverdueTasks(int $marketId, string $tz): int

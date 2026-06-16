@@ -1380,15 +1380,18 @@
         }
 
         .requests-workspace {
-            gap: 0.85rem;
+            gap: 0;
+            max-width: min(100%, 88rem);
+            margin-inline: auto;
         }
 
         .requests-hero {
             border-color: var(--requests-border);
-            border-radius: 0.95rem 0.95rem 0 0;
+            border-bottom: 0;
+            border-radius: 1.05rem 1.05rem 0 0;
             background: rgba(255, 255, 255, 0.94);
             box-shadow: none;
-            padding: 0.85rem 1rem;
+            padding: 0.95rem 1.05rem 0.75rem;
         }
 
         .dark .requests-hero {
@@ -1408,7 +1411,15 @@
         }
 
         .requests-toolbar {
-            margin-top: -0.45rem;
+            margin-top: 0;
+            padding: 0.7rem 1.05rem;
+            border-inline: 1px solid var(--requests-border);
+            border-top: 1px solid var(--requests-border);
+            background: rgba(255, 255, 255, 0.94);
+        }
+
+        .dark .requests-toolbar {
+            background: rgba(15, 23, 42, 0.92);
         }
 
         .requests-channel-tabs,
@@ -1430,8 +1441,10 @@
         }
 
         .requests-layout {
+            margin-top: 0;
             overflow: hidden;
             border: 1px solid var(--requests-border);
+            border-top: 0;
             border-radius: 0 0 0.95rem 0.95rem;
             background: var(--requests-surface);
             box-shadow: 0 22px 52px rgba(15, 23, 42, 0.08);
@@ -1487,9 +1500,9 @@
         }
 
         .requests-layout {
-            gap: 1rem;
-            grid-template-columns: minmax(18rem, 21rem) minmax(0, 1fr);
-            min-height: min(47rem, calc(100vh - 12rem));
+            gap: 0;
+            grid-template-columns: minmax(20rem, 24rem) minmax(0, 1fr);
+            min-height: min(50rem, calc(100vh - 10.5rem));
         }
 
         .requests-list-shell,

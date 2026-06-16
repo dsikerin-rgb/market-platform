@@ -14,6 +14,7 @@ use Filament\Facades\Filament;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -71,11 +72,23 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
         $requestsQuery = TenantRequest::query()->where('market_id', $marketId);
         $requestsTable = (new TenantRequest())->getTable();
         $requestsStatusCol = $this->pickFirstExistingColumn($requestsTable, ['status']) ?? 'status';
-        $closedStatuses = ['resolved', 'closed'];
+        $closedStatuses = $this->closedRequestStatuses();
 
-        $openRequests = (clone $requestsQuery)
-            ->whereNotIn($requestsStatusCol, $closedStatuses)
-            ->count();
+        $openRequestsQuery = (clone $requestsQuery)
+            ->whereNotIn($requestsStatusCol, $closedStatuses);
+
+        if (Schema::hasColumn($requestsTable, 'ticket_id')) {
+            $openRequestsQuery->where(function (Builder $query) use ($closedStatuses): void {
+                $query
+                    ->whereNull('ticket_id')
+                    ->orWhereDoesntHave('ticket')
+                    ->orWhereHas('ticket', function (Builder $ticketQuery) use ($closedStatuses): void {
+                        $ticketQuery->whereNotIn('status', $closedStatuses);
+                    });
+            });
+        }
+
+        $openRequests = $openRequestsQuery->count();
 
         [$financialContourContracts, $financialContourWithoutSpace] = $this->resolveFinancialContourStats($marketId);
 
@@ -197,6 +210,14 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
         }
 
         return null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function closedRequestStatuses(): array
+    {
+        return ['resolved', 'closed', 'cancelled'];
     }
 
     /**
