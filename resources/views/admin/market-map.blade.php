@@ -23,6 +23,9 @@
     $spaceUrl  = $spaceUrl ?? '';
     $spacesUrl = $spacesUrl ?? '';
     $oneCExchangeWarning = is_array($oneCExchangeWarning ?? null) ? $oneCExchangeWarning : null;
+    $presenceUrl = route('filament.admin.market-map.presence');
+    $messageStatusUrl = route('filament.admin.market-map.message-status');
+    $messageInboxUrl = url('/admin/requests?' . http_build_query(['channel' => 'staff']));
   @endphp
 
   <meta charset="utf-8">
@@ -2402,6 +2405,156 @@
       appearance: textfield;
       -moz-appearance: textfield;
     }
+    .map-message-launcher {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 1200;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      background: rgba(224, 242, 254, 0.94);
+      color: #075985;
+      -webkit-text-fill-color: #075985;
+      box-shadow: 0 18px 42px rgba(14, 116, 144, 0.18);
+      font-size: 14px;
+      font-weight: 800;
+      text-decoration: none;
+      backdrop-filter: blur(12px);
+      transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    .map-message-launcher:hover {
+      transform: translateY(-1px);
+      background: rgba(186, 230, 253, 0.98);
+      box-shadow: 0 22px 48px rgba(14, 116, 144, 0.24);
+    }
+    .map-message-launcher__icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      color: #0284c7;
+      -webkit-text-fill-color: #0284c7;
+    }
+    .map-message-launcher__badge {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: #ef4444;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1;
+      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.28);
+    }
+    .map-message-launcher.has-unread .map-message-launcher__badge {
+      display: inline-flex;
+    }
+    .map-message-toast {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 1300;
+      width: min(360px, calc(100vw - 36px));
+      border: 1px solid rgba(14, 165, 233, 0.28);
+      border-radius: 18px;
+      background: rgba(240, 249, 255, 0.96);
+      color: #0f172a;
+      box-shadow: 0 24px 70px rgba(14, 116, 144, 0.22);
+      backdrop-filter: blur(14px);
+      opacity: 0;
+      pointer-events: none;
+      transform: translate3d(12px, -10px, 0);
+      transition: opacity .22s ease, transform .22s ease;
+    }
+    .map-message-toast.is-visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate3d(0, 0, 0);
+    }
+    .map-message-toast__inner {
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 14px;
+      align-items: start;
+    }
+    .map-message-toast__icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: #bae6fd;
+      color: #0369a1;
+      -webkit-text-fill-color: #0369a1;
+    }
+    .map-message-toast__title {
+      margin: 0;
+      color: #0f172a;
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+    .map-message-toast__body {
+      margin: 4px 0 0;
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .map-message-toast__actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .map-message-toast__open {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #0ea5e9;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .map-message-toast__close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(255, 255, 255, 0.64);
+      color: #64748b;
+      -webkit-text-fill-color: #64748b;
+      font-size: 18px;
+      line-height: 1;
+      box-shadow: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .map-message-launcher,
+      .map-message-toast {
+        transition: none;
+      }
+    }
     input[type="number"]::-webkit-outer-spin-button,
     input[type="number"]::-webkit-inner-spin-button{
       -webkit-appearance: none;
@@ -2412,6 +2565,33 @@
 
 <body>
   <div class="wrap">
+    <a id="mapMessageLauncher" class="map-message-launcher" href="{{ $messageInboxUrl }}" aria-label="Открыть диалоги">
+      <span class="map-message-launcher__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
+        </svg>
+      </span>
+      <span>Диалоги</span>
+      <span id="mapMessageBadge" class="map-message-launcher__badge" aria-live="polite"></span>
+    </a>
+
+    <div id="mapMessageToast" class="map-message-toast" role="status" aria-live="polite" aria-atomic="true">
+      <div class="map-message-toast__inner">
+        <div class="map-message-toast__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
+          </svg>
+        </div>
+        <div>
+          <p id="mapMessageToastTitle" class="map-message-toast__title">Новое сообщение</p>
+          <p id="mapMessageToastBody" class="map-message-toast__body"></p>
+          <div class="map-message-toast__actions">
+            <a id="mapMessageToastOpen" class="map-message-toast__open" href="{{ $messageInboxUrl }}">Открыть</a>
+          </div>
+        </div>
+        <button id="mapMessageToastClose" type="button" class="map-message-toast__close" aria-label="Закрыть уведомление">×</button>
+      </div>
+    </div>
 
     <script>
       document.addEventListener('DOMContentLoaded', function () {
@@ -2420,6 +2600,185 @@
         const settingsUrl = @json($settingsUrl ?? '');
         const fallbackUrl = returnUrl || settingsUrl || '';
         const oneCWarningModal = document.getElementById('mapOneCWarningModal');
+        const presenceUrl = @json($presenceUrl);
+        const messageStatusUrl = @json($messageStatusUrl);
+        const messageInboxUrl = @json($messageInboxUrl);
+        const mapUserId = @json((int) (auth()->id() ?? 0));
+        const mapMarketId = @json((int) $marketId);
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const messageLauncher = document.getElementById('mapMessageLauncher');
+        const messageBadge = document.getElementById('mapMessageBadge');
+        const messageToast = document.getElementById('mapMessageToast');
+        const messageToastTitle = document.getElementById('mapMessageToastTitle');
+        const messageToastBody = document.getElementById('mapMessageToastBody');
+        const messageToastOpen = document.getElementById('mapMessageToastOpen');
+        const messageToastClose = document.getElementById('mapMessageToastClose');
+        const latestMessageStorageKey = 'mp-map-latest-message:' + String(mapUserId) + ':' + String(mapMarketId);
+        let latestMessageKey = '';
+        let messageStatusInitialized = false;
+        let messageToastTimer = null;
+
+        try {
+          latestMessageKey = window.localStorage.getItem(latestMessageStorageKey) || '';
+        } catch (e) {
+          latestMessageKey = '';
+        }
+
+        async function pingMapPresence() {
+          if (!presenceUrl || document.visibilityState === 'hidden') {
+            return;
+          }
+
+          try {
+            await fetch(presenceUrl, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+              },
+            });
+          } catch (e) {
+            // ignore transient network errors
+          }
+        }
+
+        function setMessageBadge(count) {
+          const unreadCount = Number(count || 0);
+
+          if (!messageLauncher || !messageBadge) {
+            return;
+          }
+
+          if (unreadCount > 0) {
+            messageLauncher.classList.add('has-unread');
+            messageBadge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+          } else {
+            messageLauncher.classList.remove('has-unread');
+            messageBadge.textContent = '';
+          }
+        }
+
+        function rememberLatestMessage(key) {
+          latestMessageKey = String(key || '');
+
+          try {
+            if (latestMessageKey !== '') {
+              window.localStorage.setItem(latestMessageStorageKey, latestMessageKey);
+            }
+          } catch (e) {
+            // ignore storage failures
+          }
+        }
+
+        function hideMessageToast() {
+          if (!messageToast) {
+            return;
+          }
+
+          messageToast.classList.remove('is-visible');
+
+          if (messageToastTimer !== null) {
+            window.clearTimeout(messageToastTimer);
+            messageToastTimer = null;
+          }
+        }
+
+        function showMessageToast(message) {
+          if (!messageToast || !message) {
+            return;
+          }
+
+          const title = String(message.title || 'Новое сообщение');
+          const body = String(message.body || 'Откройте диалоги, чтобы прочитать сообщение.');
+          const url = String(message.url || messageInboxUrl || '/admin/requests');
+
+          if (messageToastTitle) {
+            messageToastTitle.textContent = title;
+          }
+
+          if (messageToastBody) {
+            messageToastBody.textContent = body;
+          }
+
+          if (messageToastOpen) {
+            messageToastOpen.href = url;
+          }
+
+          if (messageLauncher) {
+            messageLauncher.href = url;
+          }
+
+          messageToast.classList.add('is-visible');
+
+          if (messageToastTimer !== null) {
+            window.clearTimeout(messageToastTimer);
+          }
+
+          messageToastTimer = window.setTimeout(hideMessageToast, 10000);
+        }
+
+        async function pollMapMessages() {
+          if (!messageStatusUrl) {
+            return;
+          }
+
+          try {
+            const response = await fetch(messageStatusUrl, {
+              method: 'GET',
+              credentials: 'same-origin',
+              cache: 'no-store',
+              headers: {
+                'Accept': 'application/json',
+              },
+            });
+
+            if (!response.ok) {
+              return;
+            }
+
+            const payload = await response.json();
+            const unreadCount = Number(payload?.unread_count || 0);
+            const latest = payload?.latest || null;
+
+            setMessageBadge(unreadCount);
+
+            if (latest?.url && messageLauncher) {
+              messageLauncher.href = String(latest.url);
+            } else if (messageLauncher) {
+              messageLauncher.href = messageInboxUrl || '/admin/requests';
+            }
+
+            if (!messageStatusInitialized) {
+              messageStatusInitialized = true;
+
+              if (latest?.key) {
+                rememberLatestMessage(latest.key);
+              }
+
+              return;
+            }
+
+            if (latest?.key && latest.key !== latestMessageKey) {
+              rememberLatestMessage(latest.key);
+              showMessageToast(latest);
+            }
+          } catch (e) {
+            // ignore transient network errors
+          }
+        }
+
+        messageToastClose?.addEventListener('click', hideMessageToast);
+        pingMapPresence();
+        pollMapMessages();
+        window.setInterval(pingMapPresence, 30000);
+        window.setInterval(pollMapMessages, 15000);
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') {
+            pingMapPresence();
+            pollMapMessages();
+          }
+        });
 
         if (oneCWarningModal) {
           const storageKey = oneCWarningModal.dataset.storageKey || '';

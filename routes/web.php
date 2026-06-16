@@ -42,9 +42,11 @@ use App\Models\Operation;
 use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\StaffConversation;
+use App\Models\StaffConversationMessage;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
+use App\Notifications\TicketChatNotification;
 use App\Services\Debt\DebtAggregator;
 use App\Services\Ai\AiReviewService;
 use App\Support\StaffConversationService;
@@ -4548,6 +4550,133 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ]);
         }
     })->name('filament.admin.map-review-results.ai-review.regenerate');
+
+    /**
+     * Lightweight endpoints used by the standalone map page.
+     */
+    Route::post('/admin/market-map/presence', function () {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $now = now();
+
+        if (Schema::hasColumn('users', 'last_seen_at')) {
+            $lastSeenAt = $user->last_seen_at;
+
+            if (! $lastSeenAt || $lastSeenAt->lessThanOrEqualTo($now->copy()->subMinute())) {
+                DB::table('users')
+                    ->where('id', $user->getAuthIdentifier())
+                    ->update(['last_seen_at' => $now]);
+            }
+        }
+
+        return response()->json([
+            'ok' => true,
+            'last_seen_at' => $now->toIso8601String(),
+        ]);
+    })->name('filament.admin.market-map.presence');
+
+    Route::get('/admin/market-map/message-status', function () use ($resolveMarketForMap) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+
+        $market = $resolveMarketForMap();
+        $marketId = (int) ($market->id ?? 0);
+        $staffUnreadCount = 0;
+        $tenantUnreadCount = 0;
+        $latest = null;
+        $latestTimestamp = 0;
+
+        if (
+            Schema::hasTable('staff_conversations')
+            && Schema::hasTable('staff_conversation_messages')
+            && Schema::hasColumn('staff_conversation_messages', 'read_at')
+        ) {
+            $staffUnreadQuery = StaffConversationMessage::query()
+                ->with(['user:id,name,email', 'conversation:id,market_id,created_by_user_id,recipient_user_id,subject'])
+                ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
+                ->whereNull('staff_conversation_messages.read_at')
+                ->where('staff_conversation_messages.user_id', '<>', (int) $user->id)
+                ->where(function ($query) use ($user): void {
+                    $query
+                        ->where('staff_conversations.created_by_user_id', (int) $user->id)
+                        ->orWhere('staff_conversations.recipient_user_id', (int) $user->id);
+                })
+                ->when($marketId > 0, function ($query) use ($marketId) {
+                    return $query->where('staff_conversations.market_id', $marketId);
+                });
+
+            $staffUnreadCount = (int) (clone $staffUnreadQuery)->count('staff_conversation_messages.id');
+            $latestStaffMessage = (clone $staffUnreadQuery)
+                ->select('staff_conversation_messages.*')
+                ->latest('staff_conversation_messages.created_at')
+                ->first();
+
+            if ($latestStaffMessage instanceof StaffConversationMessage) {
+                $body = trim(preg_replace('/\s+/u', ' ', (string) $latestStaffMessage->body) ?? '');
+                $attachments = is_array($latestStaffMessage->attachments) ? $latestStaffMessage->attachments : [];
+                $conversationId = (int) $latestStaffMessage->staff_conversation_id;
+                $latestTimestamp = $latestStaffMessage->created_at?->getTimestamp() ?? 0;
+
+                $latest = [
+                    'key' => 'staff:' . (int) $latestStaffMessage->id,
+                    'title' => 'Новое сообщение от ' . (trim((string) $latestStaffMessage->user?->name) ?: 'сотрудника'),
+                    'body' => mb_substr($body !== '' ? $body : ($attachments !== [] ? 'Вложение' : 'Новое сообщение'), 0, 180),
+                    'url' => url('/admin/requests?' . http_build_query([
+                        'quick_chat' => 'staff',
+                        'channel' => 'staff',
+                        'conversation_id' => $conversationId,
+                    ])),
+                    'created_at' => $latestStaffMessage->created_at?->toIso8601String(),
+                ];
+            }
+        }
+
+        if (Schema::hasTable('notifications')) {
+            $tenantUnreadQuery = DB::table('notifications')
+                ->where('notifiable_type', User::class)
+                ->where('notifiable_id', (int) $user->id)
+                ->whereNull('read_at')
+                ->where('type', TicketChatNotification::class)
+                ->where('data->event_type', TicketChatNotification::EVENT_MESSAGE_CREATED)
+                ->when($marketId > 0, function ($query) use ($marketId) {
+                    return $query->where('data->market_id', $marketId);
+                });
+
+            $tenantUnreadCount = (int) (clone $tenantUnreadQuery)->count();
+            $latestTenantNotification = (clone $tenantUnreadQuery)
+                ->select(['id', 'data', 'created_at'])
+                ->orderByDesc('created_at')
+                ->first();
+
+            if ($latestTenantNotification) {
+                $data = is_string($latestTenantNotification->data)
+                    ? (json_decode($latestTenantNotification->data, true) ?: [])
+                    : (array) $latestTenantNotification->data;
+
+                $timestamp = strtotime((string) $latestTenantNotification->created_at) ?: 0;
+
+                if ($timestamp >= $latestTimestamp) {
+                    $body = trim(preg_replace('/\s+/u', ' ', (string) ($data['message'] ?? $data['body'] ?? '')) ?? '');
+                    $url = trim((string) ($data['url'] ?? ''));
+
+                    $latest = [
+                        'key' => 'tenant:' . (string) $latestTenantNotification->id,
+                        'title' => trim((string) ($data['title'] ?? 'Новое сообщение от арендатора')),
+                        'body' => mb_substr($body !== '' ? $body : 'Новое сообщение', 0, 180),
+                        'url' => $url !== '' ? $url : url('/admin/requests?' . http_build_query(['channel' => 'tenants'])),
+                        'created_at' => (string) $latestTenantNotification->created_at,
+                    ];
+                }
+            }
+        }
+
+        return response()->json([
+            'ok' => true,
+            'unread_count' => $staffUnreadCount + $tenantUnreadCount,
+            'latest' => $latest,
+        ]);
+    })->name('filament.admin.market-map.message-status');
 
     /**
      * Viewer карты рынка (рендер через Blade).
