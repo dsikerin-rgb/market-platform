@@ -56,6 +56,7 @@ use App\Services\MarketMap\SpaceReviewActionService;
 use App\Services\Marketplace\MarketplaceContextService;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use App\Support\MarketSpaces\MarketSpaceShapePolicy;
+use App\Support\AdminCapabilities;
 use App\Support\OneC\OneCDailyExchangeWarning;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
@@ -876,6 +877,40 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         ];
     };
 
+    $emptyMapFinancialStatus = static fn (): array => [
+        'space_effective_debt_status' => null,
+        'space_effective_debt_status_label' => null,
+        'space_effective_debt_status_mode' => 'auto',
+        'space_effective_debt_status_updated_at' => null,
+        'space_effective_debt_status_source' => null,
+        'space_effective_debt_overdue_days' => null,
+        'space_effective_debt_amount' => null,
+        'space_effective_debt_status_scope' => 'none',
+        'space_effective_tenant_debt_amount' => null,
+        'space_effective_tenant_debt_status' => null,
+        'space_effective_tenant_debt_updated_at' => null,
+        'space_effective_contract_id' => null,
+        'space_effective_contract_number' => null,
+        'space_effective_contract_url' => null,
+        'space_financial_source' => 'none',
+        'space_financial_source_space_id' => null,
+        'space_financial_source_space_number' => null,
+    ];
+
+    $emptyMapDebtStatus = static fn (): array => [
+        'mode' => 'auto',
+        'status' => null,
+        'label' => null,
+        'updated_at' => null,
+        'source' => null,
+        'severity' => 0,
+        'extra' => [
+            'scope' => 'none',
+            'overdue_days' => null,
+            'debt_amount' => null,
+        ],
+    ];
+
     $buildSharedUseSummary = static function (?MarketSpace $space): array {
         $empty = [
             'is_shared_use' => false,
@@ -1497,8 +1532,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * Слой разметки: список полигонов (PDF-координаты) для отрисовки поверх canvas.
      */
-    Route::get('/admin/market-map/shapes', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus) {
+    Route::get('/admin/market-map/shapes', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus, $emptyMapFinancialStatus, $emptyMapDebtStatus) {
         $market = $resolveMarketForMap();
+        $canViewFinance = AdminCapabilities::canViewFinance(Filament::auth()->user(), (int) $market->id);
 
         $validated = $request->validate([
             'page' => ['nullable', 'integer', 'min:1'],
@@ -1579,7 +1615,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $currentRentRatesBySpaceId = collect();
         $latestRentRatesBySpaceId = collect();
 
-        if ($spaceIds->isNotEmpty()) {
+        if ($canViewFinance && $spaceIds->isNotEmpty()) {
             $periodResolver = app(\App\Services\Operations\MarketPeriodResolver::class);
             $currentPeriodDate = $periodResolver->resolveMarketPeriod($market, null)->toDateString();
 
@@ -1618,34 +1654,29 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $mapReviewStatusLabel,
             $buildSpaceEffectiveOccupancy,
             $buildSpaceEffectiveFinancialStatus,
+            $emptyMapFinancialStatus,
+            $emptyMapDebtStatus,
+            $canViewFinance,
             $market
         ): array {
             $space = $s->market_space_id ? $spacesById->get((int) $s->market_space_id) : null;
             $tenant = $space?->tenant;
             $spaceId = $space?->id ? (int) $space->id : null;
             $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
-            $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
+            $effectiveFinancial = $canViewFinance ? $buildSpaceEffectiveFinancialStatus($space) : $emptyMapFinancialStatus();
 
             // Для каждого shape используем статус по конкретному месту
-            $resolver = app(DebtStatusResolver::class);
-            $resolvedDebt = $space
-                ? $resolver->resolveForMarketSpace($space->id, (int) $market->id)
-                : ($tenant
-                    ? $resolver->resolve($tenant)
-                    : [
-                        'mode' => 'auto',
-                        'status' => 'gray',
-                        'label' => 'Нет данных',
-                        'updated_at' => null,
-                        'source' => null,
-                        'severity' => 0,
-                        'extra' => ['scope' => 'none'],
-                    ]);
+            $resolver = $canViewFinance ? app(DebtStatusResolver::class) : null;
+            $resolvedDebt = $canViewFinance
+                ? ($space
+                    ? $resolver->resolveForMarketSpace($space->id, (int) $market->id)
+                    : ($tenant ? $resolver->resolve($tenant) : $emptyMapDebtStatus()))
+                : $emptyMapDebtStatus();
 
-            $rentRateValue = $space?->rent_rate_value !== null ? (float) $space->rent_rate_value : null;
-            $rentRateUnit = filled($space?->rent_rate_unit) ? (string) $space->rent_rate_unit : null;
+            $rentRateValue = $canViewFinance && $space?->rent_rate_value !== null ? (float) $space->rent_rate_value : null;
+            $rentRateUnit = $canViewFinance && filled($space?->rent_rate_unit) ? (string) $space->rent_rate_unit : null;
 
-            if ($spaceId && $rentRateValue === null) {
+            if ($canViewFinance && $spaceId && $rentRateValue === null) {
                 $currentRate = $currentRentRatesBySpaceId->get($spaceId);
                 if ($currentRate !== null) {
                     $rentRateValue = (float) $currentRate;
@@ -1727,8 +1758,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
      * - ?id=123
      * - ?number=П3/2  (по точному совпадению number либо code)
      */
-    Route::get('/admin/market-map/space', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildBindingRiskForSpace, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus) {
+    Route::get('/admin/market-map/space', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildBindingRiskForSpace, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus, $emptyMapFinancialStatus) {
         $market = $resolveMarketForMap();
+        $canViewFinance = AdminCapabilities::canViewFinance(Filament::auth()->user(), (int) $market->id);
 
         $validated = $request->validate([
             'id' => ['nullable', 'integer', 'min:1', 'required_without:number'],
@@ -1788,7 +1820,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
         }
 
-        $bindingRisk = $buildBindingRiskForSpace($market, $space);
+        $bindingRisk = $canViewFinance ? $buildBindingRiskForSpace($market, $space) : null;
         $spaceGroupRole = (string) ($space->space_group_role ?? '');
 
         return response()->json([
@@ -1813,7 +1845,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                         'name' => (string) ($tenantName ?? ''),
                     ] : null,
                     ...$buildSpaceEffectiveOccupancy($space),
-                    ...$buildSpaceEffectiveFinancialStatus($space),
+                    ...($canViewFinance ? $buildSpaceEffectiveFinancialStatus($space) : $emptyMapFinancialStatus()),
                     'binding_risk' => $bindingRisk,
                 ],
             ]);
@@ -1824,8 +1856,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
      * Поддерживает ?number= и ?q=.
      * Поддерживает ?without_shapes=1 для получения непройденных мест без фигур.
      */
-    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $hasMapReviewColumns, $bindingRiskWarnings, $buildBindingRiskForSpace, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus) {
+    Route::get('/admin/market-map/spaces', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $hasMapReviewColumns, $bindingRiskWarnings, $buildBindingRiskForSpace, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus, $emptyMapFinancialStatus) {
         $market = $resolveMarketForMap();
+        $canViewFinance = AdminCapabilities::canViewFinance(Filament::auth()->user(), (int) $market->id);
 
         $validated = $request->validate([
             'q' => ['nullable', 'string', 'max:64'],
@@ -1989,7 +2022,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $today = now()->toDateString();
 
             $activeContractSpaceIds = collect();
-            if (Schema::hasTable('tenant_contracts') && $spaceIds->isNotEmpty()) {
+            if ($canViewFinance && Schema::hasTable('tenant_contracts') && $spaceIds->isNotEmpty()) {
                 $activeContractSpaceIds = DB::table('tenant_contracts')
                     ->where('market_id', (int) $market->id)
                     ->whereIn('market_space_id', $spaceIds)
@@ -2003,7 +2036,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             }
 
             $accrualSpaceIds = collect();
-            if (Schema::hasTable('tenant_accruals') && $spaceIds->isNotEmpty()) {
+            if ($canViewFinance && Schema::hasTable('tenant_accruals') && $spaceIds->isNotEmpty()) {
                 $accrualSpaceIds = DB::table('tenant_accruals')
                     ->where('market_id', (int) $market->id)
                     ->whereIn('market_space_id', $spaceIds)
@@ -2015,10 +2048,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $activeContractSpaceIdSet = $activeContractSpaceIds->flip();
             $accrualSpaceIdSet = $accrualSpaceIds->flip();
 
-            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $activeContractSpaceIdSet, $accrualSpaceIdSet, $bindingRiskWarnings, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus): array {
+            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $activeContractSpaceIdSet, $accrualSpaceIdSet, $bindingRiskWarnings, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus, $emptyMapFinancialStatus, $canViewFinance): array {
                 $tenant = $space->tenant;
                 $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
-                $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
+                $effectiveFinancial = $canViewFinance ? $buildSpaceEffectiveFinancialStatus($space) : $emptyMapFinancialStatus();
 
                 $tenantName = null;
                 if ($tenant) {
@@ -2038,13 +2071,15 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 $debtStatusLabel = $debtStatus !== ''
                     ? (Tenant::DEBT_STATUS_LABELS[$debtStatus] ?? $debtStatus)
                     : null;
-                $bindingWarnings = $bindingRiskWarnings(
-                    $hasTenant,
-                    $hasActiveContract,
-                    $hasAccruals,
-                    $debtStatus !== '' ? $debtStatus : null,
-                    $debtStatusLabel,
-                );
+                $bindingWarnings = $canViewFinance
+                    ? $bindingRiskWarnings(
+                        $hasTenant,
+                        $hasActiveContract,
+                        $hasAccruals,
+                        $debtStatus !== '' ? $debtStatus : null,
+                        $debtStatusLabel,
+                    )
+                    : [];
 
                 $spaceGroupRole = (string) ($space->space_group_role ?? '');
 
@@ -2071,8 +2106,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                         'has_tenant' => $hasTenant,
                         'has_active_contract' => $hasActiveContract,
                         'has_accruals' => $hasAccruals,
-                        'debt_status' => $debtStatus !== '' ? $debtStatus : null,
-                        'debt_status_label' => $debtStatusLabel,
+                        'debt_status' => $canViewFinance && $debtStatus !== '' ? $debtStatus : null,
+                        'debt_status_label' => $canViewFinance ? $debtStatusLabel : null,
                         'requires_confirmation' => ! empty($bindingWarnings),
                         'warnings' => $bindingWarnings,
                     ],
@@ -2125,10 +2160,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
             $rows = $query->orderBy('number')->orderBy('id')->limit($limit)->get();
 
-            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $buildBindingRiskForSpace, $market, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus): array {
+            $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $buildBindingRiskForSpace, $market, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus, $emptyMapFinancialStatus, $canViewFinance): array {
                 $tenant = $space->tenant;
                 $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
-                $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
+                $effectiveFinancial = $canViewFinance ? $buildSpaceEffectiveFinancialStatus($space) : $emptyMapFinancialStatus();
 
                 $tenantName = null;
                 if ($tenant) {
@@ -2137,7 +2172,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     if ($tenantName === '') $tenantName = (string) ($tenant->name ?? '');
                 }
 
-                $bindingRisk = $buildBindingRiskForSpace($market, $space);
+                $bindingRisk = $canViewFinance ? $buildBindingRiskForSpace($market, $space) : null;
                 $spaceGroupRole = (string) ($space->space_group_role ?? '');
 
                 return [
@@ -2219,10 +2254,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->limit($limit)
             ->get(['id', 'number', 'code', 'display_name', 'area_sqm', 'status', 'tenant_id', 'space_group_role', 'space_group_parent_id']);
 
-        $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $buildBindingRiskForSpace, $market, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus): array {
+        $items = $rows->map(static function (MarketSpace $space) use ($mapReviewStatusLabel, $buildBindingRiskForSpace, $market, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus, $emptyMapFinancialStatus, $canViewFinance): array {
             $tenant = $space->tenant;
             $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
-            $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
+            $effectiveFinancial = $canViewFinance ? $buildSpaceEffectiveFinancialStatus($space) : $emptyMapFinancialStatus();
 
             $tenantName = null;
             if ($tenant) {
@@ -2235,7 +2270,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 }
             }
 
-            $bindingRisk = $buildBindingRiskForSpace($market, $space);
+            $bindingRisk = $canViewFinance ? $buildBindingRiskForSpace($market, $space) : null;
 
             $spaceGroupRole = (string) ($space->space_group_role ?? '');
 
@@ -2270,8 +2305,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * HIT-test: клик по карте -> поиск места по bbox + polygon.
      */
-    Route::get('/admin/market-map/hit', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus, $buildSharedUseSummary) {
+    Route::get('/admin/market-map/hit', function (Request $request) use ($resolveMarketForMap, $mapReviewStatusLabel, $buildSpaceEffectiveOccupancy, $buildSpaceEffectiveFinancialStatus, $buildSharedUseSummary, $emptyMapFinancialStatus, $emptyMapDebtStatus) {
         $market = $resolveMarketForMap();
+        $canViewFinance = AdminCapabilities::canViewFinance(Filament::auth()->user(), (int) $market->id);
 
         $validated = $request->validate([
             'x' => ['required', 'numeric'],
@@ -2439,7 +2475,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $effectiveOccupancy = $buildSpaceEffectiveOccupancy($space);
-        $effectiveFinancial = $buildSpaceEffectiveFinancialStatus($space);
+        $effectiveFinancial = $canViewFinance ? $buildSpaceEffectiveFinancialStatus($space) : $emptyMapFinancialStatus();
         $effectiveTenant = $space?->effectiveTenant();
         $effectiveTenantName = $space?->effectiveTenantName();
 
@@ -2448,21 +2484,14 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ? $financialContextSpace->tenant
             : null;
 
-        $resolver = app(DebtStatusResolver::class);
-        $resolvedDebt = $space
+        $resolver = $canViewFinance ? app(DebtStatusResolver::class) : null;
+        $resolvedDebt = $canViewFinance && $space
             ? $resolver->resolveForMarketSpace($space->id, (int) $market->id)
-            : [
-                'mode' => 'auto',
-                'status' => 'gray',
-                'label' => 'Нет данных',
-                'updated_at' => null,
-                'source' => null,
-                'severity' => 0,
-            ];
+            : $emptyMapDebtStatus();
 
         $locationName = null;
-        $rentRateValue = $financialContextSpace?->rent_rate_value !== null ? (float) $financialContextSpace->rent_rate_value : null;
-        $rentRateUnit = filled($financialContextSpace?->rent_rate_unit) ? (string) $financialContextSpace->rent_rate_unit : null;
+        $rentRateValue = $canViewFinance && $financialContextSpace?->rent_rate_value !== null ? (float) $financialContextSpace->rent_rate_value : null;
+        $rentRateUnit = $canViewFinance && filled($financialContextSpace?->rent_rate_unit) ? (string) $financialContextSpace->rent_rate_unit : null;
         $currentAccrualPeriod = null;
         $currentAccrualTotal = null;
         $currentAccrualMode = null;
@@ -2470,7 +2499,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         if ($space) {
             $locationName = filled($space->location?->name) ? (string) $space->location->name : null;
 
-            if (Schema::hasTable('tenant_accruals')) {
+            if ($canViewFinance && Schema::hasTable('tenant_accruals')) {
                 $periodResolver = app(\App\Services\Operations\MarketPeriodResolver::class);
                 $currentPeriod = $periodResolver->resolveMarketPeriod($market, null);
                 $currentAccrualPeriod = $currentPeriod->format('Y-m');
@@ -2565,8 +2594,32 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $sharedUse = $buildSharedUseSummary($space);
+        if (! $canViewFinance && is_array($sharedUse)) {
+            $sharedUse['financial_mode'] = null;
+            $sharedUse['participants'] = collect($sharedUse['participants'] ?? [])
+                ->map(static function (array $participant): array {
+                    unset(
+                        $participant['tenant_contract_id'],
+                        $participant['rent_rate'],
+                        $participant['debt_status'],
+                        $participant['debt_status_label'],
+                        $participant['debt_status_mode'],
+                        $participant['debt_status_source'],
+                        $participant['debt_status_scope'],
+                        $participant['financial_mode'],
+                        $participant['debt_amount'],
+                        $participant['debt_overdue_days'],
+                        $participant['contract_external_id'],
+                        $participant['contract_number'],
+                    );
+
+                    return $participant;
+                })
+                ->values()
+                ->all();
+        }
         $sharedUseFinancialParticipants = $resolvedDebt['extra']['participants'] ?? null;
-        if (($sharedUse['is_shared_use'] ?? false) && is_array($sharedUseFinancialParticipants)) {
+        if ($canViewFinance && ($sharedUse['is_shared_use'] ?? false) && is_array($sharedUseFinancialParticipants)) {
             $financialByBindingId = collect($sharedUseFinancialParticipants)
                 ->filter(static fn ($participant): bool => is_array($participant) && isset($participant['binding_id']))
                 ->keyBy(static fn (array $participant): int => (int) $participant['binding_id']);
@@ -4943,6 +4996,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $canOpenPdf = (bool) ($viewerUser
             && method_exists($viewerUser, 'isSuperAdmin')
             && $viewerUser->isSuperAdmin());
+        $canViewFinance = AdminCapabilities::canViewFinance($viewerUser, (int) $market->id);
 
         $oneCExchangeWarning = app(OneCDailyExchangeWarning::class)->build(
             (int) ($market->id ?? 0),
@@ -4955,6 +5009,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'marketName' => (string) ($market->name ?? 'Рынок'),
             'hasMap' => $hasMap,
             'canEdit' => (bool) $canEditShapes(),
+            'canViewFinance' => $canViewFinance,
             'canBindContracts' => (bool) $canBindContracts(),
             'mapMode' => $mode === 'review' ? 'review' : 'map',
             'canOpenPdf' => $canOpenPdf,

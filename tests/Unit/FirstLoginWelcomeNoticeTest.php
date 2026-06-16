@@ -11,14 +11,14 @@ use PHPUnit\Framework\TestCase;
 
 class FirstLoginWelcomeNoticeTest extends TestCase
 {
-    public function test_it_shows_for_new_user_without_seen_state(): void
+    public function test_it_shows_for_authenticated_user_without_seen_session_state(): void
     {
         $user = $this->makeUser([], '2026-06-15 12:00:00');
 
         self::assertTrue((new FirstLoginWelcomeNotice())->shouldShow($user));
     }
 
-    public function test_it_does_not_show_after_user_has_seen_current_version(): void
+    public function test_it_does_not_show_after_user_has_seen_it_in_current_session(): void
     {
         $user = $this->makeUser([
             FirstLoginWelcomeNotice::PREFERENCE_KEY => [
@@ -27,14 +27,14 @@ class FirstLoginWelcomeNoticeTest extends TestCase
             ],
         ], '2026-06-15 12:00:00');
 
-        self::assertFalse((new FirstLoginWelcomeNotice())->shouldShow($user));
+        self::assertFalse((new FirstLoginWelcomeNotice())->shouldShow($user, true));
     }
 
-    public function test_it_does_not_show_for_existing_users_created_before_rollout(): void
+    public function test_it_shows_for_existing_users_created_before_rollout(): void
     {
         $user = $this->makeUser([], '2026-06-14 23:59:59');
 
-        self::assertFalse((new FirstLoginWelcomeNotice())->shouldShow($user));
+        self::assertTrue((new FirstLoginWelcomeNotice())->shouldShow($user));
     }
 
     /**
