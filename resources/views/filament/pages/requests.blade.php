@@ -1211,6 +1211,12 @@
             min-width: 0;
         }
 
+        .requests-delete-form {
+            display: flex;
+            justify-content: flex-end;
+            padding-top: 0.25rem;
+        }
+
         .requests-assignee-label {
             font-size: 0.75rem;
             font-weight: 600;
@@ -2363,6 +2369,7 @@
                                 ->get()
                             : collect();
                         $canManageStatus = $canManageAssignee;
+                        $canDeleteTicket = $canManageAssignee;
                         $statusOptions = [
                             'new' => 'Новая',
                             'in_progress' => 'В работе',
@@ -2489,6 +2496,30 @@
                                             <strong>{{ $assignedTo !== '' ? $assignedTo : 'Не назначен' }}</strong>
                                         </span>
                                     </div>
+                                @endif
+
+                                @if ($canDeleteTicket)
+                                    <form
+                                        method="POST"
+                                        action="{{ route('filament.admin.requests.delete', ['ticket' => (int) $selectedTicket->id]) }}"
+                                        class="requests-delete-form"
+                                        onsubmit="return confirm('Удалить обращение без возможности восстановления? Комментарии и вложения тоже будут удалены.');"
+                                    >
+                                        @csrf
+                                        @if ($tenantFilterId > 0)
+                                            <input type="hidden" name="tenant_id" value="{{ $tenantFilterId }}">
+                                        @endif
+                                        @if ($statusFilter !== 'all')
+                                            <input type="hidden" name="status_redirect" value="{{ $statusFilter }}">
+                                        @endif
+                                        @if ($searchQuery !== '')
+                                            <input type="hidden" name="q" value="{{ $searchQuery }}">
+                                        @endif
+
+                                        <x-filament::button type="submit" color="danger" icon="heroicon-o-trash">
+                                            Удалить обращение
+                                        </x-filament::button>
+                                    </form>
                                 @endif
                             </div>
                         </div>
