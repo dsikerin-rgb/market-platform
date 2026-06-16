@@ -210,7 +210,8 @@ final class LooseSearch
 
     private static function normalizedSql(string $column, string $driver): string
     {
-        $expr = "lower(coalesce({$column}, ''))";
+        $valueSql = $driver === 'pgsql' ? "({$column})::text" : $column;
+        $expr = "lower(coalesce({$valueSql}, ''))";
 
         if ($driver === 'pgsql') {
             return "trim(regexp_replace(regexp_replace({$expr}, '[[:punct:]]+', ' ', 'g'), '[[:space:]]+', ' ', 'g'))";
