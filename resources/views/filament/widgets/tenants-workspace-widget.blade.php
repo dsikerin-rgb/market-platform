@@ -32,6 +32,7 @@
                         </a>
                     @endif
 
+                    @if ($contractsUrl)
                     <a href="{{ $contractsUrl }}" class="aw-link-card aw-link-card--tenant-action">
                         <div class="aw-link-icon aw-link-icon--tenant-action">
                             <x-filament::icon icon="heroicon-o-document-text" class="h-5 w-5" />
@@ -41,7 +42,9 @@
                             <p class="aw-link-copy aw-link-copy--tenant-action">Привязки к местам и договорный контур.</p>
                         </div>
                     </a>
+                    @endif
 
+                    @if ($accrualsUrl)
                     <a href="{{ $accrualsUrl }}" class="aw-link-card aw-link-card--tenant-action">
                         <div class="aw-link-icon aw-link-icon--tenant-action">
                             <x-filament::icon icon="heroicon-o-banknotes" class="h-5 w-5" />
@@ -51,6 +54,7 @@
                             <p class="aw-link-copy aw-link-copy--tenant-action">1С-начисления и строки без договора.</p>
                         </div>
                     </a>
+                    @endif
 
                     <a href="{{ $requestsUrl }}" class="aw-link-card aw-link-card--tenant-action">
                         <div class="aw-link-icon aw-link-icon--tenant-action">
