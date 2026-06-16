@@ -34,6 +34,13 @@ class EditMarketSpace extends BaseEditRecord
 
     protected ?string $pendingParentGroupMapShapeAction = null;
 
+    protected function authorizeAccess(): void
+    {
+        if (! MarketSpaceResource::canView($this->record)) {
+            abort(403);
+        }
+    }
+
     public function getTitle(): string|Htmlable
     {
         return $this->resolveSpaceHeading();
@@ -104,6 +111,8 @@ class EditMarketSpace extends BaseEditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        $this->abortIfReadOnly();
+
         $this->pendingParentGroupMapShapeAction = null;
 
         $parentGroupMapShapeAction = trim((string) ($data['parent_group_map_shape_action'] ?? ''));
@@ -187,6 +196,10 @@ class EditMarketSpace extends BaseEditRecord
 
     protected function afterSave(): void
     {
+        if ($this->isReadOnly()) {
+            return;
+        }
+
         $this->applyPendingParentGroupMapShapeResolution();
     }
 
@@ -268,6 +281,8 @@ class EditMarketSpace extends BaseEditRecord
 
     public function toggleMarketSpaceActiveState(): void
     {
+        $this->abortIfReadOnly();
+
         if (! $this->record) {
             return;
         }
@@ -288,6 +303,8 @@ class EditMarketSpace extends BaseEditRecord
 
     public function changeNumber(array $data): void
     {
+        $this->abortIfReadOnly();
+
         if (! $this->record instanceof MarketSpace) {
             throw ValidationException::withMessages([
                 'number' => 'Торговое место не найдено.',
@@ -337,6 +354,8 @@ class EditMarketSpace extends BaseEditRecord
 
     public function deleteMarketSpaceWithShapes(array $data): void
     {
+        $this->abortIfReadOnly();
+
         if (! $this->record instanceof MarketSpace) {
             return;
         }
@@ -410,6 +429,8 @@ class EditMarketSpace extends BaseEditRecord
 
     public function deleteMarketSpacePermanently(array $data): void
     {
+        $this->abortIfReadOnly();
+
         if (! $this->record instanceof MarketSpace) {
             return;
         }
@@ -457,6 +478,8 @@ class EditMarketSpace extends BaseEditRecord
 
     public function deactivateMarketSpaceAfterPrecheck(): void
     {
+        $this->abortIfReadOnly();
+
         if (! $this->record instanceof MarketSpace) {
             return;
         }
@@ -1147,6 +1170,8 @@ class EditMarketSpace extends BaseEditRecord
      */
     public function markSpaceFreeAfterPrecheck(array $data): void
     {
+        $this->abortIfReadOnly();
+
         if (! $this->record instanceof MarketSpace) {
             return;
         }
@@ -2148,6 +2173,34 @@ class EditMarketSpace extends BaseEditRecord
             }
         }
 
+        if ($this->isReadOnly()) {
+            $actionClass = class_exists(\Filament\Actions\Action::class)
+                ? \Filament\Actions\Action::class
+                : \Filament\Pages\Actions\Action::class;
+
+            $actions[] = $actionClass::make('readonly_hint')
+                ->label("\u{0422}\u{043E}\u{043B}\u{044C}\u{043A}\u{043E} \u{043F}\u{0440}\u{043E}\u{0441}\u{043C}\u{043E}\u{0442}\u{0440}")
+                ->color('gray')
+                ->disabled()
+                ->action(fn () => null);
+
+            if ($isMapLinked) {
+                $actions[] = $actionClass::make('openMap')
+                    ->label("\u{041F}\u{043E}\u{043A}\u{0430}\u{0437}\u{0430}\u{0442}\u{044C} \u{043D}\u{0430} \u{043A}\u{0430}\u{0440}\u{0442}\u{0435}")
+                    ->icon('heroicon-o-map')
+                    ->tooltip($mapStatus)
+                    ->size('lg')
+                    ->outlined()
+                    ->color('primary')
+                    ->extraAttributes([
+                        'class' => 'market-space-card-action market-space-card-action--primary',
+                    ])
+                    ->url($mapUrl, shouldOpenInNewTab: true);
+            }
+
+            return $actions;
+        }
+
         if (class_exists(\Filament\Actions\Action::class)) {
             $actions[] = \Filament\Actions\Action::make('active_state')
                 ->view('filament.resources.market-spaces.partials.active-state-toggle')
@@ -2300,6 +2353,27 @@ class EditMarketSpace extends BaseEditRecord
             static fn ($action): bool => ! method_exists($action, 'getName')
                 || ! in_array($action->getName(), ['delete', 'delete_with_shapes'], true),
         ));
+    }
+
+    protected function getFormActions(): array
+    {
+        if ($this->isReadOnly()) {
+            return [];
+        }
+
+        return parent::getFormActions();
+    }
+
+    protected function isReadOnly(): bool
+    {
+        return ! MarketSpaceResource::canEdit($this->record);
+    }
+
+    private function abortIfReadOnly(): void
+    {
+        if ($this->isReadOnly()) {
+            abort(403);
+        }
     }
 
     protected function getDangerZoneActions(): array

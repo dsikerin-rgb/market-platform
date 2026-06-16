@@ -3495,7 +3495,7 @@ class MarketSpaceResource extends BaseResource
                             ->all();
                     }),
             ])
-            ->recordUrl(fn (MarketSpace $record): ?string => static::canEdit($record)
+            ->recordUrl(fn (MarketSpace $record): ?string => static::canView($record)
                 ? static::getUrl('edit', ['record' => $record])
                 : null);
 
@@ -3508,6 +3508,7 @@ class MarketSpaceResource extends BaseResource
                 ->tooltip('Редактировать')
                 ->icon('heroicon-o-pencil-square')
                 ->color('gray')
+                ->visible(fn (MarketSpace $record): bool => static::canEdit($record))
                 ->iconButton();
 
             if (method_exists($editAction, 'slideOver')) {
@@ -3525,6 +3526,7 @@ class MarketSpaceResource extends BaseResource
                 ->tooltip('Редактировать')
                 ->icon('heroicon-o-pencil-square')
                 ->color('gray')
+                ->visible(fn (MarketSpace $record): bool => static::canEdit($record))
                 ->iconButton();
 
             if (method_exists($editAction, 'slideOver')) {
@@ -3621,6 +3623,21 @@ class MarketSpaceResource extends BaseResource
         $user = Filament::auth()->user();
 
         return AdminCapabilities::canManageMarketDirectory($user);
+    }
+
+    public static function canView($record): bool
+    {
+        if (! $record instanceof MarketSpace) {
+            return false;
+        }
+
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        return AdminCapabilities::canViewMarketDirectory($user, (int) ($record->market_id ?? 0));
     }
 
     public static function canEdit($record): bool
