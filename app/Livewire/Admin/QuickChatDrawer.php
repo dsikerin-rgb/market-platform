@@ -297,7 +297,7 @@ class QuickChatDrawer extends Component
         app(TicketAccessService::class)->scopeVisibleTo($query, $user);
         $this->scopeTicketSearch($query);
 
-        return $query->get()->toBase()->map(function (Ticket $ticket): array {
+        return $query->get()->toBase()->map(function (Ticket $ticket) use ($user): array {
             $subject = trim((string) $ticket->subject) !== ''
                 ? trim((string) $ticket->subject)
                 : 'Диалог с арендатором';
