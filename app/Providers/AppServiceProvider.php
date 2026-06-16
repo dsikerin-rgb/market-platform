@@ -21,6 +21,7 @@ use App\Observers\IntegrationExchangeObserver;
 use App\Observers\MarketSpaceGroupSharedUseObserver;
 use App\Observers\MarketSpaceTenantBindingSharedUseObserver;
 use App\Policies\TaskPolicy;
+use App\Support\Search\LooseSearch;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
@@ -94,9 +95,7 @@ class AppServiceProvider extends ServiceProvider
                     return response()->json(['ok' => true, 'items' => []]);
                 }
 
-                $queryText = trim(str_replace(['№', '#'], '', (string) ($validated['q'] ?? '')));
-                $queryText = trim(str_replace(["\n", "\r", "\t"], ' ', $queryText));
-                $queryText = trim((string) preg_replace('/\s+/u', ' ', $queryText));
+                $queryText = trim((string) ($validated['q'] ?? ''));
 
                 if ($queryText === '') {
                     return response()->json(['ok' => true, 'items' => []]);
@@ -105,41 +104,29 @@ class AppServiceProvider extends ServiceProvider
                 $limit = (int) ($validated['limit'] ?? 10);
                 $currentSpaceId = (int) ($validated['current_space_id'] ?? 0);
                 $isNumeric = ctype_digit($queryText);
-                $queryEscaped = str_replace(['%', '_'], ['\%', '\_'], $queryText);
-                $queryLike = '%' . $queryEscaped . '%';
-                $driverName = DB::connection()->getDriverName();
-                $orWhereNormalizedLike = static function ($query, string $column, string $value) use ($driverName): void {
-                    if ($driverName === 'pgsql') {
-                        $query->orWhereRaw("regexp_replace(coalesce({$column}, ''), '[[:space:]]+', ' ', 'g') like ?", [$value]);
-
-                        return;
-                    }
-
-                    $query->orWhere($column, 'like', $value);
-                };
-                $numberExactOrderSql = $driverName === 'pgsql'
-                    ? "CASE WHEN regexp_replace(coalesce(number, ''), '[[:space:]]+', ' ', 'g') = ? THEN 0 ELSE 1 END"
-                    : 'CASE WHEN number = ? THEN 0 ELSE 1 END';
+                $numberExactOrderSql = "CASE WHEN replace(trim(regexp_replace(regexp_replace(lower(coalesce(number, '')), '[[:punct:]]+', ' '), '[[:space:]]+', ' ')), ' ', '') = ? THEN 0 ELSE 1 END";
+                $exactOrderToken = LooseSearch::compact($queryText);
 
                 $spaces = MarketSpace::query()
                     ->with(['tenant:id,name,short_name'])
                     ->where('market_id', (int) $marketId)
                     ->where('is_active', true)
                     ->when($currentSpaceId > 0, fn ($query) => $query->whereKeyNot($currentSpaceId))
-                    ->where(function ($query) use ($isNumeric, $queryText, $queryLike, $orWhereNormalizedLike): void {
+                    ->where(function ($query) use ($isNumeric, $queryText): void {
                         if ($isNumeric) {
                             $query->orWhere('id', '=', (int) $queryText);
                         }
 
-                        $orWhereNormalizedLike($query, 'number', $queryLike);
-                        $orWhereNormalizedLike($query, 'code', $queryLike);
-                        $orWhereNormalizedLike($query, 'display_name', $queryLike);
-                        $query->orWhereHas('tenant', function ($tenantQuery) use ($queryLike, $orWhereNormalizedLike): void {
-                            $orWhereNormalizedLike($tenantQuery, 'name', $queryLike);
-                            $orWhereNormalizedLike($tenantQuery, 'short_name', $queryLike);
-                        });
+                        LooseSearch::applySearch($query, $queryText, [
+                            static function ($searchQuery, array $termPatterns): void {
+                                LooseSearch::orWhereMatchesColumns($searchQuery, ['number', 'code', 'display_name'], $termPatterns);
+                                $searchQuery->orWhereHas('tenant', function ($tenantQuery) use ($termPatterns): void {
+                                    LooseSearch::orWhereMatchesColumns($tenantQuery, ['name', 'short_name'], $termPatterns);
+                                });
+                            },
+                        ]);
                     })
-                    ->orderByRaw($numberExactOrderSql, [$queryText])
+                    ->orderByRaw($numberExactOrderSql, [$exactOrderToken])
                     ->orderBy('number')
                     ->orderBy('id')
                     ->limit($limit)

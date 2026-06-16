@@ -8,6 +8,7 @@ use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Support\OneC\AccrualPaymentReconciliationReport;
 use App\Support\AdminCapabilities;
+use App\Support\Search\LooseSearch;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
@@ -361,21 +362,12 @@ class OneCSettlements extends Page
 
     private function applySearch(Builder $query, string $search): void
     {
-        $search = mb_strtolower(trim($search));
-
-        if ($search === '') {
-            return;
-        }
-
-        $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $search) . '%';
-
-        $query->where(function (Builder $nested) use ($like): void {
-            $nested
-                ->whereRaw('lower(coalesce(tenant_name, ?)) like ?', ['', $like])
-                ->orWhereRaw('lower(coalesce(contract_name, ?)) like ?', ['', $like])
-                ->orWhereRaw('lower(coalesce(organization_name, ?)) like ?', ['', $like])
-                ->orWhereRaw('lower(coalesce(settlement_document_name, ?)) like ?', ['', $like]);
-        });
+        LooseSearch::applySearchToColumns($query, $search, [
+            'tenant_name',
+            'contract_name',
+            'organization_name',
+            'settlement_document_name',
+        ]);
     }
 
     private function applyTenantScope(Builder $query, ?int $tenantId): void

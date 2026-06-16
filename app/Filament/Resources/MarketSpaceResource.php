@@ -18,6 +18,7 @@ use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationsStateService;
 use App\Support\AdminCapabilities;
 use App\Support\MarketSpaces\MarketSpaceShapePolicy;
+use App\Support\Search\LooseSearch;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Grid;
@@ -3237,7 +3238,13 @@ class MarketSpaceResource extends BaseResource
                 TextColumn::make('location.name')
                     ->label('Локация')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => LooseSearch::applySearch($query, $search, [
+                        static function (Builder $searchQuery, array $termPatterns): void {
+                            $searchQuery->orWhereHas('location', function (Builder $locationQuery) use ($termPatterns): void {
+                                LooseSearch::orWhereMatchesColumn($locationQuery, 'name', $termPatterns);
+                            });
+                        },
+                    ]))
                     ->placeholder('—')
                     ->tooltip(fn (MarketSpace $record) => $record->location?->name ?: null),
 
@@ -3260,7 +3267,7 @@ class MarketSpaceResource extends BaseResource
                 TextColumn::make('display_name')
                     ->label('Название')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => LooseSearch::applySearchToColumns($query, $search, ['market_spaces.display_name']))
                     ->placeholder('—')
                     ->toggleable()
                     ->tooltip(fn (MarketSpace $record) => $record->display_name ?: null),
@@ -3268,7 +3275,7 @@ class MarketSpaceResource extends BaseResource
                 TextColumn::make('number')
                     ->label('Номер')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => LooseSearch::applySearchToColumns($query, $search, ['market_spaces.number', 'market_spaces.code']))
                     ->tooltip(fn (MarketSpace $record) => $record->number ?: null),
 
                 // Тип места описывает физический формат и не смешивается со статусом, группой или локацией.
@@ -3284,7 +3291,7 @@ class MarketSpaceResource extends BaseResource
                     ->label('Вид деятельности')
                     ->placeholder('—')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => LooseSearch::applySearchToColumns($query, $search, ['market_spaces.activity_type']))
                     ->toggleable()
                     ->tooltip(fn (MarketSpace $record) => $record->activity_type ?: null),
 
@@ -3292,14 +3299,14 @@ class MarketSpaceResource extends BaseResource
                     ->label('Группа мест')
                     ->placeholder('—')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => LooseSearch::applySearchToColumns($query, $search, ['market_spaces.space_group_token']))
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('space_group_slot')
                     ->label('Номер в группе')
                     ->placeholder('—')
                     ->sortable()
-                    ->searchable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => LooseSearch::applySearchToColumns($query, $search, ['market_spaces.space_group_slot']))
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('map_shape_policy')

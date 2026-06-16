@@ -15,6 +15,7 @@ use App\Models\MarketHoliday;
 use App\Models\Task;
 use App\Models\TaskParticipant;
 use App\Models\User;
+use App\Support\Search\LooseSearch;
 use App\Support\SystemAgentService;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -1473,7 +1474,7 @@ $assigneeColumn = TextColumn::make('assignee.name')
 
         $search = trim((string) $search);
         if ($search !== '') {
-            $query->where('name', 'like', '%' . addcslashes($search, '\\%_') . '%');
+            LooseSearch::applySearchToColumns($query, $search, ['name']);
         }
 
         return $query
