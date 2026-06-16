@@ -54,6 +54,9 @@ class StaffForm
                     ->revealable()
                     ->required(fn (string $operation, $get) => $operation === 'create' || filled($get('password')))
                     ->same('password')
+                    ->validationMessages([
+                        'same' => 'Пароль и подтверждение не совпадают.',
+                    ])
                     ->autocomplete('new-password')
                     ->dehydrated(false),
             ]),
