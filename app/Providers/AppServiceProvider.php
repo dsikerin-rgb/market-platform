@@ -34,6 +34,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\View\View;
 
@@ -46,6 +47,20 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Validator::replacer('confirmed', function (string $message, string $attribute): string {
+            return $this->isPasswordField($attribute)
+                ? 'Пароль и подтверждение не совпадают.'
+                : 'Подтверждение поля не совпадает.';
+        });
+
+        Validator::replacer('same', function (string $message, string $attribute, string $rule, array $parameters): string {
+            $other = (string) ($parameters[0] ?? '');
+
+            return $this->isPasswordConfirmationPair($attribute, $other)
+                ? 'Пароль и подтверждение не совпадают.'
+                : 'Значения полей не совпадают.';
+        });
+
         Gate::policy(Task::class, TaskPolicy::class);
         IntegrationExchange::observe(IntegrationExchangeObserver::class);
         MarketSpace::observe(MarketSpaceGroupSharedUseObserver::class);
@@ -343,5 +358,22 @@ class AppServiceProvider extends ServiceProvider
             fn (): View => view('filament.partials.map-review-retire-space-actions'),
             scopes: [MapReviewResults::class],
         );
+    }
+
+    private function isPasswordField(string $attribute): bool
+    {
+        $attribute = strtolower($attribute);
+
+        return $attribute === 'password'
+            || str_ends_with($attribute, '.password');
+    }
+
+    private function isPasswordConfirmationPair(string $attribute, string $other): bool
+    {
+        $attribute = strtolower($attribute);
+        $other = strtolower($other);
+
+        return ($attribute === 'password_confirmation' || str_ends_with($attribute, '.password_confirmation'))
+            && ($other === 'password' || str_ends_with($other, '.password'));
     }
 }
