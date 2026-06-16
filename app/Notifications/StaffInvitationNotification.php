@@ -37,17 +37,15 @@ class StaffInvitationNotification extends Notification
         $marketplaceSettings = is_array($marketSettings['marketplace'] ?? null)
             ? $marketSettings['marketplace']
             : [];
-        $brandName = MarketplaceSettingsValue::string($marketplaceSettings['brand_name'] ?? null, $marketName);
         $expiresAt = $this->invitation->expires_at?->timezone(config('app.timezone'))->format('d.m.Y H:i');
 
         return (new MailMessage())
-            ->subject('Приглашение в команду рынка «' . $marketName . '»')
+            ->subject('Приглашение в команду «' . $marketName . '»')
             ->view([
                 'mail.staff-invitation',
                 'mail.staff-invitation-text',
             ], [
                 'acceptUrl' => $this->acceptUrl,
-                'brandName' => $brandName !== '' ? $brandName : $marketName,
                 'expiresAt' => $expiresAt,
                 'logoUrl' => $this->logoUrl($marketplaceSettings),
                 'marketName' => $marketName,
@@ -61,6 +59,12 @@ class StaffInvitationNotification extends Notification
     {
         $logoPath = MarketplaceSettingsValue::nullablePath($marketplaceSettings['logo_path'] ?? null);
 
-        return $logoPath !== null ? MarketplaceMediaStorage::url($logoPath) : null;
+        if ($logoPath !== null) {
+            return MarketplaceMediaStorage::url($logoPath);
+        }
+
+        $defaultLogoPath = 'marketplace/brand/eko-fair-logo.svg';
+
+        return file_exists(public_path($defaultLogoPath)) ? asset($defaultLogoPath) : null;
     }
 }
