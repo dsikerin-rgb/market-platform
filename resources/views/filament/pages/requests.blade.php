@@ -1379,6 +1379,113 @@
             margin-top: 0.7rem;
         }
 
+        .requests-workspace {
+            gap: 0.85rem;
+        }
+
+        .requests-hero {
+            border-color: var(--requests-border);
+            border-radius: 0.95rem 0.95rem 0 0;
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: none;
+            padding: 0.85rem 1rem;
+        }
+
+        .dark .requests-hero {
+            background: rgba(15, 23, 42, 0.92);
+            box-shadow: none;
+        }
+
+        .requests-title-icon {
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 999px;
+        }
+
+        .requests-title-text h2 {
+            font-size: 1.18rem;
+            font-weight: 900;
+        }
+
+        .requests-toolbar {
+            margin-top: -0.45rem;
+        }
+
+        .requests-channel-tabs,
+        .requests-tabs {
+            border-radius: 999px;
+            background: rgba(248, 250, 252, 0.92);
+        }
+
+        .requests-tab {
+            border-radius: 999px;
+            min-height: 2rem;
+            padding: 0.42rem 0.75rem;
+            font-size: 0.84rem;
+            font-weight: 750;
+        }
+
+        .requests-search input[type="search"] {
+            border-radius: 999px;
+        }
+
+        .requests-layout {
+            overflow: hidden;
+            border: 1px solid var(--requests-border);
+            border-radius: 0 0 0.95rem 0.95rem;
+            background: var(--requests-surface);
+            box-shadow: 0 22px 52px rgba(15, 23, 42, 0.08);
+        }
+
+        .requests-list-shell,
+        .requests-chat-shell {
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+
+        .requests-list-shell {
+            border-right: 1px solid var(--requests-border) !important;
+        }
+
+        .requests-list-shell .fi-section-header,
+        .requests-chat-shell .fi-section-header {
+            background: rgba(255, 255, 255, 0.88);
+            padding: 0.85rem 1rem !important;
+        }
+
+        .dark .requests-list-shell .fi-section-header,
+        .dark .requests-chat-shell .fi-section-header {
+            background: rgba(15, 23, 42, 0.88);
+        }
+
+        .requests-ticket-card {
+            background: transparent;
+        }
+
+        .requests-ticket-card.is-selected {
+            background: #e0f2fe;
+        }
+
+        .requests-details-card {
+            background: rgba(255, 255, 255, 0.92);
+        }
+
+        .requests-actions-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 0.55rem;
+            padding-top: 0.25rem;
+        }
+
+        .requests-close-form,
+        .requests-delete-form {
+            display: flex;
+            justify-content: flex-end;
+        }
+
         .requests-layout {
             gap: 1rem;
             grid-template-columns: minmax(18rem, 21rem) minmax(0, 1fr);
@@ -2498,28 +2605,53 @@
                                     </div>
                                 @endif
 
-                                @if ($canDeleteTicket)
-                                    <form
-                                        method="POST"
-                                        action="{{ route('filament.admin.requests.delete', ['ticket' => (int) $selectedTicket->id]) }}"
-                                        class="requests-delete-form"
-                                        onsubmit="return confirm('Удалить обращение без возможности восстановления? Комментарии и вложения тоже будут удалены.');"
-                                    >
-                                        @csrf
-                                        @if ($tenantFilterId > 0)
-                                            <input type="hidden" name="tenant_id" value="{{ $tenantFilterId }}">
-                                        @endif
-                                        @if ($statusFilter !== 'all')
-                                            <input type="hidden" name="status_redirect" value="{{ $statusFilter }}">
-                                        @endif
-                                        @if ($searchQuery !== '')
-                                            <input type="hidden" name="q" value="{{ $searchQuery }}">
+                                @if ($canManageStatus || $canDeleteTicket)
+                                    <div class="requests-actions-row">
+                                        @if ($canManageStatus && ! in_array($status, ['resolved', 'closed', 'cancelled'], true))
+                                            <form
+                                                method="POST"
+                                                action="{{ route('filament.admin.requests.status', ['ticket' => (int) $selectedTicket->id]) }}"
+                                                class="requests-close-form"
+                                            >
+                                                @csrf
+                                                <input type="hidden" name="status" value="closed">
+                                                @if ($tenantFilterId > 0)
+                                                    <input type="hidden" name="tenant_id" value="{{ $tenantFilterId }}">
+                                                @endif
+                                                @if ($searchQuery !== '')
+                                                    <input type="hidden" name="q" value="{{ $searchQuery }}">
+                                                @endif
+
+                                                <x-filament::button type="submit" color="gray" icon="heroicon-o-lock-closed">
+                                                    Закрыть обращение
+                                                </x-filament::button>
+                                            </form>
                                         @endif
 
-                                        <x-filament::button type="submit" color="danger" icon="heroicon-o-trash">
-                                            Удалить обращение
-                                        </x-filament::button>
-                                    </form>
+                                        @if ($canDeleteTicket)
+                                            <form
+                                                method="POST"
+                                                action="{{ route('filament.admin.requests.delete', ['ticket' => (int) $selectedTicket->id]) }}"
+                                                class="requests-delete-form"
+                                                onsubmit="return confirm('Удалить обращение без возможности восстановления? Комментарии и вложения тоже будут удалены.');"
+                                            >
+                                                @csrf
+                                                @if ($tenantFilterId > 0)
+                                                    <input type="hidden" name="tenant_id" value="{{ $tenantFilterId }}">
+                                                @endif
+                                                @if ($statusFilter !== 'all')
+                                                    <input type="hidden" name="status_redirect" value="{{ $statusFilter }}">
+                                                @endif
+                                                @if ($searchQuery !== '')
+                                                    <input type="hidden" name="q" value="{{ $searchQuery }}">
+                                                @endif
+
+                                                <x-filament::button type="submit" color="danger" icon="heroicon-o-trash">
+                                                    Удалить обращение
+                                                </x-filament::button>
+                                            </form>
+                                        @endif
+                                    </div>
                                 @endif
                             </div>
                         </div>
