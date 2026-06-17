@@ -1,4 +1,5 @@
 <?php
+# app/Livewire/Admin/QuickChatDrawer.php
 
 declare(strict_types=1);
 
@@ -413,7 +414,20 @@ class QuickChatDrawer extends Component
                 $query->where('market_id', $marketId);
             }
         } else {
-            $query->where('market_id', (int) ($user->market_id ?? 0));
+            $marketId = (int) ($user->market_id ?? 0);
+            if ($marketId > 0) {
+                $query->where(function (Builder $query) use ($marketId): void {
+                    $query
+                        ->where('market_id', $marketId)
+                        ->orWhereHas('roles', function (Builder $roleQuery): void {
+                            $roleQuery->where('name', 'super-admin');
+                        });
+                });
+            } else {
+                $query->whereHas('roles', function (Builder $roleQuery): void {
+                    $roleQuery->where('name', 'super-admin');
+                });
+            }
         }
 
         return $query->get()
@@ -692,12 +706,32 @@ class QuickChatDrawer extends Component
             return false;
         }
 
+        if (! $this->isAllowedInternalStaffPeer($peer)) {
+            return false;
+        }
+
         if ($this->isSuperAdmin($user)) {
             return true;
         }
 
         return (int) ($user->market_id ?? 0) > 0
-            && (int) ($user->market_id ?? 0) === (int) ($peer->market_id ?? 0);
+            && (
+                (int) ($user->market_id ?? 0) === (int) ($peer->market_id ?? 0)
+                || $this->isSuperAdmin($peer)
+            );
+    }
+
+    private function isAllowedInternalStaffPeer(User $peer): bool
+    {
+        if ((int) ($peer->tenant_id ?? 0) > 0) {
+            return false;
+        }
+
+        if (! method_exists($peer, 'hasAnyRole')) {
+            return true;
+        }
+
+        return ! $peer->hasAnyRole(['merchant', 'merchant-user', 'tenant', 'buyer', 'user']);
     }
 
     private function staffPeerId(StaffConversation $conversation, User $user): int

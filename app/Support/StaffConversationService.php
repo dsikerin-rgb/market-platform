@@ -1,4 +1,5 @@
 <?php
+# app/Support/StaffConversationService.php
 
 declare(strict_types=1);
 
@@ -28,8 +29,10 @@ class StaffConversationService
 
         $resolvedSubject = $this->resolveSubject($subject, $body);
 
+        $marketId = $this->resolveConversationMarketId($author, $recipient);
+
         $conversation = StaffConversation::query()->create([
-            'market_id' => (int) $recipient->market_id,
+            'market_id' => $marketId,
             'created_by_user_id' => (int) $author->id,
             'recipient_user_id' => (int) $recipient->id,
             'subject' => $resolvedSubject,
@@ -46,6 +49,16 @@ class StaffConversationService
         );
 
         return $conversation;
+    }
+
+    private function resolveConversationMarketId(User $author, User $recipient): int
+    {
+        $marketId = (int) $recipient->market_id;
+        if ($marketId > 0) {
+            return $marketId;
+        }
+
+        return (int) $author->market_id;
     }
 
     /**
