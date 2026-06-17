@@ -18,6 +18,9 @@ Closed prod checkpoint:
 - group episodes exist as a read model and are used in contract history;
 - current group episodes were backfilled;
 - historical parent shape split into existing spaces is supported from the map editor;
+
+Related model spec for market common areas:
+- [Market space common areas / sanitary / shared facilities](market-space-common-areas.md)
 - `СТ2-4` was split into existing spaces `СТ 2` and `СТ 3` without activating `СТ2-4`, creating wrong names, or overwriting target areas.
 
 ## Closed Product Layer
