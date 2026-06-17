@@ -67,7 +67,7 @@ class RevenueYearChartWidget extends ChartWidget
 
         $parts = [
             'Период графика: до ' . $this->formatMonthLabel($selectedYm, $tz),
-            'Заполняемость площади: сданная арендуемая площадь / площадь, подлежащая сдаче',
+            'Заполняемость площади: по договорной истории',
         ];
 
         if ($selectedYm !== $currentYm) {
