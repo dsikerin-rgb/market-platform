@@ -1,4 +1,5 @@
 <?php
+# app/Filament/Resources/MarketSpaceTypeResource.php
 
 namespace App\Filament\Resources;
 
@@ -75,6 +76,16 @@ class MarketSpaceTypeResource extends BaseResource
         return $code;
     }
 
+    public static function categoryOptions(): array
+    {
+        return [
+            'commercial' => 'Торговое место',
+            'service' => 'Служебный объект',
+            'common_area' => 'Место общего пользования',
+            'infrastructure' => 'Инфраструктура',
+        ];
+    }
+
     public static function normalizeNameForLookup(string $name): string
     {
         $normalized = preg_replace('/\s+/u', ' ', trim($name));
@@ -147,6 +158,12 @@ class MarketSpaceTypeResource extends BaseResource
                 ->maxLength(255)
                 ->helperText('Тип отвечает на вопрос "что сдаётся". Локация отвечает на вопрос "где находится". Совпадение названий допустимо, если смысл разный.'),
 
+            Forms\Components\Select::make('category')
+                ->label('Категория')
+                ->options(static::categoryOptions())
+                ->default('commercial')
+                ->required(),
+
             Forms\Components\Select::make('unit')
                 ->label('Единица расчёта по умолчанию')
                 ->options([
@@ -196,6 +213,12 @@ class MarketSpaceTypeResource extends BaseResource
                     ->label('Название типа')
                     ->sortable()
                     ->searchable(),
+
+                TextColumn::make('category')
+                    ->label('Категория')
+                    ->formatStateUsing(fn (?string $state) => static::categoryOptions()[(string) $state] ?? $state)
+                    ->searchable()
+                    ->sortable(),
 
                 TextColumn::make('unit')
                     ->label('Единица расчёта')

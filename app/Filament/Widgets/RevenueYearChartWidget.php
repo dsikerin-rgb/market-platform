@@ -327,6 +327,14 @@ class RevenueYearChartWidget extends ChartWidget
      */
     private function buildPayableSeries(int $marketId, array $months): array
     {
+        $accountingSpaceIds = MarketSpaceDashboardMetrics::accountingSpacesQuery($marketId)
+            ->pluck('market_spaces.id')
+            ->unique()
+            ->values()
+            ->all();
+
+        $accountingSpaceIdSet = array_fill_keys(array_map('intval', $accountingSpaceIds), true);
+
         try {
             $rows = DB::table('contract_debts as d')
                 ->leftJoin('tenant_contracts as tc', function ($join): void {
@@ -364,12 +372,18 @@ class RevenueYearChartWidget extends ChartWidget
             $period = trim((string) ($row->period ?? ''));
             $periodStats[$period] ??= ['rows' => 0, 'payable' => 0.0, 'spaces' => []];
 
+            if ($row->market_space_id !== null) {
+                $marketSpaceId = (int) $row->market_space_id;
+
+                if (! isset($accountingSpaceIdSet[$marketSpaceId])) {
+                    continue;
+                }
+
+                $periodStats[$period]['spaces'][$marketSpaceId] = true;
+            }
+
             $periodStats[$period]['rows']++;
             $periodStats[$period]['payable'] += (float) ($row->accrued_amount ?? 0);
-
-            if ($row->market_space_id !== null) {
-                $periodStats[$period]['spaces'][(int) $row->market_space_id] = true;
-            }
         }
 
         $totalSpaces = MarketSpaceDashboardMetrics::accountingSpacesQuery($marketId)->count();
