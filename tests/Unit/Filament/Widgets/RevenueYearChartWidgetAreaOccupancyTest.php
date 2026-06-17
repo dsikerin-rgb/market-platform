@@ -61,13 +61,13 @@ class RevenueYearChartWidgetAreaOccupancyTest extends TestCase
 
         $market = $this->createMarketWithSingleLeasedSpace();
 
-        Role::findOrCreate('super-admin', 'web');
+        Role::findOrCreate('market-finance', 'web');
 
         $user = User::factory()->create([
             'market_id' => (int) $market->id,
             'email' => 'finance-area-widget@example.test',
         ]);
-        $user->assignRole('super-admin');
+        $user->assignRole('market-finance');
 
         Filament::setCurrentPanel(app(\Filament\Panel::class));
         auth()->login($user);
