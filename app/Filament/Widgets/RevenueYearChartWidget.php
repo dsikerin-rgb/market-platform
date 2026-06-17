@@ -7,8 +7,9 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
-use App\Models\MarketSpace;
 use App\Support\AdminCapabilities;
+use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
+use App\Support\MarketSpaces\MarketSpacePeriodEffectivenessService;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
@@ -21,12 +22,9 @@ class RevenueYearChartWidget extends ChartWidget
     use InteractsWithPageFilters;
     use ResolvesDashboardFilterMonth;
 
-    protected ?string $heading = 'Начислено по 1С и охват мест за 13 месяцев';
+    protected ?string $heading = 'Начислено по 1С и заполняемость площади за 13 месяцев';
 
-    protected int|string|array $columnSpan = [
-        'default' => 'full',
-        'lg' => 2,
-    ];
+    protected int|string|array $columnSpan = ['default' => 'full', 'lg' => 2];
 
     protected ?string $maxHeight = '320px';
 
@@ -57,10 +55,7 @@ class RevenueYearChartWidget extends ChartWidget
             return null;
         }
 
-        $market = Market::query()
-            ->select(['id', 'name', 'timezone'])
-            ->find($marketId);
-
+        $market = Market::query()->select(['id', 'name', 'timezone'])->find($marketId);
         if (! $market) {
             return null;
         }
@@ -72,6 +67,7 @@ class RevenueYearChartWidget extends ChartWidget
 
         $parts = [
             'Период графика: до ' . $this->formatMonthLabel($selectedYm, $tz),
+            'Заполняемость площади: сданная арендуемая площадь / площадь, подлежащая сдаче',
         ];
 
         if ($selectedYm !== $currentYm) {
@@ -98,17 +94,12 @@ class RevenueYearChartWidget extends ChartWidget
         }
 
         $marketId = $this->resolveMarketIdForWidget($user);
-
         if (! $marketId) {
             return $this->emptyChart('Выбери рынок');
         }
 
-        $market = Market::query()
-            ->select(['id', 'timezone'])
-            ->find($marketId);
-
+        $market = Market::query()->select(['id', 'timezone'])->find($marketId);
         $tz = $this->resolveTimezone($market?->timezone);
-
         [, $endMonthStart] = $this->resolveEndMonth($tz, $marketId);
 
         $months = [];
@@ -118,73 +109,28 @@ class RevenueYearChartWidget extends ChartWidget
             $cursor = $cursor->addMonth();
         }
 
-        $labels = array_map(
-            fn (string $ym): string => $this->formatMonthLabel($ym, $tz),
-            $months
-        );
+        $labels = array_map(fn (string $ym): string => $this->formatMonthLabel($ym, $tz), $months);
+        $areaData = app(MarketSpacePeriodEffectivenessService::class)
+            ->areaOccupancyPercentSeries($marketId, $months, $tz);
+        $payableData = Schema::hasTable('contract_debts')
+            ? $this->buildPayableSeries($marketId, $months)
+            : array_fill(0, count($months), null);
 
-        $totalSpaces = MarketSpace::query()
-            ->where('market_id', $marketId)
-            ->count();
-
-        if (! Schema::hasTable('contract_debts')) {
-            return $this->emptyTwoSeriesChart($labels, count($months));
-        }
-
-        // Строим данные для всех 13 месяцев (пустые месяцы будут с null)
-        [$payableData, $coveragePctData] = $this->buildDebtSeries($marketId, $months, $totalSpaces);
         $canViewFinance = AdminCapabilities::canViewFinance($user);
+        $hasAreaData = $this->hasAnyNumericData($areaData);
+        $hasPayableData = $this->hasAnyNumericData($payableData);
 
-        // Проверяем, есть ли хоть какие-то данные
-        $hasAnyData = false;
-        foreach ($payableData as $value) {
-            if ($value !== null) {
-                $hasAnyData = true;
-                break;
-            }
+        if (! $hasAreaData && (! $canViewFinance || ! $hasPayableData)) {
+            return $this->emptyChart('Нет данных для графика');
         }
 
-        if (! $hasAnyData) {
-            return $this->emptyChart('Нет данных 1С за выбранный период');
-        }
-
-        $datasets = [
-            [
-                'label' => 'Охват мест',
-                'data' => $coveragePctData,
-                'yAxisID' => 'y1',
-                'tension' => 0.25,
-                'fill' => false,
-                'borderColor' => '#60a5fa',
-                'backgroundColor' => '#60a5fa',
-                'pointRadius' => 2,
-                'borderWidth' => 2,
-                'spanGaps' => false,
-            ],
-        ];
+        $datasets = [$this->lineDataset('Заполняемость площади', $areaData, 'y1', '#60a5fa')];
 
         if ($canViewFinance) {
-            array_unshift(
-                $datasets,
-                [
-                    'label' => 'К оплате',
-                    'data' => $payableData,
-                    'yAxisID' => 'y',
-                    'tension' => 0.25,
-                    'fill' => false,
-                    'borderColor' => '#fbbf24',
-                    'backgroundColor' => '#fbbf24',
-                    'pointRadius' => 2,
-                    'borderWidth' => 2,
-                    'spanGaps' => false,
-                ],
-            );
+            array_unshift($datasets, $this->lineDataset('К оплате', $payableData, 'y', '#fbbf24'));
         }
 
-        return [
-            'labels' => $labels,
-            'datasets' => $datasets,
-        ];
+        return ['labels' => $labels, 'datasets' => $datasets];
     }
 
     protected function getOptions(): array
@@ -195,36 +141,18 @@ class RevenueYearChartWidget extends ChartWidget
             'responsive' => true,
             'maintainAspectRatio' => true,
             'aspectRatio' => 2.0,
-            'layout' => [
-                'padding' => 6,
-            ],
+            'layout' => ['padding' => 6],
             'plugins' => [
                 'legend' => [
                     'display' => true,
-                    'labels' => [
-                        'boxWidth' => 10,
-                        'boxHeight' => 10,
-                        'padding' => 10,
-                        'font' => ['size' => 11],
-                    ],
+                    'labels' => ['boxWidth' => 10, 'boxHeight' => 10, 'padding' => 10, 'font' => ['size' => 11]],
                 ],
-                'tooltip' => [
-                    'mode' => 'index',
-                    'intersect' => false,
-                ],
+                'tooltip' => ['mode' => 'index', 'intersect' => false],
             ],
-            'interaction' => [
-                'mode' => 'index',
-                'intersect' => false,
-            ],
+            'interaction' => ['mode' => 'index', 'intersect' => false],
             'scales' => [
                 'x' => [
-                    'ticks' => [
-                        'font' => ['size' => 10],
-                        'autoSkip' => false,
-                        'maxRotation' => 0,
-                        'minRotation' => 0,
-                    ],
+                    'ticks' => ['font' => ['size' => 10], 'autoSkip' => false, 'maxRotation' => 0, 'minRotation' => 0],
                     'grid' => ['display' => false],
                 ],
                 'y' => [
@@ -242,6 +170,26 @@ class RevenueYearChartWidget extends ChartWidget
                     'ticks' => ['font' => ['size' => 10]],
                 ],
             ],
+        ];
+    }
+
+    /**
+     * @param  list<float|int|null>  $data
+     * @return array<string, mixed>
+     */
+    private function lineDataset(string $label, array $data, string $axis, string $color): array
+    {
+        return [
+            'label' => $label,
+            'data' => $data,
+            'yAxisID' => $axis,
+            'tension' => 0.25,
+            'fill' => false,
+            'borderColor' => $color,
+            'backgroundColor' => $color,
+            'pointRadius' => 2,
+            'borderWidth' => 2,
+            'spanGaps' => false,
         ];
     }
 
@@ -265,29 +213,19 @@ class RevenueYearChartWidget extends ChartWidget
             $value = session('filament.admin.selected_market_id');
         }
 
-        if (filled($value)) {
-            return (int) $value;
-        }
-
-        return $this->resolveDefaultMarketId();
+        return filled($value) ? (int) $value : $this->resolveDefaultMarketId();
     }
 
     private function resolveDefaultMarketId(): ?int
     {
-        $marketId = Market::query()
-            ->orderBy('id')
-            ->value('id');
+        $marketId = Market::query()->orderBy('id')->value('id');
 
         return $marketId ? (int) $marketId : null;
     }
 
     private function resolveTimezone(?string $marketTimezone): string
     {
-        $tz = trim((string) $marketTimezone);
-
-        if ($tz === '') {
-            $tz = (string) config('app.timezone', 'UTC');
-        }
+        $tz = trim((string) $marketTimezone) ?: (string) config('app.timezone', 'UTC');
 
         try {
             CarbonImmutable::now($tz);
@@ -325,9 +263,7 @@ class RevenueYearChartWidget extends ChartWidget
             }
         }
 
-        $start = $this->parseMonthStart($ym, $tz);
-
-        return [$ym, $start];
+        return [$ym, $this->parseMonthStart($ym, $tz)];
     }
 
     private function formatMonthLabel(string $ym, string $tz): string
@@ -363,67 +299,33 @@ class RevenueYearChartWidget extends ChartWidget
             return null;
         }
 
-        return is_string($value) && preg_match('/^\d{4}-\d{2}$/', $value)
-            ? $value
-            : null;
+        return is_string($value) && preg_match('/^\d{4}-\d{2}$/', $value) ? $value : null;
     }
 
     private function emptyChart(string $label = 'Нет данных'): array
     {
-        return [
-            'labels' => [$label],
-            'datasets' => [
-                ['data' => [1]],
-            ],
-        ];
+        return ['labels' => [$label], 'datasets' => [['data' => [1]]]];
     }
 
-    private function emptyTwoSeriesChart(array $labels, int $count): array
+    /**
+     * @param  list<float|int|null>  $values
+     */
+    private function hasAnyNumericData(array $values): bool
     {
-        $datasets = [
-            [
-                'label' => 'Охват мест',
-                'data' => array_fill(0, $count, null),
-                'yAxisID' => 'y1',
-                'tension' => 0.25,
-                'fill' => false,
-                'borderColor' => '#60a5fa',
-                'backgroundColor' => '#60a5fa',
-                'pointRadius' => 2,
-                'borderWidth' => 2,
-                'spanGaps' => false,
-            ],
-        ];
-
-        if (AdminCapabilities::canViewFinance(Filament::auth()->user())) {
-            array_unshift(
-                $datasets,
-                [
-                    'label' => 'К оплате',
-                    'data' => array_fill(0, $count, null),
-                    'yAxisID' => 'y',
-                    'tension' => 0.25,
-                    'fill' => false,
-                    'borderColor' => '#fbbf24',
-                    'backgroundColor' => '#fbbf24',
-                    'pointRadius' => 2,
-                    'borderWidth' => 2,
-                    'spanGaps' => false,
-                ],
-            );
+        foreach ($values as $value) {
+            if ($value !== null && is_numeric($value)) {
+                return true;
+            }
         }
 
-        return [
-            'labels' => $labels,
-            'datasets' => $datasets,
-        ];
+        return false;
     }
 
     /**
      * @param  list<string>  $months
-     * @return array{0: list<int|null>, 1: list<float|null>}
+     * @return list<int|null>
      */
-    private function buildDebtSeries(int $marketId, array $months, int $totalSpaces): array
+    private function buildPayableSeries(int $marketId, array $months): array
     {
         try {
             $rows = DB::table('contract_debts as d')
@@ -436,18 +338,10 @@ class RevenueYearChartWidget extends ChartWidget
                 ->orderBy('d.period')
                 ->orderBy('d.contract_external_id')
                 ->orderByDesc('d.calculated_at')
-                ->select([
-                    'd.period',
-                    'd.contract_external_id',
-                    'd.accrued_amount',
-                    'tc.market_space_id',
-                ])
+                ->select(['d.period', 'd.contract_external_id', 'd.accrued_amount', 'tc.market_space_id'])
                 ->get();
         } catch (\Throwable) {
-            return [
-                array_fill(0, count($months), null),
-                array_fill(0, count($months), null),
-            ];
+            return array_fill(0, count($months), null);
         }
 
         $latestByContractPeriod = [];
@@ -461,24 +355,14 @@ class RevenueYearChartWidget extends ChartWidget
             }
 
             $key = $period . '|' . $contractExternalId;
-
-            if (! array_key_exists($key, $latestByContractPeriod)) {
-                $latestByContractPeriod[$key] = $row;
-            }
+            $latestByContractPeriod[$key] ??= $row;
         }
 
         $periodStats = [];
 
         foreach ($latestByContractPeriod as $row) {
             $period = trim((string) ($row->period ?? ''));
-
-            if (! isset($periodStats[$period])) {
-                $periodStats[$period] = [
-                    'rows' => 0,
-                    'payable' => 0.0,
-                    'spaces' => [],
-                ];
-            }
+            $periodStats[$period] ??= ['rows' => 0, 'payable' => 0.0, 'spaces' => []];
 
             $periodStats[$period]['rows']++;
             $periodStats[$period]['payable'] += (float) ($row->accrued_amount ?? 0);
@@ -488,38 +372,20 @@ class RevenueYearChartWidget extends ChartWidget
             }
         }
 
+        $totalSpaces = MarketSpaceDashboardMetrics::accountingSpacesQuery($marketId)->count();
         $periodStats = $this->filterLeadingIncompleteDebtPeriods($periodStats, $totalSpaces);
 
         $payableData = [];
-        $coveragePctData = [];
-
         foreach ($months as $month) {
-            if (! isset($periodStats[$month])) {
-                $payableData[] = null;
-                $coveragePctData[] = null;
-                continue;
-            }
-
-            $payableData[] = (int) round($periodStats[$month]['payable']);
-
-            if ($totalSpaces <= 0) {
-                $coveragePctData[] = null;
-                continue;
-            }
-
-            $occupied = count($periodStats[$month]['spaces']);
-            $coveragePctData[] = round(($occupied / $totalSpaces) * 100, 1);
+            $payableData[] = isset($periodStats[$month])
+                ? (int) round($periodStats[$month]['payable'])
+                : null;
         }
 
-        $coveragePctData = $this->nullLeadingZeroCoveragePoints($coveragePctData);
-
-        return [$payableData, $coveragePctData];
+        return $payableData;
     }
 
     /**
-     * The earliest debt snapshots can be partial and look like tiny but real values.
-     * Keep the leading outlier months out of the chart so we do not misrepresent them as final data.
-     *
      * @param  array<string, array{rows:int,payable:float,spaces:array<int,true>}>  $periodStats
      * @return array<string, array{rows:int,payable:float,spaces:array<int,true>}>
      */
@@ -546,7 +412,6 @@ class RevenueYearChartWidget extends ChartWidget
         $rowsThreshold = $maxRows > 0 ? max(2, (int) ceil($maxRows * 0.2)) : 0;
         $payableThreshold = $maxPayable > 0 ? max(1.0, $maxPayable * 0.2) : 0.0;
         $coverageThreshold = $maxCoverage > 0 ? max(1.0, $maxCoverage * 0.2) : 0.0;
-
         $filtered = [];
         $stillLeading = true;
 
@@ -577,45 +442,10 @@ class RevenueYearChartWidget extends ChartWidget
      */
     private function calculateDebtCoveragePct(array $stat, int $totalSpaces): float
     {
-        if ($totalSpaces <= 0) {
-            return 0.0;
-        }
-
         $spaces = isset($stat['spaces']) && is_array($stat['spaces'])
             ? count($stat['spaces'])
             : 0;
 
-        return round(($spaces / $totalSpaces) * 100, 1);
-    }
-
-    /**
-     * If the first visible coverage points are exact zeros, but later months do have
-     * positive coverage, treat those zeros as incomplete data rather than a real 0%.
-     *
-     * @param  list<float|null>  $coveragePctData
-     * @return list<float|null>
-     */
-    private function nullLeadingZeroCoveragePoints(array $coveragePctData): array
-    {
-        $firstPositiveIndex = null;
-
-        foreach ($coveragePctData as $index => $value) {
-            if (is_numeric($value) && (float) $value > 0.0) {
-                $firstPositiveIndex = $index;
-                break;
-            }
-        }
-
-        if ($firstPositiveIndex === null) {
-            return $coveragePctData;
-        }
-
-        for ($i = 0; $i < $firstPositiveIndex; $i++) {
-            if (isset($coveragePctData[$i]) && is_numeric($coveragePctData[$i]) && (float) $coveragePctData[$i] <= 0.0) {
-                $coveragePctData[$i] = null;
-            }
-        }
-
-        return $coveragePctData;
+        return $totalSpaces > 0 ? round(($spaces / $totalSpaces) * 100, 1) : 0.0;
     }
 }
