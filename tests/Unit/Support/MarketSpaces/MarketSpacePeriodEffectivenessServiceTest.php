@@ -133,4 +133,123 @@ class MarketSpacePeriodEffectivenessServiceTest extends TestCase
         self::assertSame(21.1, $series[1]);
         self::assertNull($series[2]);
     }
+
+    #[Test]
+    public function it_uses_1c_debt_periods_as_historical_area_snapshots_by_unique_spaces(): void
+    {
+        if (! Schema::hasTable('contract_debts')) {
+            self::markTestSkipped('contract_debts table is not available in this test database.');
+        }
+
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant',
+            'is_active' => true,
+        ]);
+
+        $spaceA = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'A1',
+            'area_sqm' => 100,
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        $spaceB = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'B1',
+            'area_sqm' => 50,
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        $spaceC = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'C1',
+            'area_sqm' => 50,
+            'status' => 'vacant',
+            'is_active' => true,
+        ]);
+
+        TenantContract::query()->create([
+            'external_id' => 'contract-a',
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $spaceA->id,
+            'number' => 'A1-2026',
+            'status' => 'active',
+            'starts_at' => '2026-06-01',
+            'ends_at' => null,
+            'is_active' => true,
+        ]);
+
+        TenantContract::query()->create([
+            'external_id' => 'contract-b',
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $spaceB->id,
+            'number' => 'B1-2026',
+            'status' => 'active',
+            'starts_at' => '2026-06-01',
+            'ends_at' => null,
+            'is_active' => true,
+        ]);
+
+        TenantContract::query()->create([
+            'external_id' => 'contract-excluded',
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $spaceC->id,
+            'space_mapping_mode' => TenantContract::SPACE_MAPPING_MODE_EXCLUDED,
+            'number' => 'C1-2026',
+            'status' => 'active',
+            'starts_at' => '2026-06-01',
+            'ends_at' => null,
+            'is_active' => true,
+        ]);
+
+        $this->insertDebtRow($market, $tenant, 'contract-a', '2026-03', '2026-03-30 00:00:00', 1000);
+        $this->insertDebtRow($market, $tenant, 'contract-a', '2026-03', '2026-03-31 00:00:00', 2000);
+        $this->insertDebtRow($market, $tenant, 'contract-b', '2026-03', '2026-03-31 00:00:00', 3000);
+        $this->insertDebtRow($market, $tenant, 'contract-a', '2026-04', '2026-04-30 00:00:00', 4000);
+        $this->insertDebtRow($market, $tenant, 'contract-excluded', '2026-04', '2026-04-30 00:00:00', 5000);
+        $this->insertDebtRow($market, $tenant, 'contract-missing', '2026-05', '2026-05-31 00:00:00', 6000);
+
+        $series = app(MarketSpacePeriodEffectivenessService::class)
+            ->areaOccupancyPercentSeries((int) $market->id, ['2026-03', '2026-04', '2026-05', '2026-06'], 'Europe/Moscow');
+
+        self::assertSame(75.0, $series[0]);
+        self::assertSame(50.0, $series[1]);
+        self::assertNull($series[2]);
+        self::assertSame(75.0, $series[3]);
+    }
+
+    private function insertDebtRow(
+        Market $market,
+        Tenant $tenant,
+        string $contractExternalId,
+        string $period,
+        string $calculatedAt,
+        int $amount,
+    ): void {
+        DB::table('contract_debts')->insert([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'tenant_external_id' => 'tenant-' . $tenant->id,
+            'contract_external_id' => $contractExternalId,
+            'period' => $period,
+            'accrued_amount' => $amount,
+            'paid_amount' => 0,
+            'debt_amount' => $amount,
+            'calculated_at' => $calculatedAt,
+            'hash' => hash('sha256', $contractExternalId . '|' . $period . '|' . $calculatedAt),
+            'source' => '1c',
+        ]);
+    }
 }

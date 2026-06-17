@@ -31,16 +31,25 @@ class MarketSpacePeriodEffectivenessService
             return array_fill(0, count($months), null);
         }
 
-        $leasedAreasByMonth = $this->loadLeasedAreasByMonth($marketId, $months, $tz, $spaces);
+        $debtAreasByMonth = $this->loadContractDebtAreasByMonth($marketId, $months, $spaces);
+        $dateAreasByMonth = $this->loadContractDateAreasByMonth($marketId, $months, $tz, $spaces);
         $series = [];
 
         foreach ($months as $month) {
-            if (! array_key_exists($month, $leasedAreasByMonth)) {
+            if (array_key_exists($month, $debtAreasByMonth)) {
+                $leasedArea = $debtAreasByMonth[$month];
+            } elseif (array_key_exists($month, $dateAreasByMonth)) {
+                $leasedArea = $dateAreasByMonth[$month];
+            } else {
+                $leasedArea = null;
+            }
+
+            if ($leasedArea === null) {
                 $series[] = null;
                 continue;
             }
 
-            $leasedArea = min((float) $leasedAreasByMonth[$month], $rentableArea);
+            $leasedArea = min((float) $leasedArea, $rentableArea);
             $series[] = round(($leasedArea / $rentableArea) * 100, 1);
         }
 
@@ -95,9 +104,110 @@ class MarketSpacePeriodEffectivenessService
     /**
      * @param  list<string>  $months
      * @param  array<int, array{area_sqm:float,status:string}>  $spaces
+     * @return array<string, float|null>
+     */
+    private function loadContractDebtAreasByMonth(int $marketId, array $months, array $spaces): array
+    {
+        if (
+            $months === []
+            || $spaces === []
+            || ! Schema::hasTable('contract_debts')
+            || ! Schema::hasTable('tenant_contracts')
+        ) {
+            return [];
+        }
+
+        $select = [
+            'd.period',
+            'd.contract_external_id',
+            'tc.market_space_id',
+        ];
+
+        if (Schema::hasColumn('tenant_contracts', 'space_mapping_mode')) {
+            $select[] = 'tc.space_mapping_mode';
+        }
+
+        $rows = DB::table('contract_debts as d')
+            ->leftJoin('tenant_contracts as tc', function ($join): void {
+                $join->on('tc.market_id', '=', 'd.market_id')
+                    ->on('tc.external_id', '=', 'd.contract_external_id');
+            })
+            ->where('d.market_id', $marketId)
+            ->whereIn('d.period', $months)
+            ->orderBy('d.period')
+            ->orderBy('d.contract_external_id')
+            ->orderByDesc('d.calculated_at')
+            ->select($select)
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $latestByContractPeriod = [];
+        $periodsWithRows = [];
+
+        foreach ($rows as $row) {
+            $period = trim((string) ($row->period ?? ''));
+            $contractExternalId = trim((string) ($row->contract_external_id ?? ''));
+
+            if ($period === '' || $contractExternalId === '') {
+                continue;
+            }
+
+            $periodsWithRows[$period] = true;
+            $key = $period . '|' . $contractExternalId;
+            $latestByContractPeriod[$key] ??= $row;
+        }
+
+        $occupiedByMonthSpace = [];
+
+        foreach ($latestByContractPeriod as $row) {
+            $period = trim((string) ($row->period ?? ''));
+
+            if ($period === '') {
+                continue;
+            }
+
+            if ($this->contractDebtRowUsesExcludedSpaceMapping($row)) {
+                continue;
+            }
+
+            $spaceId = (int) ($row->market_space_id ?? 0);
+            if (! isset($spaces[$spaceId])) {
+                continue;
+            }
+
+            $occupiedByMonthSpace[$period][$spaceId] = (float) $spaces[$spaceId]['area_sqm'];
+        }
+
+        $result = [];
+
+        foreach (array_keys($periodsWithRows) as $period) {
+            $spacesForMonth = $occupiedByMonthSpace[$period] ?? [];
+            $result[$period] = $spacesForMonth !== []
+                ? array_sum($spacesForMonth)
+                : null;
+        }
+
+        return $result;
+    }
+
+    private function contractDebtRowUsesExcludedSpaceMapping(object $row): bool
+    {
+        if (! property_exists($row, 'space_mapping_mode')) {
+            return false;
+        }
+
+        return trim((string) ($row->space_mapping_mode ?? '')) === 'excluded';
+    }
+
+    /**
+     * @param  list<string>  $months
+     * @param  array<int, array{area_sqm:float,status:string}>  $spaces
      * @return array<string, float>
      */
-    private function loadLeasedAreasByMonth(int $marketId, array $months, string $tz, array $spaces): array
+    private function loadContractDateAreasByMonth(int $marketId, array $months, string $tz, array $spaces): array
     {
         if ($months === [] || $spaces === [] || ! Schema::hasTable('tenant_contracts')) {
             return [];
@@ -247,7 +357,6 @@ class MarketSpacePeriodEffectivenessService
         }
 
         sort($areas, SORT_NUMERIC);
-
         $index = (int) floor((count($areas) - 1) * 0.95);
         $p95 = (float) ($areas[$index] ?? 0.0);
 
