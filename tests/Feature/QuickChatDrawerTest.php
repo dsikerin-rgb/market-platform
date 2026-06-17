@@ -1,4 +1,5 @@
 <?php
+# tests/Feature/QuickChatDrawerTest.php
 
 declare(strict_types=1);
 
@@ -217,6 +218,11 @@ class QuickChatDrawerTest extends TestCase
         ]);
 
         $admin = $this->actingAsMarketAdmin($market);
+        $market->forceFill([
+            'settings' => [
+                'request_notification_recipient_user_ids' => [(int) $admin->id],
+            ],
+        ])->save();
 
         $ticket = Ticket::query()->create([
             'market_id' => (int) $market->id,
@@ -238,8 +244,8 @@ class QuickChatDrawerTest extends TestCase
                 'ticket_id' => (int) $ticket->id,
                 'market_id' => (int) $market->id,
                 'event_type' => TicketChatNotification::EVENT_MESSAGE_CREATED,
-                'title' => 'Новое сообщение в чате',
-                'message' => 'Арендатор написал сообщение',
+                'title' => 'New chat message',
+                'message' => 'Tenant wrote a message',
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
             'read_at' => null,
             'created_at' => now(),
@@ -340,19 +346,89 @@ class QuickChatDrawerTest extends TestCase
         ]);
 
         $this->actingAsSuperAdmin();
+        Role::findOrCreate('market-admin', 'web');
 
-        User::factory()->create([
-            'name' => 'Фриц Юрий Александрович',
+        $staffCandidate = User::factory()->create([
+            'name' => 'Searchable Staff Candidate',
             'market_id' => (int) $market->id,
             'tenant_id' => null,
-            'email' => 'friz2009@example.test',
+            'email' => 'searchable-staff-candidate@example.test',
         ]);
+        $staffCandidate->assignRole('market-admin');
 
         Livewire::test(QuickChatDrawer::class)
             ->call('openDrawer')
-            ->set('search', 'Фри')
-            ->assertSee('Фриц Юрий Александрович')
-            ->assertSee('Новый диалог');
+            ->set('search', 'Searchable')
+            ->assertSee('Searchable Staff Candidate');
+    }
+
+    public function test_staff_can_start_staff_dialog_with_super_admin_without_market_id(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+
+        Role::findOrCreate('super-admin', 'web');
+
+        $superAdmin = User::factory()->create([
+            'name' => 'Internal Super Admin',
+            'market_id' => null,
+            'tenant_id' => null,
+            'email' => 'internal-super-admin-qa@example.test',
+        ]);
+        $superAdmin->assignRole('super-admin');
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'staff', (int) $superAdmin->id)
+            ->assertSet('isOpen', true)
+            ->assertSet('selectedType', 'staff')
+            ->assertSet('selectedId', (int) $superAdmin->id)
+            ->assertSeeHtml('class="quick-chat__composer"')
+            ->set('messageBody', 'Hello from staff')
+            ->call('sendMessage')
+            ->assertHasNoErrors()
+            ->assertSee('Hello from staff');
+
+        $this->assertDatabaseHas('staff_conversations', [
+            'market_id' => (int) $market->id,
+            'created_by_user_id' => (int) $admin->id,
+            'recipient_user_id' => (int) $superAdmin->id,
+        ]);
+
+        $this->assertDatabaseHas('staff_conversation_messages', [
+            'user_id' => (int) $admin->id,
+            'body' => 'Hello from staff',
+        ]);
+    }
+
+    public function test_staff_cannot_open_dialog_with_merchant_role(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        Role::findOrCreate('merchant', 'web');
+
+        $merchant = User::factory()->create([
+            'name' => 'Blocked Merchant',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'blocked-merchant-qa@example.test',
+        ]);
+        $merchant->assignRole('merchant');
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'staff', (int) $merchant->id)
+            ->assertSet('selectedType', null)
+            ->assertSet('selectedId', null);
     }
 
     private function actingAsMarketAdmin(Market $market): User
