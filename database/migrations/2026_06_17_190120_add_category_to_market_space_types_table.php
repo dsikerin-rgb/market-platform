@@ -13,9 +13,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('market_space_types', function (Blueprint $table) {
-            $table->string('category')->default('commercial')->index();
-        });
+        if (! Schema::hasColumn('market_space_types', 'category')) {
+            Schema::table('market_space_types', function (Blueprint $table) {
+                $table->string('category')->default('commercial')->index();
+            });
+        }
 
         if (! Schema::hasColumn('market_space_types', 'category')) {
             return;
@@ -27,10 +29,10 @@ return new class extends Migration
             '%туалет%',
             '%мооп%',
             '%моп%',
-            '%wc%',
-            '%toilet%',
             '%mop%',
             '%общ%польз%',
+            '%курил%',
+            '%курен%',
             '%common_area%',
             '%common area%',
             '%commonarea%',
@@ -61,8 +63,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('market_space_types', function (Blueprint $table) {
-            $table->dropColumn('category');
-        });
+        if (Schema::hasColumn('market_space_types', 'category')) {
+            Schema::table('market_space_types', function (Blueprint $table) {
+                $table->dropColumn('category');
+            });
+        }
     }
 };

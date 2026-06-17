@@ -114,7 +114,7 @@ class RevenueYearChartWidgetAreaOccupancyTest extends TestCase
         MarketSpaceType::query()->create([
             'market_id' => (int) $market->id,
             'name_ru' => 'Санузел',
-            'code' => 'wc-space',
+            'code' => 'sanuzel',
             'unit' => 'sqm',
             'price' => 0,
             'currency' => 'RUB',
@@ -132,8 +132,8 @@ class RevenueYearChartWidgetAreaOccupancyTest extends TestCase
 
         $commonSpace = MarketSpace::query()->create([
             'market_id' => (int) $market->id,
-            'number' => 'WC-1',
-            'type' => 'wc-space',
+            'number' => 'SANUZEL-1',
+            'type' => 'sanuzel',
             'status' => 'vacant',
             'is_active' => true,
         ]);
@@ -154,12 +154,12 @@ class RevenueYearChartWidgetAreaOccupancyTest extends TestCase
             'market_id' => (int) $market->id,
             'tenant_id' => (int) $tenant->id,
             'market_space_id' => (int) $commonSpace->id,
-            'number' => 'WC-CONTRACT',
+            'number' => 'SANUZEL-CONTRACT',
             'status' => 'active',
             'starts_at' => '2026-01-01',
             'ends_at' => '2026-12-31',
             'is_active' => true,
-            'external_id' => 'WC-EXT',
+            'external_id' => 'SANUZEL-EXT',
         ]);
 
         DB::table('contract_debts')->insert([
@@ -179,13 +179,13 @@ class RevenueYearChartWidgetAreaOccupancyTest extends TestCase
                 'market_id' => (int) $market->id,
                 'tenant_id' => (int) $tenant->id,
                 'tenant_external_id' => 'TEN-1',
-                'contract_external_id' => 'WC-EXT',
+                'contract_external_id' => 'SANUZEL-EXT',
                 'period' => '2026-01',
                 'accrued_amount' => 500,
                 'paid_amount' => 0,
                 'debt_amount' => 500,
                 'calculated_at' => CarbonImmutable::create(2026, 1, 1, 12, 5, 0, 'UTC')->toDateTimeString(),
-                'hash' => md5('WC-EXT-2026-01'),
+                'hash' => md5('SANUZEL-EXT-2026-01'),
             ],
             [
                 'market_id' => (int) $market->id,
