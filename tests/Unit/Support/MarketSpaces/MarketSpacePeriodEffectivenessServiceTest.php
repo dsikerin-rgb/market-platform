@@ -121,6 +121,7 @@ class MarketSpacePeriodEffectivenessServiceTest extends TestCase
                 'paid_amount' => 0,
                 'debt_amount' => 999999,
                 'calculated_at' => '2026-03-31 00:00:00',
+                'hash' => hash('sha256', 'area-occupancy-contract-debt-noise-2026-03'),
                 'source' => '1c',
             ]);
         }
