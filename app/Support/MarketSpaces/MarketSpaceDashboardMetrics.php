@@ -8,6 +8,7 @@ namespace App\Support\MarketSpaces;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Models\MarketSpaceTenantBinding;
+use App\Models\MarketSpaceType;
 use App\Models\Tenant;
 use App\Services\MarketSpaces\MarketSpaceTenantBindingRecorder;
 use App\Support\MarketSpaces\MarketSpaceShapePolicy;
@@ -40,15 +41,15 @@ class MarketSpaceDashboardMetrics
                 'spaceGroupParent:id,tenant_id,rent_rate_value,rent_rate_unit',
             ])
             ->get([
-            'id',
-            'tenant_id',
-            'status',
-            'area_sqm',
-            'rent_rate_value',
-            'rent_rate_unit',
-            'space_group_role',
-            'space_group_parent_id',
-        ]);
+                'market_spaces.id',
+                'market_spaces.tenant_id',
+                'market_spaces.status',
+                'market_spaces.area_sqm',
+                'market_spaces.rent_rate_value',
+                'market_spaces.rent_rate_unit',
+                'market_spaces.space_group_role',
+                'market_spaces.space_group_parent_id',
+            ]);
 
         $areaCap = self::resolveAreaOutlierCap(
             $spaces
@@ -161,12 +162,12 @@ class MarketSpaceDashboardMetrics
                 'spaceGroupParent:id,tenant_id',
             ])
             ->get([
-            'id',
-            'tenant_id',
-            'status',
-            'space_group_role',
-            'space_group_parent_id',
-        ]);
+                'market_spaces.id',
+                'market_spaces.tenant_id',
+                'market_spaces.status',
+                'market_spaces.space_group_role',
+                'market_spaces.space_group_parent_id',
+            ]);
 
         if ($spaces->isEmpty()) {
             return 0;
@@ -208,22 +209,40 @@ class MarketSpaceDashboardMetrics
 
     public static function accountingSpacesQuery(int $marketId)
     {
-        return MarketSpace::query()
-            ->where('market_id', $marketId)
-            ->where('is_active', true)
+        return self::applyCommercialCategoryFilter(MarketSpace::query()
+            ->where('market_spaces.market_id', $marketId)
+            ->where('market_spaces.is_active', true)
             ->where(function ($query): void {
                 $query
-                    ->whereNull('space_group_role')
-                    ->orWhere('space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD)
-                    ->orWhereNull('space_group_parent_id');
+                    ->whereNull('market_spaces.space_group_role')
+                    ->orWhere('market_spaces.space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                    ->orWhereNull('market_spaces.space_group_parent_id');
+            }));
+    }
+
+    private static function applyCommercialCategoryFilter(Builder $query): Builder
+    {
+        return $query
+            ->leftJoin('market_space_types as types', function ($join): void {
+                $join
+                    ->on('types.code', '=', 'market_spaces.type')
+                    ->on('types.market_id', '=', 'market_spaces.market_id');
+            })
+            ->where(function ($query): void {
+                $query
+                    ->whereNull('types.category')
+                    ->orWhereNotIn('types.category', [
+                        MarketSpaceType::CATEGORY_COMMON_AREA,
+                        MarketSpaceType::CATEGORY_INFRASTRUCTURE,
+                    ]);
             });
     }
 
     public static function physicalSpacesQuery(int $marketId): Builder
     {
-        $query = MarketSpace::query()
-            ->where('market_id', $marketId)
-            ->where('is_active', true);
+        $query = self::applyCommercialCategoryFilter(MarketSpace::query()
+            ->where('market_spaces.market_id', $marketId)
+            ->where('market_spaces.is_active', true));
 
         MarketSpaceShapePolicy::scopeRequiresOwnMapShape($query);
 

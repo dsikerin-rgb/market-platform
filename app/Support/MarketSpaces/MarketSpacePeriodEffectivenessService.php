@@ -63,11 +63,11 @@ class MarketSpacePeriodEffectivenessService
     {
         $spaces = MarketSpaceDashboardMetrics::accountingSpacesQuery($marketId)
             ->get([
-                'id',
-                'area_sqm',
-                'status',
-                'space_group_role',
-                'space_group_parent_id',
+                'market_spaces.id',
+                'market_spaces.area_sqm',
+                'market_spaces.status',
+                'market_spaces.space_group_role',
+                'market_spaces.space_group_parent_id',
             ]);
 
         $areaCap = $this->resolveAreaOutlierCap(

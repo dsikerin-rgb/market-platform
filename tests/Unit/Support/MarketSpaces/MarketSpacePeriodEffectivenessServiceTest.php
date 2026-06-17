@@ -1,10 +1,12 @@
 <?php
+# tests/Unit/Support/MarketSpaces/MarketSpacePeriodEffectivenessServiceTest.php
 
 declare(strict_types=1);
 
 namespace Tests\Unit\Support\MarketSpaces;
 
 use App\Models\Market;
+use App\Models\MarketSpaceType;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantContract;
@@ -228,6 +230,120 @@ class MarketSpacePeriodEffectivenessServiceTest extends TestCase
         self::assertSame(50.0, $series[1]);
         self::assertNull($series[2]);
         self::assertSame(75.0, $series[3]);
+    }
+
+    #[Test]
+    public function it_excludes_common_area_and_infrastructure_from_area_occupancy_denominator(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Category Effectiveness Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Tenant',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceType::query()->create([
+            'market_id' => (int) $market->id,
+            'name_ru' => 'Торговое',
+            'code' => 'commercial',
+            'unit' => 'sqm',
+            'price' => 0,
+            'currency' => 'RUB',
+            'category' => MarketSpaceType::CATEGORY_COMMERCIAL,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceType::query()->create([
+            'market_id' => (int) $market->id,
+            'name_ru' => 'Санузел',
+            'code' => 'wc',
+            'unit' => 'sqm',
+            'price' => 0,
+            'currency' => 'RUB',
+            'category' => MarketSpaceType::CATEGORY_COMMON_AREA,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceType::query()->create([
+            'market_id' => (int) $market->id,
+            'name_ru' => 'Инфраструктура',
+            'code' => 'infra',
+            'unit' => 'sqm',
+            'price' => 0,
+            'currency' => 'RUB',
+            'category' => MarketSpaceType::CATEGORY_INFRASTRUCTURE,
+            'is_active' => true,
+        ]);
+
+        $commercialSpace = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'COM-1',
+            'type' => 'commercial',
+            'status' => 'vacant',
+            'area_sqm' => 100.0,
+            'is_active' => true,
+        ]);
+
+        $commonArea = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'WC-1',
+            'type' => 'wc',
+            'status' => 'vacant',
+            'area_sqm' => 20.0,
+            'is_active' => true,
+        ]);
+
+        $infrastructureSpace = MarketSpace::query()->create([
+            'market_id' => (int) $market->id,
+            'number' => 'INF-1',
+            'type' => 'infra',
+            'status' => 'vacant',
+            'area_sqm' => 30.0,
+            'is_active' => true,
+        ]);
+
+        TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $commercialSpace->id,
+            'number' => 'COM-LEASE',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'ends_at' => '2026-01-31',
+            'is_active' => true,
+        ]);
+
+        TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $commonArea->id,
+            'number' => 'WC-LEASE',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'ends_at' => '2026-01-31',
+            'is_active' => true,
+        ]);
+
+        TenantContract::query()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => (int) $tenant->id,
+            'market_space_id' => (int) $infrastructureSpace->id,
+            'number' => 'INF-LEASE',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'ends_at' => '2026-01-31',
+            'is_active' => true,
+        ]);
+
+        $series = app(MarketSpacePeriodEffectivenessService::class)
+            ->areaOccupancyPercentSeries((int) $market->id, ['2026-01'], 'Europe/Moscow');
+
+        self::assertSame(100.0, $series[0]);
     }
 
     private function insertDebtRow(

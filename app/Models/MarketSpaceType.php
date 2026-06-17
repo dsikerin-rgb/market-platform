@@ -1,4 +1,5 @@
 <?php
+# app/Models/MarketSpaceType.php
 
 namespace App\Models;
 
@@ -10,6 +11,19 @@ class MarketSpaceType extends Model
 {
     use HasFactory;
 
+    public const CATEGORY_COMMERCIAL = 'commercial';
+
+    public const CATEGORY_SERVICE = 'service';
+
+    public const CATEGORY_COMMON_AREA = 'common_area';
+
+    public const CATEGORY_INFRASTRUCTURE = 'infrastructure';
+
+    public const CATEGORY_COMMON_AREAS = [
+        self::CATEGORY_COMMON_AREA,
+        self::CATEGORY_INFRASTRUCTURE,
+    ];
+
     /**
      * @var list<string>
      */
@@ -20,6 +34,7 @@ class MarketSpaceType extends Model
         'unit',
         'price',
         'currency',
+        'category',
         'is_active',
     ];
 
@@ -27,6 +42,17 @@ class MarketSpaceType extends Model
         'price' => 'decimal:2',
         'is_active' => 'boolean',
     ];
+
+    public function isAccountingCategory(): bool
+    {
+        $category = trim((string) ($this->category ?? ''));
+
+        if ($category === '') {
+            return true;
+        }
+
+        return ! in_array($category, self::CATEGORY_COMMON_AREAS, true);
+    }
 
     public function market(): BelongsTo
     {
