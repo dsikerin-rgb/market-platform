@@ -8,4 +8,5 @@ return [
     App\Providers\HorizonServiceProvider::class,
     App\Providers\TelescopeServiceProvider::class,
     App\Providers\MarketMapWithoutShapesServiceProvider::class,
+    App\Providers\OneCWarningModalServiceProvider::class,
 ];
