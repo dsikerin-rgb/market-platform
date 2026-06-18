@@ -36,7 +36,7 @@ class MarketSpaceDashboardMetrics
      */
     public static function summarize(int $marketId): array
     {
-        $spaces = self::physicalSpacesQuery($marketId)
+        $spaces = self::dashboardAreaSpacesQuery($marketId)
             ->with([
                 'spaceGroupParent:id,tenant_id,rent_rate_value,rent_rate_unit',
             ])
@@ -157,7 +157,7 @@ class MarketSpaceDashboardMetrics
 
     public static function countCurrentTenants(int $marketId): int
     {
-        $spaces = self::physicalSpacesQuery($marketId)
+        $spaces = self::dashboardAreaSpacesQuery($marketId)
             ->with([
                 'spaceGroupParent:id,tenant_id',
             ])
@@ -236,6 +236,47 @@ class MarketSpaceDashboardMetrics
                         MarketSpaceType::CATEGORY_INFRASTRUCTURE,
                     ]);
             });
+    }
+
+    public static function dashboardAreaSpacesQuery(int $marketId): Builder
+    {
+        $query = self::applyCommercialCategoryFilter(MarketSpace::query()
+            ->where('market_spaces.market_id', $marketId)
+            ->where('market_spaces.is_active', true));
+
+        if (! Schema::hasTable('market_space_map_shapes')) {
+            return $query->where(function (Builder $query): void {
+                $query
+                    ->where('market_spaces.space_group_role', MarketSpace::SPACE_GROUP_ROLE_PARENT)
+                    ->orWhere(function (Builder $query): void {
+                        self::scopeNotChildWithParent($query);
+                    });
+            });
+        }
+
+        return $query->where(function (Builder $query): void {
+            $query
+                ->where('market_spaces.space_group_role', MarketSpace::SPACE_GROUP_ROLE_PARENT)
+                ->orWhere(function (Builder $query): void {
+                    self::scopeNotChildWithParent($query);
+
+                    $query->whereHas('mapShapes', static function (Builder $shapeQuery): void {
+                        if (Schema::hasColumn('market_space_map_shapes', 'is_active')) {
+                            $shapeQuery->where('is_active', true);
+                        }
+                    });
+                });
+        });
+    }
+
+    private static function scopeNotChildWithParent(Builder $query): void
+    {
+        $query->where(function (Builder $query): void {
+            $query
+                ->whereNull('market_spaces.space_group_role')
+                ->orWhere('market_spaces.space_group_role', '!=', MarketSpace::SPACE_GROUP_ROLE_CHILD)
+                ->orWhereNull('market_spaces.space_group_parent_id');
+        });
     }
 
     public static function physicalSpacesQuery(int $marketId): Builder
