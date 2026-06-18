@@ -223,6 +223,10 @@ class MarketSpaceDashboardMetrics
 
     private static function applyCommercialCategoryFilter(Builder $query): Builder
     {
+        if (! self::canUseCommercialCategoryFilter()) {
+            return $query;
+        }
+
         return $query
             ->leftJoin('market_space_types as types', function ($join): void {
                 $join
@@ -237,6 +241,15 @@ class MarketSpaceDashboardMetrics
                         MarketSpaceType::CATEGORY_INFRASTRUCTURE,
                     ]);
             });
+    }
+
+    private static function canUseCommercialCategoryFilter(): bool
+    {
+        return Schema::hasTable('market_space_types')
+            && Schema::hasColumn('market_spaces', 'type')
+            && Schema::hasColumn('market_space_types', 'code')
+            && Schema::hasColumn('market_space_types', 'market_id')
+            && Schema::hasColumn('market_space_types', 'category');
     }
 
     public static function dashboardAreaSpacesQuery(int $marketId): Builder
