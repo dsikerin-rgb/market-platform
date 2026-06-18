@@ -1122,12 +1122,33 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
     $buildMapReviewProgress = static function (Market $market) use ($hasMapReviewColumns, $mapReviewStatusLabel): array {
         $baseQuery = MarketSpace::query()->where('market_id', (int) $market->id);
+        $withoutShapesBaseQuery = MarketSpace::query()
+            ->where('market_id', (int) $market->id);
 
         if (Schema::hasColumn('market_spaces', 'is_active')) {
             $baseQuery->where('is_active', true);
+            $withoutShapesBaseQuery->where('is_active', true);
         }
 
         $total = (int) (clone $baseQuery)->count();
+
+        if (Schema::hasTable('market_space_map_shapes')) {
+            MarketSpaceShapePolicy::scopeRequiresOwnMapShape($withoutShapesBaseQuery);
+            $withoutShapesBaseQuery->whereDoesntHave('mapShapes', function ($q) {
+                $q->where('is_active', true)
+                  ->where(function ($sub) {
+                      $sub->whereNotNull('bbox_x1')
+                          ->whereNotNull('bbox_y1')
+                          ->whereNotNull('bbox_x2')
+                          ->whereNotNull('bbox_y2')
+                          ->whereColumn('bbox_x1', '<', 'bbox_x2')
+                          ->whereColumn('bbox_y1', '<', 'bbox_y2');
+                      $sub->orWhereJsonLength('polygon', '>=', 3);
+                  });
+            });
+        }
+
+        $withoutShapesTotal = (clone $withoutShapesBaseQuery)->count('id');
 
         if (! $hasMapReviewColumns()) {
             return [
@@ -1135,6 +1156,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'reviewed' => 0,
                 'remaining' => $total,
                 'percent' => 0,
+                'without_shapes_total' => $withoutShapesTotal,
+                'without_shapes_pending' => $withoutShapesTotal,
                 'counts' => [],
                 'labels' => [],
             ];
@@ -1150,12 +1173,17 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $reviewed = array_sum($counts);
         $remaining = max($total - $reviewed, 0);
+        $withoutShapesPending = (clone $withoutShapesBaseQuery)
+            ->whereNull('map_review_status')
+            ->count('id');
 
         return [
             'total' => $total,
             'reviewed' => $reviewed,
             'remaining' => $remaining,
             'percent' => $total > 0 ? (int) round(($reviewed / $total) * 100) : 0,
+            'without_shapes_total' => $withoutShapesTotal,
+            'without_shapes_pending' => $withoutShapesPending,
             'counts' => $counts,
             'labels' => collect(array_keys($counts))
                 ->mapWithKeys(fn (string $status): array => [$status => $mapReviewStatusLabel($status) ?? $status])
@@ -1960,7 +1988,19 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ->orderBy('number')
                 ->orderBy('id')
                 ->limit($limit)
-                ->get(['id', 'number', 'code', 'display_name', 'area_sqm', 'tenant_id', 'space_group_role', 'space_group_parent_id']);
+                ->get([
+                    'id',
+                    'number',
+                    'code',
+                    'display_name',
+                    'area_sqm',
+                    'tenant_id',
+                    'space_group_role',
+                    'space_group_parent_id',
+                    'map_review_status',
+                    'map_reviewed_at',
+                    'map_reviewed_by',
+                ]);
 
             // Фильтр shared-use participant-псевдо-мест (с pattern __t\d+ или _t\d+ в number),
             // если у основного места есть фигура на карте.
@@ -2094,8 +2134,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'is_space_group_parent' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT,
                     'result_type' => $spaceGroupRole === MarketSpace::SPACE_GROUP_ROLE_PARENT ? 'group' : 'space',
                     'map_shape_requirement' => MarketSpaceShapePolicy::requirementFor($space),
-                    'review_status' => '',
-                    'review_status_label' => '',
+                    'review_status' => (string) ($space->map_review_status ?? ''),
+                    'review_status_label' => $mapReviewStatusLabel($space->map_review_status),
+                    'reviewed_at' => optional($space->map_reviewed_at)?->toIso8601String(),
+                    'reviewed_by' => $space->map_reviewed_by ? (int) $space->map_reviewed_by : null,
                     'tenant' => $tenant ? [
                         'id' => (int) ($tenant->id ?? 0),
                         'name' => (string) ($tenantName ?? ''),

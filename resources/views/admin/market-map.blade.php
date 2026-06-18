@@ -6156,8 +6156,17 @@
             const pendingCount = getPendingReviewNavCount();
             const remainingTotal = Math.max(0, Number(reviewProgressState?.remaining ?? 0) || 0);
             const totalReviewSpaces = Math.max(0, Number(reviewProgressState?.total || 0) || 0);
-            const withoutShapesCount = Math.max(0, totalReviewSpaces - reviewNavItems.length);
-            const withoutShapesPendingCount = Math.max(0, remainingTotal - pendingCount);
+            const backendWithoutShapesTotal = Number(reviewProgressState?.without_shapes_total ?? NaN);
+            const backendWithoutShapesPending = Number(reviewProgressState?.without_shapes_pending ?? NaN);
+            const hasWithoutShapesTotals = Number.isFinite(backendWithoutShapesTotal);
+            const withoutShapesCount = Math.max(
+                0,
+                (hasWithoutShapesTotals ? backendWithoutShapesTotal : (totalReviewSpaces - reviewNavItems.length))
+            );
+            const withoutShapesPendingCount = Math.max(
+                0,
+                (Number.isFinite(backendWithoutShapesPending) ? backendWithoutShapesPending : (remainingTotal - pendingCount))
+            );
 
           if (reviewNavStatus) {
               const noShapesEntry = document.getElementById('noShapesEntry');

@@ -1067,6 +1067,12 @@ class MarketMapLinkingTest extends TestCase
         $emptySearch->assertOk();
         $emptySearch->assertJsonPath('meta.total_count', 2);
         $this->assertCount(0, $emptySearch->json('items'));
+
+        $reviewedItem = $items->firstWhere('id', (int) $reviewedSpace->id);
+        $this->assertNotNull($reviewedItem, 'Reviewed space item should be present in response');
+        $this->assertSame('matched', $reviewedItem['review_status'] ?? '');
+        $this->assertSame('Совпало', $reviewedItem['review_status_label'] ?? '');
+        $this->assertNotEmpty($reviewedItem['reviewed_at'] ?? '');
     }
 
     public function test_market_map_without_shapes_excludes_shared_use_participant_pseudo_spaces(): void
