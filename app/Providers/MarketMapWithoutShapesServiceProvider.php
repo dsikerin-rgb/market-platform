@@ -40,6 +40,7 @@ class MarketMapWithoutShapesServiceProvider extends ServiceProvider
                         'meta' => [
                             'without_shapes' => true,
                             'count' => 0,
+                            'filtered_count' => 0,
                             'total_count' => 0,
                         ],
                     ]);
@@ -53,21 +54,32 @@ class MarketMapWithoutShapesServiceProvider extends ServiceProvider
                 $limit = (int) ($validated['limit'] ?? 50);
                 $search = trim((string) ($validated['q'] ?? ''));
 
-                $query = MarketSpace::query()
+                $baseQuery = MarketSpace::query()
                     ->with(['tenant:id,name,short_name'])
                     ->where('market_id', $marketId);
 
                 if (Schema::hasColumn('market_spaces', 'is_active')) {
-                    $query->where('is_active', true);
+                    $baseQuery->where('is_active', true);
                 }
 
-                MarketSpaceShapePolicy::scopeRequiresOwnMapShape($query);
+                MarketSpaceShapePolicy::scopeRequiresOwnMapShape($baseQuery);
 
                 if (Schema::hasTable('market_space_map_shapes')) {
-                    $query->whereDoesntHave('mapShapes', function ($shapeQuery): void {
+                    $baseQuery->whereDoesntHave('mapShapes', function ($shapeQuery): void {
                         $this->scopeUsableShape($shapeQuery);
                     });
                 }
+
+                $totalRows = $this->filterSharedUseParticipantSpacesWithVisibleBase(
+                    (clone $baseQuery)
+                        ->orderBy('number')
+                        ->orderBy('id')
+                        ->limit(5000)
+                        ->get(['id', 'market_id', 'number', 'code', 'display_name', 'area_sqm', 'tenant_id', 'space_group_role', 'space_group_parent_id']),
+                    $marketId,
+                )->values();
+
+                $query = clone $baseQuery;
 
                 if ($search !== '') {
                     $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $search) . '%';
@@ -92,7 +104,8 @@ class MarketMapWithoutShapesServiceProvider extends ServiceProvider
                     ->get(['id', 'market_id', 'number', 'code', 'display_name', 'area_sqm', 'tenant_id', 'space_group_role', 'space_group_parent_id']);
 
                 $rows = $this->filterSharedUseParticipantSpacesWithVisibleBase($rows, $marketId)->values();
-                $totalCount = $rows->count();
+                $totalCount = $totalRows->count();
+                $filteredCount = $rows->count();
 
                 $items = $rows
                     ->take($limit)
@@ -133,6 +146,7 @@ class MarketMapWithoutShapesServiceProvider extends ServiceProvider
                     'meta' => [
                         'without_shapes' => true,
                         'count' => $items->count(),
+                        'filtered_count' => $filteredCount,
                         'total_count' => $totalCount,
                     ],
                 ]);
@@ -193,9 +207,7 @@ class MarketMapWithoutShapesServiceProvider extends ServiceProvider
         }
 
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $selectedMarketId = session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
+        $selectedMarketId = session("filament.{$panelId}.selected_market_id")
             ?? session('filament.admin.selected_market_id');
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
@@ -408,14 +420,18 @@ class MarketMapWithoutShapesServiceProvider extends ServiceProvider
 
   async function loadPanel(query) {
     const content = document.getElementById('withoutShapesPanelContent');
+    const normalizedQuery = String(query || '').trim();
+
     if (content) {
       content.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #64748b;">Загрузка...</div>';
     }
 
-    const json = await fetchWithoutShapes(query);
-    totalCount = Number(json?.meta?.total_count || 0);
+    const json = await fetchWithoutShapes(normalizedQuery);
+    if (normalizedQuery === '') {
+      totalCount = Number(json?.meta?.total_count || 0);
+    }
     syncButton();
-    renderRows(Array.isArray(json.items) ? json.items : [], String(query || '').trim());
+    renderRows(Array.isArray(json.items) ? json.items : [], normalizedQuery);
   }
 
   function openPanel() {
