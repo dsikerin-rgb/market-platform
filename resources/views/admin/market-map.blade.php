@@ -6155,18 +6155,35 @@
             const currentIndex = getReviewCurrentIndex();
             const pendingCount = getPendingReviewNavCount();
             const remainingTotal = Math.max(0, Number(reviewProgressState?.remaining ?? 0) || 0);
+            const totalReviewSpaces = Math.max(0, Number(reviewProgressState?.total || 0) || 0);
+            const backendWithoutShapesTotal = Number(reviewProgressState?.without_shapes_total ?? NaN);
+            const backendWithoutShapesPending = Number(reviewProgressState?.without_shapes_pending ?? NaN);
+            const hasWithoutShapesTotals = Number.isFinite(backendWithoutShapesTotal);
+            const withoutShapesCount = Math.max(
+                0,
+                (hasWithoutShapesTotals ? backendWithoutShapesTotal : (totalReviewSpaces - reviewNavItems.length))
+            );
+            const withoutShapesPendingCount = Math.max(
+                0,
+                (Number.isFinite(backendWithoutShapesPending) ? backendWithoutShapesPending : (remainingTotal - pendingCount))
+            );
 
           if (reviewNavStatus) {
               const noShapesEntry = document.getElementById('noShapesEntry');
               const noShapesCount = document.getElementById('noShapesCount');
               const reviewNoShapesGroup = document.getElementById('reviewNoShapesGroup');
-              const withoutShapesCount = remainingTotal - pendingCount;
-              noShapesCount.textContent = String(withoutShapesCount);
+              if (noShapesCount) {
+                noShapesCount.textContent = String(withoutShapesCount);
+              }
               const showNoShapesEntry = isReviewMode() && withoutShapesCount > 0;
-              noShapesEntry.style.display = showNoShapesEntry ? 'inline-flex' : 'none';
-              noShapesEntry.hidden = !showNoShapesEntry;
-              noShapesEntry.disabled = !showNoShapesEntry;
-              noShapesEntry.title = withoutShapesCount > 0 ? ('Показать ' + String(withoutShapesCount) + ' мест без фигур') : 'Нет мест без фигур';
+              if (noShapesEntry) {
+                noShapesEntry.style.display = showNoShapesEntry ? 'inline-flex' : 'none';
+                noShapesEntry.hidden = !showNoShapesEntry;
+                noShapesEntry.disabled = !showNoShapesEntry;
+              }
+              if (noShapesEntry) {
+                noShapesEntry.title = withoutShapesCount > 0 ? ('Показать ' + String(withoutShapesCount) + ' мест без фигур') : 'Нет мест без фигур';
+              }
               if (reviewNoShapesGroup) {
                 const showNoShapesGroup = isReviewMode() && withoutShapesCount > 0;
                 if (showNoShapesGroup) {
@@ -6179,8 +6196,8 @@
 
               if (!total) {
                 reviewNavStatus.textContent = 'Места не загружены';
-              } else if (pendingCount === 0) {
-                reviewNavStatus.textContent = remainingTotal > 0
+            } else if (pendingCount === 0) {
+                reviewNavStatus.textContent = withoutShapesPendingCount > 0
                   ? 'Есть непройденные места без фигур на карте'
                   : 'Непройденных мест не осталось';
               } else if (currentIndex >= 0) {
@@ -6201,7 +6218,7 @@
             if (reviewNavNextPendingBtn) {
               const noPending = findNextPendingIndex(currentIndex) === -1;
               reviewNavNextPendingBtn.disabled = noPending;
-              if (noPending && remainingTotal > 0) {
+              if (noPending && withoutShapesPendingCount > 0) {
                 reviewNavNextPendingBtn.title = 'Есть непройденные места без фигур на карте';
                 reviewNavNextPendingBtn.setAttribute('aria-label', 'Есть непройденные места без фигур на карте');
               } else {

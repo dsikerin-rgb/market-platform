@@ -990,6 +990,91 @@ class MarketMapLinkingTest extends TestCase
         $this->assertContains((int) $ordinary->id, $ids);
     }
 
+    public function test_market_map_without_shapes_includes_reviewed_and_counts_total_with_search(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        $reviewedSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'WR-1',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+            'map_review_status' => 'matched',
+            'map_reviewed_at' => now(),
+        ]);
+
+        $pendingSpace = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'WR-2',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $spaceWithUsableShape = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'WR-3',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_NONE,
+            'is_active' => true,
+        ]);
+
+        $parentGroup = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'WR-4',
+            'space_group_role' => MarketSpace::SPACE_GROUP_ROLE_PARENT,
+            'is_active' => true,
+        ]);
+
+        MarketSpaceMapShape::create([
+            'market_id' => $market->id,
+            'market_space_id' => $spaceWithUsableShape->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [['x' => 0, 'y' => 0], ['x' => 10, 'y' => 0], ['x' => 10, 'y' => 10], ['x' => 0, 'y' => 10]],
+            'bbox_x1' => 0,
+            'bbox_y1' => 0,
+            'bbox_x2' => 10,
+            'bbox_y2' => 10,
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson(route('filament.admin.market-map.spaces', [
+            'without_shapes' => true,
+            'limit' => 50,
+        ]));
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+        $response->assertJsonPath('meta.total_count', 2);
+        $response->assertJsonPath('meta.pending_count', 1);
+
+        $items = collect($response->json('items'));
+        $ids = $items->pluck('id')->all();
+
+        $this->assertContains((int) $reviewedSpace->id, $ids, 'Reviewed space without shape should be included');
+        $this->assertContains((int) $pendingSpace->id, $ids, 'Pending space without shape should be included');
+        $this->assertNotContains((int) $spaceWithUsableShape->id, $ids, 'Space with usable shape should be excluded');
+        $this->assertNotContains((int) $parentGroup->id, $ids, 'Parent group should be excluded from without_shapes list');
+
+        $emptySearch = $this->getJson(route('filament.admin.market-map.spaces', [
+            'without_shapes' => true,
+            'q' => 'not-found',
+            'limit' => 50,
+        ]));
+
+        $emptySearch->assertOk();
+        $emptySearch->assertJsonPath('meta.total_count', 2);
+        $this->assertCount(0, $emptySearch->json('items'));
+
+        $reviewedItem = $items->firstWhere('id', (int) $reviewedSpace->id);
+        $this->assertNotNull($reviewedItem, 'Reviewed space item should be present in response');
+        $this->assertSame('matched', $reviewedItem['review_status'] ?? '');
+        $this->assertSame('Совпало', $reviewedItem['review_status_label'] ?? '');
+        $this->assertNotEmpty($reviewedItem['reviewed_at'] ?? '');
+    }
+
     public function test_market_map_without_shapes_excludes_shared_use_participant_pseudo_spaces(): void
     {
         // Regression test: shared-use participant-псевдо-места (с pattern __t\d+ или _t\d+)
