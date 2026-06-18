@@ -102,7 +102,7 @@ class MarketSpaceDashboardMetrics
             );
             $shared = $sharedUse->get($spaceId);
             $sharedArea = $shared ? max((float) ($shared->total_area_sqm ?? 0), 0.0) : 0.0;
-            $effectivePhysicalArea = $physicalArea > 0 ? $physicalArea : $sharedArea;
+            $effectivePhysicalArea = $sharedArea > 0 ? $sharedArea : $physicalArea;
 
             $summary['total_area_sqm'] += $effectivePhysicalArea;
 
