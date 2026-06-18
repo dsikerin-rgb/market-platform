@@ -39,6 +39,38 @@ class MarketSpaceTableSearchTest extends TestCase
             'status' => 'occupied',
         ]);
 
+        $this->createSpace($market, [
+            'number' => 'С-1',
+            'display_name' => 'Свободное место',
+            'tenant_id' => null,
+            'status' => 'vacant',
+        ]);
+
+        $ids = $this->searchIds($market, 'Танцы');
+
+        self::assertSame([(int) $matched->id], $ids);
+    }
+
+    public function test_search_matches_location_name_without_matching_unrelated_locations(): void
+    {
+        $market = $this->createMarket();
+        $danceLocation = $this->createLocation($market, 'Корпус Танцы');
+        $otherLocation = $this->createLocation($market, 'Ряд Аптеки');
+
+        $matched = $this->createSpace($market, [
+            'number' => 'Л-1',
+            'display_name' => 'Студия',
+            'location_id' => (int) $danceLocation->id,
+            'status' => 'vacant',
+        ]);
+
+        $this->createSpace($market, [
+            'number' => 'Л-2',
+            'display_name' => 'Аптека',
+            'location_id' => (int) $otherLocation->id,
+            'status' => 'vacant',
+        ]);
+
         $ids = $this->searchIds($market, 'Танцы');
 
         self::assertSame([(int) $matched->id], $ids);
@@ -130,6 +162,16 @@ class MarketSpaceTableSearchTest extends TestCase
         ]);
     }
 
+    private function createLocation(Market $market, string $name): MarketLocation
+    {
+        return MarketLocation::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => $name,
+            'type' => 'row',
+            'is_active' => true,
+        ]);
+    }
+
     private function createTenant(Market $market, string $name): Tenant
     {
         return Tenant::query()->create([
@@ -148,6 +190,7 @@ class MarketSpaceTableSearchTest extends TestCase
             'market_id' => (int) $market->id,
             'number' => $attributes['number'] ?? 'П-1',
             'display_name' => $attributes['display_name'] ?? null,
+            'location_id' => $attributes['location_id'] ?? null,
             'tenant_id' => $attributes['tenant_id'] ?? null,
             'status' => $attributes['status'] ?? 'vacant',
             'area_sqm' => $attributes['area_sqm'] ?? 10,
