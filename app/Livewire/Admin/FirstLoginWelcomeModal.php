@@ -1,4 +1,5 @@
 <?php
+# app/Livewire/Admin/FirstLoginWelcomeModal.php
 
 declare(strict_types=1);
 
@@ -24,6 +25,16 @@ class FirstLoginWelcomeModal extends Component
     public function acknowledge(): void
     {
         session()->put(FirstLoginWelcomeNotice::SESSION_KEY, true);
+
+        $notice = app(FirstLoginWelcomeNotice::class);
+        $user = Filament::auth()->user();
+
+        if ($user && $user->exists) {
+            $preferences = (array) ($user->notification_preferences ?? []);
+            $preferences[FirstLoginWelcomeNotice::PREFERENCE_KEY] = $notice->acknowledgementPreference();
+            $user->notification_preferences = $preferences;
+            $user->save();
+        }
 
         $this->shouldShow = false;
     }
