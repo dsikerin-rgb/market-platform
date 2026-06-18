@@ -27,6 +27,26 @@ final class FirstLoginWelcomeNotice
             return false;
         }
 
+        if ($this->isAcknowledged($user)) {
+            return false;
+        }
+
         return $this->settings->enabledForUser($user);
+    }
+
+    public function isAcknowledged(User $user): bool
+    {
+        $preferences = (array) ($user->notification_preferences ?? []);
+        $notice = $preferences[self::PREFERENCE_KEY] ?? null;
+
+        if (is_string($notice)) {
+            return $notice === self::VERSION;
+        }
+
+        if (! is_array($notice)) {
+            return false;
+        }
+
+        return (string) ($notice['version'] ?? '') === self::VERSION;
     }
 }
