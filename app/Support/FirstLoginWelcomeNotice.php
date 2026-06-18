@@ -34,6 +34,17 @@ final class FirstLoginWelcomeNotice
         return $this->settings->enabledForUser($user);
     }
 
+    /**
+     * @return array{version:string,acknowledged_at:string}
+     */
+    public function acknowledgementPreference(): array
+    {
+        return [
+            'version' => self::VERSION,
+            'acknowledged_at' => now()->toISOString(),
+        ];
+    }
+
     public function isAcknowledged(User $user): bool
     {
         $preferences = (array) ($user->notification_preferences ?? []);
