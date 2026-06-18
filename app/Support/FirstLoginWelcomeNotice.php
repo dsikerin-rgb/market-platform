@@ -1,4 +1,5 @@
 <?php
+# app/Support/FirstLoginWelcomeNotice.php
 
 declare(strict_types=1);
 
@@ -26,6 +27,37 @@ final class FirstLoginWelcomeNotice
             return false;
         }
 
+        if ($this->isAcknowledged($user)) {
+            return false;
+        }
+
         return $this->settings->enabledForUser($user);
+    }
+
+    /**
+     * @return array{version:string,acknowledged_at:string}
+     */
+    public function acknowledgementPreference(): array
+    {
+        return [
+            'version' => self::VERSION,
+            'acknowledged_at' => now()->toISOString(),
+        ];
+    }
+
+    public function isAcknowledged(User $user): bool
+    {
+        $preferences = (array) ($user->notification_preferences ?? []);
+        $notice = $preferences[self::PREFERENCE_KEY] ?? null;
+
+        if (is_string($notice)) {
+            return $notice === self::VERSION;
+        }
+
+        if (! is_array($notice)) {
+            return false;
+        }
+
+        return (string) ($notice['version'] ?? '') === self::VERSION;
     }
 }
