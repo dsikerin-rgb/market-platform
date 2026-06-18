@@ -1,4 +1,5 @@
 <?php
+# app/Support/FirstLoginWelcomeNotice.php
 
 declare(strict_types=1);
 
