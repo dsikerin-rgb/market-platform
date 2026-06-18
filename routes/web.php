@@ -1891,24 +1891,23 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ], 422);
             }
 
-            // Запрос: активные места без map_review_status И без usable bbox
+            // Запрос: активные места без usable shape, независимо от map_review_status
             // Usable bbox = active shape с (bbox_x1/bbox_y1/bbox_x2/bbox_y2 NOT NULL) ИЛИ (polygon ≥3 точек)
-            $query = MarketSpace::query()
+            $baseWithoutShapesQuery = MarketSpace::query()
                 ->with([
                     'tenant',
                     'spaceGroupParent.tenant',
                 ])
-                ->where('market_id', (int) $market->id)
-                ->whereNull('map_review_status');
+                ->where('market_id', (int) $market->id);
 
             // Фильтр по is_active если колонка существует
             if (Schema::hasColumn('market_spaces', 'is_active')) {
-                $query->where('is_active', true);
+                $baseWithoutShapesQuery->where('is_active', true);
             }
 
             // Parent-группы не считаются "местами без фигур":
             // у группы может не быть собственной фигуры, она отображается через дочерние места.
-            MarketSpaceShapePolicy::scopeRequiresOwnMapShape($query);
+            MarketSpaceShapePolicy::scopeRequiresOwnMapShape($baseWithoutShapesQuery);
 
             // Исключаем места у которых ЕСТЬ usable shape для review navigation
             // (согласовано с buildReviewNavItemsFromShapes() на фронте)
@@ -1919,7 +1918,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             //   - ИЛИ JSON_LENGTH(polygon) >= 3  →  bbox вычисляется из polygon
             //
             // whereDoesntHave инвертирует: вернёт места БЕЗ usable shape
-            $query->whereDoesntHave('mapShapes', function ($q) {
+            $baseWithoutShapesQuery->whereDoesntHave('mapShapes', function ($q) {
                 $q->where('is_active', true)
                   ->where(function ($sub) {
                       // Вариант 1: есть bbox с корректными размерами (x1 < x2 и y1 < y2)
@@ -1938,6 +1937,8 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             });
 
             // Поиск по строке q (номер / код / display_name / арендатор)
+            $query = clone $baseWithoutShapesQuery;
+
             $rawQ = trim((string) ($validated['q'] ?? ''));
             if ($rawQ !== '') {
                 $qEsc = str_replace(['%', '_'], ['\%', '\\_'], $rawQ);
@@ -2114,9 +2115,14 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ];
             })->values();
 
+            $totalWithoutShapesCount = (clone $baseWithoutShapesQuery)->count('id');
+            $pendingWithoutShapesCount = (clone $baseWithoutShapesQuery)->whereNull('map_review_status')->count('id');
+
             return response()->json(['ok' => true, 'items' => $items, 'meta' => [
                 'without_shapes' => true,
                 'count' => count($items),
+                'total_count' => $totalWithoutShapesCount,
+                'pending_count' => $pendingWithoutShapesCount,
                 'shape_policy' => [
                     'parent_groups_require_own_shape' => false,
                     'parent_group_label' => 'Фигура не требуется',

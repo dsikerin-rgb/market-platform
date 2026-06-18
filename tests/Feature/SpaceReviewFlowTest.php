@@ -3728,7 +3728,7 @@ JS;
 
         // НЕ должны попасть
         $this->assertNotContains($spaceWithUsableBbox->id, $ids, 'Место с usable bbox не должно попасть');
-        $this->assertNotContains($spaceReviewed->id, $ids, 'Пройденное место не должно попасть');
+        $this->assertContains($spaceReviewed->id, $ids, 'Пройденное место должно попадать, если у него нет usable shape');
         $this->assertNotContains($spaceInactive->id, $ids, 'Неактивное место не должно попасть');
 
         // Проверяем структуру ответа
