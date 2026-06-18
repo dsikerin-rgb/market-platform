@@ -40,13 +40,13 @@ class MarketMapWithoutShapesAllTest extends TestCase
         return $user;
     }
 
-    private function createMarketWithMap(): Market
+    private function createMarketWithMap(string $name = 'Тестовый рынок'): Market
     {
         Storage::fake('local');
         Storage::disk('local')->put('market-maps/map.pdf', 'fake');
 
         return Market::create([
-            'name' => 'Тестовый рынок',
+            'name' => $name,
             'timezone' => 'Europe/Moscow',
             'is_active' => true,
             'settings' => [
@@ -133,6 +133,70 @@ class MarketMapWithoutShapesAllTest extends TestCase
         $this->assertContains((int) $reviewedWithoutShape->id, $ids);
         $this->assertContains((int) $pendingWithoutShape->id, $ids);
         $this->assertNotContains((int) $withShape->id, $ids);
+    }
+
+    public function test_without_shapes_all_endpoint_keeps_total_count_when_search_has_no_matches(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $market = $this->createMarketWithMap();
+        $this->selectMarketInSession($market);
+
+        MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'NO-SHAPE-1',
+            'is_active' => true,
+        ]);
+
+        MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'NO-SHAPE-2',
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson('/admin/market-map/without-shapes-all?q=definitely-no-match');
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('meta.total_count', 2)
+            ->assertJsonPath('meta.filtered_count', 0)
+            ->assertJsonCount(0, 'items');
+    }
+
+    public function test_without_shapes_all_endpoint_uses_filament_selected_market_over_dashboard_session(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $staleDashboardMarket = $this->createMarketWithMap('Старый рынок dashboard');
+        $selectedMapMarket = $this->createMarketWithMap('Выбранный рынок карты');
+
+        $this->withSession([
+            'dashboard_market_id' => (int) $staleDashboardMarket->id,
+            'filament.admin.selected_market_id' => (int) $selectedMapMarket->id,
+        ]);
+
+        $wrongMarketSpace = MarketSpace::create([
+            'market_id' => $staleDashboardMarket->id,
+            'number' => 'WRONG-MARKET-NO-SHAPE',
+            'is_active' => true,
+        ]);
+
+        $rightMarketSpace = MarketSpace::create([
+            'market_id' => $selectedMapMarket->id,
+            'number' => 'RIGHT-MARKET-NO-SHAPE',
+            'is_active' => true,
+        ]);
+
+        $response = $this->getJson('/admin/market-map/without-shapes-all');
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('meta.total_count', 1);
+
+        $ids = collect($response->json('items'))->pluck('id')->all();
+
+        $this->assertContains((int) $rightMarketSpace->id, $ids);
+        $this->assertNotContains((int) $wrongMarketSpace->id, $ids);
     }
 
     public function test_market_map_page_injects_without_shapes_review_fix_script(): void
