@@ -272,4 +272,12 @@ class ListMarketSpaces extends ListRecords
 
         return $tab;
     }
+
+    public function getPageClasses(): array
+    {
+        return [
+            ...parent::getPageClasses(),
+            'fi-resource-market-spaces-list-page',
+        ];
+    }
 }
