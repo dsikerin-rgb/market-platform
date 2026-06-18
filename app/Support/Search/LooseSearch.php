@@ -1,4 +1,5 @@
 <?php
+# app/Support/Search/LooseSearch.php
 
 declare(strict_types=1);
 
@@ -145,9 +146,28 @@ final class LooseSearch
      */
     public static function orWhereMatchesColumns(Builder $query, array $columns, array $termPatterns): void
     {
+        if (static::hasRelationColumnConstraint($query)) {
+            static::whereMatchesColumns($query, $columns, $termPatterns);
+
+            return;
+        }
+
         foreach ($columns as $column) {
             static::orWhereMatchesColumn($query, $column, $termPatterns);
         }
+    }
+
+    /**
+     * @param  list<string>  $columns
+     * @param  array{normalized:list<string>,compact:list<string>}  $termPatterns
+     */
+    public static function whereMatchesColumns(Builder $query, array $columns, array $termPatterns): void
+    {
+        $query->where(function (Builder $columnQuery) use ($columns, $termPatterns): void {
+            foreach ($columns as $column) {
+                static::orWhereMatchesColumn($columnQuery, $column, $termPatterns);
+            }
+        });
     }
 
     /**
@@ -155,6 +175,12 @@ final class LooseSearch
      */
     public static function orWhereMatchesColumn(Builder $query, string $column, array $termPatterns): void
     {
+        if (static::hasRelationColumnConstraint($query)) {
+            static::whereMatchesColumn($query, $column, $termPatterns);
+
+            return;
+        }
+
         $driver = $query->getConnection()->getDriverName();
         $normalizedSql = static::normalizedSql($column, $driver);
         $compactSql = static::compactSql($column, $driver);
@@ -167,6 +193,16 @@ final class LooseSearch
             foreach ($termPatterns['compact'] as $pattern) {
                 $columnQuery->orWhereRaw($compactSql . ' like ?', [$pattern]);
             }
+        });
+    }
+
+    /**
+     * @param  array{normalized:list<string>,compact:list<string>}  $termPatterns
+     */
+    public static function whereMatchesColumn(Builder $query, string $column, array $termPatterns): void
+    {
+        $query->where(function (Builder $columnQuery) use ($column, $termPatterns): void {
+            static::orWhereMatchesColumn($columnQuery, $column, $termPatterns);
         });
     }
 
@@ -228,6 +264,17 @@ final class LooseSearch
     private static function escapeLike(string $value): string
     {
         return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+    }
+
+    private static function hasRelationColumnConstraint(Builder $query): bool
+    {
+        foreach ($query->getQuery()->wheres ?? [] as $where) {
+            if (($where['type'] ?? null) === 'Column') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function switchKeyboardLayout(string $value, string $target): string
