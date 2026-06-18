@@ -7,6 +7,5 @@ return [
     App\Providers\NotificationAuditServiceProvider::class,
     App\Providers\HorizonServiceProvider::class,
     App\Providers\TelescopeServiceProvider::class,
-    App\Providers\MarketMapWithoutShapesServiceProvider::class,
     App\Providers\OneCWarningModalServiceProvider::class,
 ];
