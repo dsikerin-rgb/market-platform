@@ -9,8 +9,10 @@ use App\Filament\Widgets\MarketSpacesWorkspaceWidget;
 use App\Models\MarketSpace;
 use App\Models\TenantContract;
 use App\Support\AdminCapabilities;
+use App\Support\MarketSpaces\MarketSpaceTableSearch;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -66,6 +68,12 @@ class ListMarketSpaces extends ListRecords
         if (blank($currentValue)) {
             $this->tableFilters['status']['value'] = 'maintenance';
         }
+    }
+
+    public function table(Table $table): Table
+    {
+        return parent::table($table)
+            ->searchUsing(fn (Builder $query, string $search): Builder => MarketSpaceTableSearch::apply($query, $search));
     }
 
     public function getBreadcrumbs(): array
@@ -263,13 +271,5 @@ class ListMarketSpaces extends ListRecords
         }
 
         return $tab;
-    }
-
-    public function getPageClasses(): array
-    {
-        return [
-            ...parent::getPageClasses(),
-            'fi-resource-market-spaces-list-page',
-        ];
     }
 }
