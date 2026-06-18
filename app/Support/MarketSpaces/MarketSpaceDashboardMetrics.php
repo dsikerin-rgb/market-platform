@@ -176,6 +176,7 @@ class MarketSpaceDashboardMetrics
         $spaceIds = $spaces->pluck('id')->map(static fn ($id): int => (int) $id)->all();
 
         $directTenantIds = $spaces
+            ->toBase()
             ->filter(static function (MarketSpace $space): bool {
                 return self::normalizeStatus((string) ($space->status ?? 'vacant')) === 'occupied'
                     && filled($space->effectiveTenantId() ?? $space->tenant_id);
