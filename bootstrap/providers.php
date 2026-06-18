@@ -1,4 +1,5 @@
 <?php
+# bootstrap/providers.php
 
 return [
     App\Providers\AppServiceProvider::class,
@@ -6,4 +7,5 @@ return [
     App\Providers\NotificationAuditServiceProvider::class,
     App\Providers\HorizonServiceProvider::class,
     App\Providers\TelescopeServiceProvider::class,
+    App\Providers\MarketMapWithoutShapesServiceProvider::class,
 ];
