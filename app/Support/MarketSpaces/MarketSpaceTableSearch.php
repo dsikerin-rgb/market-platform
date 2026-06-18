@@ -26,17 +26,19 @@ final class MarketSpaceTableSearch
             },
             static function (Builder $searchQuery, array $termPatterns): void {
                 $searchQuery->orWhereHas('location', function (Builder $locationQuery) use ($termPatterns): void {
-                    LooseSearch::orWhereMatchesColumn($locationQuery, 'name', $termPatterns);
+                    self::whereMatchesColumns($locationQuery, [
+                        'market_locations.name',
+                    ], $termPatterns);
                 });
             },
             static function (Builder $searchQuery, array $termPatterns): void {
                 $searchQuery->orWhereHas('tenant', function (Builder $tenantQuery) use ($termPatterns): void {
-                    self::orWhereTenantMatches($tenantQuery, $termPatterns);
+                    self::whereTenantMatches($tenantQuery, $termPatterns);
                 });
             },
             static function (Builder $searchQuery, array $termPatterns): void {
                 $searchQuery->orWhereHas('spaceGroupParent.tenant', function (Builder $tenantQuery) use ($termPatterns): void {
-                    self::orWhereTenantMatches($tenantQuery, $termPatterns);
+                    self::whereTenantMatches($tenantQuery, $termPatterns);
                 });
             },
             static function (Builder $searchQuery, array $termPatterns): void {
@@ -57,7 +59,7 @@ final class MarketSpaceTableSearch
                         ->where('binding_type', 'shared_use')
                         ->whereNull('ended_at')
                         ->whereHas('tenant', function (Builder $tenantQuery) use ($termPatterns): void {
-                            self::orWhereTenantMatches($tenantQuery, $termPatterns);
+                            self::whereTenantMatches($tenantQuery, $termPatterns);
                         });
                 });
             },
@@ -65,11 +67,22 @@ final class MarketSpaceTableSearch
     }
 
     /**
+     * @param  list<string>  $columns
      * @param  array{normalized:list<string>,compact:list<string>}  $termPatterns
      */
-    private static function orWhereTenantMatches(Builder $tenantQuery, array $termPatterns): void
+    private static function whereMatchesColumns(Builder $query, array $columns, array $termPatterns): void
     {
-        LooseSearch::orWhereMatchesColumns($tenantQuery, [
+        $query->where(function (Builder $searchQuery) use ($columns, $termPatterns): void {
+            LooseSearch::orWhereMatchesColumns($searchQuery, $columns, $termPatterns);
+        });
+    }
+
+    /**
+     * @param  array{normalized:list<string>,compact:list<string>}  $termPatterns
+     */
+    private static function whereTenantMatches(Builder $tenantQuery, array $termPatterns): void
+    {
+        self::whereMatchesColumns($tenantQuery, [
             'tenants.name',
             'tenants.short_name',
             'tenants.inn',
