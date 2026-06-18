@@ -41,12 +41,14 @@ final class MarketSpaceTableSearch
             },
             static function (Builder $searchQuery, array $termPatterns): void {
                 $searchQuery->orWhereHas('spaceType', function (Builder $typeQuery) use ($termPatterns): void {
-                    $typeQuery->whereColumn('market_space_types.market_id', 'market_spaces.market_id');
-
-                    LooseSearch::orWhereMatchesColumns($typeQuery, [
-                        'market_space_types.name_ru',
-                        'market_space_types.code',
-                    ], $termPatterns);
+                    $typeQuery
+                        ->whereColumn('market_space_types.market_id', 'market_spaces.market_id')
+                        ->where(function (Builder $typeSearchQuery) use ($termPatterns): void {
+                            LooseSearch::orWhereMatchesColumns($typeSearchQuery, [
+                                'market_space_types.name_ru',
+                                'market_space_types.code',
+                            ], $termPatterns);
+                        });
                 });
             },
             static function (Builder $searchQuery, array $termPatterns): void {
