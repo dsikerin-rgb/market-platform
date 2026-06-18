@@ -102,7 +102,7 @@ class MarketSpaceDashboardMetrics
             );
             $shared = $sharedUse->get($spaceId);
             $sharedArea = $shared ? max((float) ($shared->total_area_sqm ?? 0), 0.0) : 0.0;
-            $effectivePhysicalArea = $physicalArea > 0 ? $physicalArea : $sharedArea;
+            $effectivePhysicalArea = $sharedArea > 0 ? $sharedArea : $physicalArea;
 
             $summary['total_area_sqm'] += $effectivePhysicalArea;
 
@@ -176,6 +176,7 @@ class MarketSpaceDashboardMetrics
         $spaceIds = $spaces->pluck('id')->map(static fn ($id): int => (int) $id)->all();
 
         $directTenantIds = $spaces
+            ->toBase()
             ->filter(static function (MarketSpace $space): bool {
                 return self::normalizeStatus((string) ($space->status ?? 'vacant')) === 'occupied'
                     && filled($space->effectiveTenantId() ?? $space->tenant_id);
