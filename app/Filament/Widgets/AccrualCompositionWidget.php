@@ -8,29 +8,26 @@ use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
-use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
+use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-class AccrualCompositionWidget extends ChartWidget
+class AccrualCompositionWidget extends Widget
 {
     use InteractsWithPageFilters;
     use ResolvesDashboardFilterMonth;
 
-    protected ?string $heading = 'Структура начислений';
+    private const TOP_PACKAGE_LIMIT = 5;
+
+    protected string $view = 'filament.widgets.accrual-composition-widget';
+
+    protected ?string $heading = 'Пакеты начислений 1С';
 
     protected int|string|array $columnSpan = [
         'default' => 'full',
         'lg' => 1,
     ];
-
-    protected ?string $maxHeight = '320px';
-
-    protected function getType(): string
-    {
-        return 'doughnut';
-    }
 
     public static function canView(): bool
     {
@@ -42,52 +39,22 @@ class AccrualCompositionWidget extends ChartWidget
         );
     }
 
-    public function getDescription(): ?string
+    protected function getViewData(): array
     {
         $user = Filament::auth()->user();
 
         if (! $user) {
-            return null;
+            return $this->emptyData('Нет пользователя');
         }
 
         $marketId = $this->resolveMarketIdForWidget($user);
 
         if (! $marketId) {
-            return null;
-        }
-
-        $market = Market::query()
-            ->select(['id', 'timezone'])
-            ->find($marketId);
-
-        if (! $market) {
-            return null;
-        }
-
-        $tz = $this->resolveTimezone($market->timezone);
-        [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
-        [$effectiveMonthYm] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
-
-        return $this->formatMonthLabel($effectiveMonthYm, $tz)
-            . ' • Источник: 1С (детализация начислений)';
-    }
-
-    protected function getData(): array
-    {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return $this->emptyChart('Нет пользователя');
-        }
-
-        $marketId = $this->resolveMarketIdForWidget($user);
-
-        if (! $marketId) {
-            return $this->emptyChart('Выберите рынок');
+            return $this->emptyData('Выберите рынок');
         }
 
         if (! Schema::hasTable('tenant_accruals')) {
-            return $this->emptyChart('Нет данных начислений');
+            return $this->emptyData('Нет данных начислений');
         }
 
         $market = Market::query()
@@ -96,102 +63,45 @@ class AccrualCompositionWidget extends ChartWidget
 
         $tz = $this->resolveTimezone($market?->timezone);
         [$selectedMonthYm, $selectedMonthStart] = $this->resolveMonthRange($tz);
-        [, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
+        [$effectiveMonthYm, $effectiveMonthStart] = $this->resolveEffectiveMonthRange($marketId, $selectedMonthYm, $selectedMonthStart, $tz);
 
-        $totals = $this->loadAccrualTotals($marketId, $effectiveMonthStart);
+        $packages = $this->loadAccrualPackages($marketId, $effectiveMonthStart);
 
-        if ($totals === null) {
-            return $this->emptyChart('Не удалось прочитать начисления');
+        if ($packages === null) {
+            return $this->emptyData('Не удалось прочитать начисления');
         }
 
-        if (! $totals['has_rows']) {
-            return $this->emptyChart('Нет начислений за ' . $this->formatMonthLabel($effectiveMonthStart->format('Y-m'), $tz));
+        if ($packages === []) {
+            return $this->emptyData('Нет начислений за ' . $this->formatMonthLabel($effectiveMonthStart->format('Y-m'), $tz));
         }
 
-        $rent = $totals['rent'];
-        $utilities = $totals['utilities'];
-        $electricity = $totals['electricity'];
-        $management = $totals['management'];
-        $other = $totals['other'];
+        $topPackages = array_slice($packages, 0, self::TOP_PACKAGE_LIMIT);
+        $tailPackages = array_slice($packages, self::TOP_PACKAGE_LIMIT);
+        $totalAmount = array_sum(array_column($packages, 'amount'));
 
-        $labels = [];
-        $data = [];
-        $colors = [];
+        $visiblePackages = [];
 
-        if ($rent > 0) {
-            $labels[] = 'Аренда';
-            $data[] = round($rent, 2);
-            $colors[] = '#f59e0b';
+        foreach ($topPackages as $index => $package) {
+            $visiblePackages[] = $this->formatPackageRow($package, $index, $totalAmount);
         }
 
-        if ($utilities > 0) {
-            $labels[] = 'Коммунальные';
-            $data[] = round($utilities, 2);
-            $colors[] = '#60a5fa';
+        if ($tailPackages !== []) {
+            $visiblePackages[] = $this->formatPackageRow([
+                'name' => 'Прочие пакеты',
+                'amount' => array_sum(array_column($tailPackages, 'amount')),
+                'rows' => array_sum(array_column($tailPackages, 'rows')),
+            ], count($visiblePackages), $totalAmount, count($tailPackages));
         }
-
-        if ($electricity > 0) {
-            $labels[] = 'Электроэнергия';
-            $data[] = round($electricity, 2);
-            $colors[] = '#34d399';
-        }
-
-        if ($management > 0) {
-            $labels[] = 'Управление';
-            $data[] = round($management, 2);
-            $colors[] = '#a78bfa';
-        }
-
-        if ($other > 0) {
-            $labels[] = 'Прочее';
-            $data[] = $other;
-            $colors[] = '#94a3b8';
-        }
-
-        if ($labels === []) {
-            return $this->emptyChart('Нет начислений за ' . $this->formatMonthLabel($effectiveMonthStart->format('Y-m'), $tz));
-        }
-
-        $labels = $this->withPercentageLabels($labels, $data);
 
         return [
-            'labels' => $labels,
-            'datasets' => [
-                [
-                    'label' => 'Структура начислений',
-                    'data' => $data,
-                    'backgroundColor' => $colors,
-                    'borderColor' => $colors,
-                    'borderWidth' => 1,
-                    'hoverOffset' => 6,
-                ],
-            ],
+            'heading' => $this->heading,
+            'description' => $this->formatMonthLabel($effectiveMonthYm, $tz) . ' • пакеты service_name из 1С',
+            'packages' => $visiblePackages,
+            'totalAmount' => round($totalAmount, 2),
+            'rowsCount' => array_sum(array_column($packages, 'rows')),
+            'packagesCount' => count($packages),
+            'emptyReason' => null,
         ];
-    }
-
-    /**
-     * @param  array<int, string>  $labels
-     * @param  array<int, float|int>  $data
-     * @return array<int, string>
-     */
-    private function withPercentageLabels(array $labels, array $data): array
-    {
-        $total = array_sum($data);
-
-        if ($total <= 0) {
-            return $labels;
-        }
-
-        $result = [];
-
-        foreach ($labels as $index => $label) {
-            $value = (float) ($data[$index] ?? 0.0);
-            $percent = ($value / $total) * 100;
-
-            $result[] = sprintf('%s (%s%%)', $label, $this->formatPercent($percent));
-        }
-
-        return $result;
     }
 
     private function formatPercent(float $value): string
@@ -204,82 +114,156 @@ class AccrualCompositionWidget extends ChartWidget
     }
 
     /**
+     * @param  array{name:string, amount:float, rows:int}  $package
      * @return array{
-     *   has_rows: bool,
-     *   rent: float,
-     *   utilities: float,
-     *   electricity: float,
-     *   management: float,
-     *   total_with_vat: float,
-     *   other: float
-     * }|null
+     *   label:string,
+     *   full_label:string,
+     *   amount:float,
+     *   percent:float,
+     *   percent_label:string,
+     *   rows:int,
+     *   packages_count:int|null,
+     *   color:string,
+     *   width:string
+     * }
      */
-    private function loadAccrualTotals(int $marketId, CarbonImmutable $monthStart): ?array
+    private function formatPackageRow(array $package, int $index, float $totalAmount, ?int $packagesCount = null): array
+    {
+        $amount = (float) $package['amount'];
+        $percent = $totalAmount > 0 ? ($amount / $totalAmount) * 100 : 0.0;
+
+        return [
+            'label' => $this->formatPackageLabel($package['name']),
+            'full_label' => $package['name'],
+            'amount' => round($amount, 2),
+            'percent' => round($percent, 2),
+            'percent_label' => $this->formatPercent($percent),
+            'rows' => (int) $package['rows'],
+            'packages_count' => $packagesCount,
+            'color' => $this->packageColor($index),
+            'width' => max(2, min(100, round($percent, 2))) . '%',
+        ];
+    }
+
+    /**
+     * @return array<int, array{name:string, amount:float, rows:int}>|null
+     */
+    private function loadAccrualPackages(int $marketId, CarbonImmutable $monthStart): ?array
     {
         try {
-            $row = $this->accrualsBaseQuery($marketId)
+            $rows = $this->accrualsBaseQuery($marketId)
                 ->where('period', $monthStart->toDateString())
+                ->selectRaw("COALESCE(NULLIF(service_name, ''), 'Без вида начисления') as package_name")
                 ->selectRaw('
                     COUNT(*) as rows_count,
-                    COALESCE(SUM(rent_amount), 0) as rent_total,
-                    COALESCE(SUM(utilities_amount), 0) as utilities_total,
-                    COALESCE(SUM(electricity_amount), 0) as electricity_total,
-                    COALESCE(SUM(management_fee), 0) as management_total,
-                    COALESCE(SUM(total_with_vat), 0) as total_with_vat
+                    COALESCE(SUM(
+                        COALESCE(
+                            total_with_vat,
+                            total_no_vat,
+                            COALESCE(rent_amount, 0)
+                                + COALESCE(management_fee, 0)
+                                + COALESCE(utilities_amount, 0)
+                                + COALESCE(electricity_amount, 0)
+                        )
+                    ), 0) as total_amount
                 ')
-                ->first();
+                ->groupByRaw("COALESCE(NULLIF(service_name, ''), 'Без вида начисления')")
+                ->orderByDesc('total_amount')
+                ->get();
         } catch (\Throwable) {
             return null;
         }
 
-        $rent = (float) ($row->rent_total ?? 0);
-        $utilities = (float) ($row->utilities_total ?? 0);
-        $electricity = (float) ($row->electricity_total ?? 0);
-        $management = (float) ($row->management_total ?? 0);
-        $totalWithVat = (float) ($row->total_with_vat ?? 0);
+        return $rows
+            ->map(static fn ($row): array => [
+                'name' => (string) ($row->package_name ?? 'Без вида начисления'),
+                'amount' => (float) ($row->total_amount ?? 0),
+                'rows' => (int) ($row->rows_count ?? 0),
+            ])
+            ->filter(static fn (array $row): bool => $row['amount'] > 0)
+            ->values()
+            ->all();
+    }
 
-        return [
-            'has_rows' => (int) ($row->rows_count ?? 0) > 0,
-            'rent' => $rent,
-            'utilities' => $utilities,
-            'electricity' => $electricity,
-            'management' => $management,
-            'total_with_vat' => $totalWithVat,
-            'other' => $this->calculateOtherAmount($rent, $utilities, $electricity, $management, $totalWithVat),
+    private function formatPackageLabel(string $packageName): string
+    {
+        $parts = array_values(array_unique(array_filter(array_map(
+            fn (string $part): string => $this->shortServiceName($part),
+            preg_split('/;+/u', $packageName) ?: [],
+        ), static fn (string $part): bool => $part !== '')));
+
+        if ($parts === []) {
+            $parts = ['Без вида начисления'];
+        }
+
+        if (count($parts) > 3) {
+            $visible = array_slice($parts, 0, 3);
+            $visible[] = '+' . (count($parts) - 3);
+
+            return implode(' + ', $visible);
+        }
+
+        return implode(' + ', $parts);
+    }
+
+    private function shortServiceName(string $name): string
+    {
+        $normalized = trim(preg_replace('/^Услуги:\s*/u', '', $name) ?? $name);
+
+        return match ($normalized) {
+            'Арендная плата' => 'Аренда',
+            'Компенсация потребленной эл/энергии' => 'Эл/энергия',
+            'Компенсация расходов на водоснабжение и канализацию' => 'Вода/канализация',
+            'Компенсация расходов на чистку жироуловителей' => 'Жироуловители',
+            'Место для размещения рекламной информации' => 'Реклама',
+            'Компенсация расходов по звуковой рекламе' => 'Звуковая реклама',
+            'Доп.электрооборудование',
+            'Установка доп.эл.оборудования' => 'Доп. эл/оборудование',
+            'Компенсация расходов на газоснабжение' => 'Газ',
+            'Компенсация расходов на обслуживание газового оборудования' => 'Газовое оборудование',
+            'Откачка житких бытовых отходов' => 'ЖБО',
+            'Эксплуатационные расходы' => 'Эксплуатация',
+            default => $this->truncateLabel($normalized),
+        };
+    }
+
+    private function truncateLabel(string $label): string
+    {
+        if (mb_strlen($label) <= 34) {
+            return $label;
+        }
+
+        return rtrim(mb_substr($label, 0, 31)) . '...';
+    }
+
+    private function packageColor(int $index): string
+    {
+        $colors = [
+            '#2563eb',
+            '#f59e0b',
+            '#10b981',
+            '#8b5cf6',
+            '#ef4444',
+            '#06b6d4',
+            '#64748b',
         ];
+
+        return $colors[$index % count($colors)];
     }
 
-    private function calculateOtherAmount(
-        float $rent,
-        float $utilities,
-        float $electricity,
-        float $management,
-        float $totalWithVat
-    ): float {
-        $knownTotal = $rent + $utilities + $electricity + $management;
-
-        return max(0.0, round($totalWithVat - $knownTotal, 2));
-    }
-
-    protected function getOptions(): array
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyData(string $reason): array
     {
         return [
-            'responsive' => true,
-            'maintainAspectRatio' => true,
-            'aspectRatio' => 1.2,
-            'plugins' => [
-                'legend' => [
-                    'display' => true,
-                    'position' => 'bottom',
-                    'labels' => [
-                        'boxWidth' => 10,
-                        'boxHeight' => 10,
-                        'padding' => 10,
-                        'font' => ['size' => 11],
-                    ],
-                ],
-            ],
-            'cutout' => '58%',
+            'heading' => $this->heading,
+            'description' => null,
+            'packages' => [],
+            'totalAmount' => 0.0,
+            'rowsCount' => 0,
+            'packagesCount' => 0,
+            'emptyReason' => $reason,
         ];
     }
 
