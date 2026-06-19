@@ -63,7 +63,7 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
         $tz = $this->resolveTimezone($market?->timezone);
         [$endYm] = $this->resolveEndMonth($tz, $marketId);
 
-        return '13 месяцев до ' . $this->formatMonthLabel($endYm, $tz) . ' • источник: начисления и оплаты из 1С';
+        return '13 месяцев до ' . $this->formatMonthLabel($endYm, $tz) . ' • источник: обороты ОСВ 1С по счету 62';
     }
 
     protected function getData(): array
@@ -80,7 +80,11 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
             return $this->emptyChart('Выберите рынок');
         }
 
-        if (! Schema::hasTable('tenant_accruals') && ! Schema::hasTable('tenant_payments')) {
+        if (
+            ! Schema::hasTable('tenant_settlement_balances')
+            && ! Schema::hasTable('tenant_accruals')
+            && ! Schema::hasTable('tenant_payments')
+        ) {
             return $this->emptyChart('Нет данных 1С');
         }
 
@@ -101,8 +105,13 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
 
         $startDate = $months[0] . '-01';
         $endDate = $endMonthStart->addMonth()->format('Y-m-d');
-        $accrualsByMonth = $this->loadAccrualsByMonth($marketId, $startDate, $endDate);
-        $paymentsByMonth = $this->loadPaymentsByMonth($marketId, $startDate, $endDate);
+        $settlementTurnoversByMonth = $this->loadSettlementTurnoversByMonth($marketId, $startDate, $endDate);
+        $accrualsByMonth = $settlementTurnoversByMonth !== []
+            ? array_map(static fn (array $row): float => (float) ($row['accrued'] ?? 0.0), $settlementTurnoversByMonth)
+            : $this->loadAccrualsByMonth($marketId, $startDate, $endDate);
+        $paymentsByMonth = $settlementTurnoversByMonth !== []
+            ? array_map(static fn (array $row): float => (float) ($row['paid'] ?? 0.0), $settlementTurnoversByMonth)
+            : $this->loadPaymentsByMonth($marketId, $startDate, $endDate);
 
         $hasAnyData = false;
         $accruedData = [];
@@ -206,6 +215,52 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
                 ],
             ],
         ];
+    }
+
+    /**
+     * @return array<string, array{accrued: float, paid: float}>
+     */
+    private function loadSettlementTurnoversByMonth(int $marketId, string $startDate, string $endDate): array
+    {
+        if (
+            ! Schema::hasTable('tenant_settlement_balances')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'period_to')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'turnover_debit')
+            || ! Schema::hasColumn('tenant_settlement_balances', 'turnover_credit')
+        ) {
+            return [];
+        }
+
+        $query = DB::table('tenant_settlement_balances')
+            ->where('market_id', $marketId)
+            ->where('period_to', '>=', $startDate)
+            ->where('period_to', '<', $endDate);
+
+        if (Schema::hasColumn('tenant_settlement_balances', 'account')) {
+            $query->where('account', '62');
+        }
+
+        try {
+            $rows = $query->get(['period_to', 'turnover_debit', 'turnover_credit']);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($rows as $row) {
+            $month = $this->normalizePeriodToMonth($row->period_to ?? null);
+
+            if ($month === null) {
+                continue;
+            }
+
+            $result[$month] ??= ['accrued' => 0.0, 'paid' => 0.0];
+            $result[$month]['accrued'] += (float) ($row->turnover_debit ?? 0.0);
+            $result[$month]['paid'] += (float) ($row->turnover_credit ?? 0.0);
+        }
+
+        return $result;
     }
 
     /**
@@ -433,7 +488,26 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
 
                 $latest = $this->maxMonth($latest, $this->normalizePeriodToMonth($value));
             } catch (\Throwable) {
-                // ignore and use accrual fallback
+                // ignore and try settlement fallback
+            }
+        }
+
+        if (Schema::hasTable('tenant_settlement_balances') && Schema::hasColumn('tenant_settlement_balances', 'period_to')) {
+            try {
+                $query = DB::table('tenant_settlement_balances')
+                    ->where('market_id', $marketId);
+
+                if (Schema::hasColumn('tenant_settlement_balances', 'account')) {
+                    $query->where('account', '62');
+                }
+
+                $value = $query
+                    ->orderByDesc('period_to')
+                    ->value('period_to');
+
+                $latest = $this->maxMonth($latest, $this->normalizePeriodToMonth($value));
+            } catch (\Throwable) {
+                // ignore and use document data fallback
             }
         }
 
