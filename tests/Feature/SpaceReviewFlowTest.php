@@ -3714,7 +3714,10 @@ JS;
 
         $response->assertOk()
             ->assertJsonPath('ok', true)
-            ->assertJsonPath('meta.without_shapes', true);
+            ->assertJsonPath('meta.without_shapes', true)
+            ->assertJsonPath('meta.total_count', 3)
+            ->assertJsonPath('meta.pending_count', 3)
+            ->assertJsonPath('meta.all_count', 4);
 
         $items = $response->json('items');
         $this->assertIsArray($items);
@@ -3728,7 +3731,7 @@ JS;
 
         // НЕ должны попасть
         $this->assertNotContains($spaceWithUsableBbox->id, $ids, 'Место с usable bbox не должно попасть');
-        $this->assertContains($spaceReviewed->id, $ids, 'Пройденное место должно попадать, если у него нет usable shape');
+        $this->assertNotContains($spaceReviewed->id, $ids, 'Пройденное место не должно попадать в рабочую очередь');
         $this->assertNotContains($spaceInactive->id, $ids, 'Неактивное место не должно попасть');
 
         // Проверяем структуру ответа

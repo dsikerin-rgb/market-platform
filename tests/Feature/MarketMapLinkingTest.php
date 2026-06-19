@@ -990,7 +990,7 @@ class MarketMapLinkingTest extends TestCase
         $this->assertContains((int) $ordinary->id, $ids);
     }
 
-    public function test_market_map_without_shapes_includes_reviewed_and_counts_total_with_search(): void
+    public function test_market_map_without_shapes_returns_pending_by_default_and_can_include_reviewed(): void
     {
         $this->actingAsSuperAdmin();
 
@@ -1047,13 +1047,15 @@ class MarketMapLinkingTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('ok', true);
-        $response->assertJsonPath('meta.total_count', 2);
+        $response->assertJsonPath('meta.total_count', 1);
         $response->assertJsonPath('meta.pending_count', 1);
+        $response->assertJsonPath('meta.all_count', 2);
+        $response->assertJsonPath('meta.include_reviewed', false);
 
         $items = collect($response->json('items'));
         $ids = $items->pluck('id')->all();
 
-        $this->assertContains((int) $reviewedSpace->id, $ids, 'Reviewed space without shape should be included');
+        $this->assertNotContains((int) $reviewedSpace->id, $ids, 'Reviewed space without shape should not be in the default work queue');
         $this->assertContains((int) $pendingSpace->id, $ids, 'Pending space without shape should be included');
         $this->assertNotContains((int) $spaceWithUsableShape->id, $ids, 'Space with usable shape should be excluded');
         $this->assertNotContains((int) $parentGroup->id, $ids, 'Parent group should be excluded from without_shapes list');
@@ -1065,11 +1067,24 @@ class MarketMapLinkingTest extends TestCase
         ]));
 
         $emptySearch->assertOk();
-        $emptySearch->assertJsonPath('meta.total_count', 2);
+        $emptySearch->assertJsonPath('meta.total_count', 1);
+        $emptySearch->assertJsonPath('meta.all_count', 2);
         $this->assertCount(0, $emptySearch->json('items'));
 
-        $reviewedItem = $items->firstWhere('id', (int) $reviewedSpace->id);
-        $this->assertNotNull($reviewedItem, 'Reviewed space item should be present in response');
+        $includeReviewedResponse = $this->getJson(route('filament.admin.market-map.spaces', [
+            'without_shapes' => true,
+            'include_reviewed' => true,
+            'limit' => 50,
+        ]));
+
+        $includeReviewedResponse->assertOk();
+        $includeReviewedResponse->assertJsonPath('meta.total_count', 2);
+        $includeReviewedResponse->assertJsonPath('meta.pending_count', 1);
+        $includeReviewedResponse->assertJsonPath('meta.all_count', 2);
+        $includeReviewedResponse->assertJsonPath('meta.include_reviewed', true);
+
+        $reviewedItem = collect($includeReviewedResponse->json('items'))->firstWhere('id', (int) $reviewedSpace->id);
+        $this->assertNotNull($reviewedItem, 'Reviewed space item should be present when include_reviewed is enabled');
         $this->assertSame('matched', $reviewedItem['review_status'] ?? '');
         $this->assertSame('Совпало', $reviewedItem['review_status_label'] ?? '');
         $this->assertNotEmpty($reviewedItem['reviewed_at'] ?? '');
@@ -1159,6 +1174,9 @@ class MarketMapLinkingTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('ok', true);
+        $response->assertJsonPath('meta.total_count', 1);
+        $response->assertJsonPath('meta.pending_count', 1);
+        $response->assertJsonPath('meta.all_count', 1);
 
         $items = collect($response->json('items'));
         $ids = $items->pluck('id')->all();
