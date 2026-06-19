@@ -2407,61 +2407,6 @@
       appearance: textfield;
       -moz-appearance: textfield;
     }
-    .map-message-launcher {
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      z-index: 1200;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 44px;
-      padding: 8px 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(14, 165, 233, 0.35);
-      background: rgba(224, 242, 254, 0.94);
-      color: #075985;
-      -webkit-text-fill-color: #075985;
-      box-shadow: 0 18px 42px rgba(14, 116, 144, 0.18);
-      font-size: 14px;
-      font-weight: 800;
-      text-decoration: none;
-      backdrop-filter: blur(12px);
-      transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
-    }
-    .map-message-launcher:hover {
-      transform: translateY(-1px);
-      background: rgba(186, 230, 253, 0.98);
-      box-shadow: 0 22px 48px rgba(14, 116, 144, 0.24);
-    }
-    .map-message-launcher__icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px;
-      height: 22px;
-      color: #0284c7;
-      -webkit-text-fill-color: #0284c7;
-    }
-    .map-message-launcher__badge {
-      display: none;
-      align-items: center;
-      justify-content: center;
-      min-width: 20px;
-      height: 20px;
-      padding: 0 6px;
-      border-radius: 999px;
-      background: #ef4444;
-      color: #fff;
-      -webkit-text-fill-color: #fff;
-      font-size: 11px;
-      font-weight: 900;
-      line-height: 1;
-      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.28);
-    }
-    .map-message-launcher.has-unread .map-message-launcher__badge {
-      display: inline-flex;
-    }
     .map-message-toast {
       position: fixed;
       top: 18px;
@@ -2552,7 +2497,6 @@
       box-shadow: none;
     }
     @media (prefers-reduced-motion: reduce) {
-      .map-message-launcher,
       .map-message-toast {
         transition: none;
       }
@@ -2567,16 +2511,6 @@
 
 <body>
   <div class="wrap">
-    <a id="mapMessageLauncher" class="map-message-launcher" href="{{ $messageInboxUrl }}" aria-label="Открыть диалоги">
-      <span class="map-message-launcher__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path>
-        </svg>
-      </span>
-      <span>Диалоги</span>
-      <span id="mapMessageBadge" class="map-message-launcher__badge" aria-live="polite"></span>
-    </a>
-
     <div id="mapMessageToast" class="map-message-toast" role="status" aria-live="polite" aria-atomic="true">
       <div class="map-message-toast__inner">
         <div class="map-message-toast__icon" aria-hidden="true">
@@ -2686,11 +2620,12 @@
           }
         }
 
-        function showMessageToast(message) {
+        function showMessageToast(message, options = {}) {
           if (!messageToast || !message) {
             return;
           }
 
+          const autoHide = options.autoHide !== false;
           const title = String(message.title || 'Новое сообщение');
           const body = String(message.body || 'Откройте диалоги, чтобы прочитать сообщение.');
           const url = String(message.url || messageInboxUrl || '/admin/requests');
@@ -2715,9 +2650,12 @@
 
           if (messageToastTimer !== null) {
             window.clearTimeout(messageToastTimer);
+            messageToastTimer = null;
           }
 
-          messageToastTimer = window.setTimeout(hideMessageToast, 10000);
+          if (autoHide) {
+            messageToastTimer = window.setTimeout(hideMessageToast, 10000);
+          }
         }
 
         async function pollMapMessages() {
@@ -2758,12 +2696,16 @@
                 rememberLatestMessage(latest.key);
               }
 
+              if (unreadCount > 0 && latest) {
+                showMessageToast(latest, { autoHide: false });
+              }
+
               return;
             }
 
             if (latest?.key && latest.key !== latestMessageKey) {
               rememberLatestMessage(latest.key);
-              showMessageToast(latest);
+              showMessageToast(latest, { autoHide: false });
             }
           } catch (e) {
             // ignore transient network errors
