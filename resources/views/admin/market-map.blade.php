@@ -3524,6 +3524,7 @@
         const CAN_EDIT  = @json((bool) $canEdit);
         const CAN_VIEW_FINANCE = @json((bool) $canViewFinanceMap);
         const CAN_BIND_CONTRACTS = @json((bool) ($canBindContracts ?? false));
+        const CAN_OPEN_PDF = @json((bool) $canOpenPdf);
         const INITIAL_MAP_MODE = @json($mapMode ?? 'map');
         const MARKET_ID = @json((int) $marketId);
         const MAP_PAGE = @json((int) ($mapPage ?? 1));
@@ -3847,10 +3848,28 @@
 
         function fallbackToIframe(reason) {
           console.warn('PDF.js fallback:', reason);
-          setMapLoadProgress(100, 'Встроенный просмотр PDF', 'fallback');
+          setMapLoadProgress(100, 'Не удалось загрузить интерактивную карту', 'fallback');
           disablePdfJsControls();
           if (viewerRoot) {
-            viewerRoot.innerHTML = '<iframe class="iframe" src="' + PDF_URL + '" loading="lazy"></iframe>';
+            const pdfLink = CAN_OPEN_PDF && PDF_URL
+              ? '<a href="' + escapeHtml(PDF_URL) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;text-decoration:none;font-weight:700;padding:9px 12px;">Открыть PDF</a>'
+              : '';
+
+            viewerRoot.innerHTML =
+              '<div style="display:flex;min-height:360px;align-items:center;justify-content:center;padding:24px;">' +
+                '<div style="max-width:560px;border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:14px;padding:18px;box-shadow:0 18px 45px rgba(127,29,29,.12);">' +
+                  '<div style="font-weight:800;font-size:16px;margin-bottom:8px;">Интерактивная карта не загрузилась</div>' +
+                  '<div style="font-size:14px;line-height:1.45;margin-bottom:14px;">Не удалось загрузить PDF.js. Проверьте доступность локальных файлов /vendor/pdfjs/*.mjs и корректный MIME type для .mjs на сервере.</div>' +
+                  '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+                    '<button id="retryMapLoad" type="button" style="border-radius:10px;border:1px solid #fca5a5;background:#fff;color:#7f1d1d;font-weight:700;padding:9px 12px;">Повторить загрузку</button>' +
+                    pdfLink +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+
+            document.getElementById('retryMapLoad')?.addEventListener('click', () => {
+              window.location.reload();
+            });
           }
         }
 
@@ -9561,7 +9580,7 @@
 
           const localMjsBlob = await withMapLoadTimeout(
             tryImportBlob('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs'),
-            4000,
+            15000,
             'local blob pdfjs'
           );
           if (localMjsBlob) return localMjsBlob;
