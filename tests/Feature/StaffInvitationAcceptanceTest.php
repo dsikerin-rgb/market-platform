@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Market;
 use App\Models\StaffInvitation;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -14,6 +15,20 @@ use Tests\TestCase;
 class StaffInvitationAcceptanceTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_invitation_acceptance_post_route_does_not_require_csrf_session(): void
+    {
+        $route = app('router')->getRoutes()->getByName('staff-invitations.accept.submit');
+
+        $this->assertNotNull($route);
+
+        $middleware = app('router')->gatherRouteMiddleware($route);
+
+        $this->assertFalse(collect($middleware)->contains(
+            static fn (mixed $middleware): bool => is_string($middleware)
+                && is_a($middleware, VerifyCsrfToken::class, true)
+        ));
+    }
 
     public function test_invited_staff_user_can_accept_invitation(): void
     {

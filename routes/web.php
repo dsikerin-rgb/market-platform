@@ -94,6 +94,7 @@ Route::get('/login', function () {
 Route::get('/staff-invitations/{invitation}/{token}', [StaffInvitationController::class, 'show'])
     ->name('staff-invitations.accept');
 Route::post('/staff-invitations/{invitation}/{token}', [StaffInvitationController::class, 'accept'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
     ->name('staff-invitations.accept.submit');
 
 Route::prefix('cabinet')->middleware('cabinet.no_cache')->group(function () {
