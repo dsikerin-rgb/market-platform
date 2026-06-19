@@ -74,7 +74,8 @@ class AccrualCompositionWidgetTest extends TestCase
 
         $data = $widget->exposedGetViewData();
 
-        self::assertSame('Пакеты начислений 1С', $data['heading']);
+        self::assertSame('Состав начислений 1С', $data['heading']);
+        self::assertSame('06.2026 • группировка по составу услуг', $data['description']);
         self::assertSame(3000.0, $data['totalAmount']);
         self::assertSame(4, $data['rowsCount']);
         self::assertSame(3, $data['packagesCount']);

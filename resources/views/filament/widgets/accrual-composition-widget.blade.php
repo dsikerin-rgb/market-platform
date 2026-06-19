@@ -152,7 +152,7 @@
             <div class="accrual-packages-widget__summary">
                 <div class="accrual-packages-widget__total">{{ $formatMoney((float) $totalAmount) }}</div>
                 <div class="accrual-packages-widget__meta">
-                    {{ $formatCount((int) $rowsCount) }} строк · {{ $formatCount((int) $packagesCount) }} пакетов
+                    {{ $formatCount((int) $rowsCount) }} строк · {{ $formatCount((int) $packagesCount) }} групп
                 </div>
             </div>
 
@@ -170,7 +170,7 @@
                             <span>{{ $package['percent_label'] }}%</span>
                             <span>{{ $formatCount((int) $package['rows']) }} строк</span>
                             @if (filled($package['packages_count'] ?? null))
-                                <span>{{ $formatCount((int) $package['packages_count']) }} пакетов</span>
+                                <span>{{ $formatCount((int) $package['packages_count']) }} групп</span>
                             @endif
                         </div>
 

@@ -628,7 +628,7 @@ class Dashboard extends BaseDashboard
                 + [
                     'accrual_composition' => [
                         'class' => AccrualCompositionWidget::class,
-                        'label' => 'Пакеты начислений 1С',
+                        'label' => 'Состав начислений 1С',
                     ],
                 ]
                 + array_slice($widgets, 4, null, true);

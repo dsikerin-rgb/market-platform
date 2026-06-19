@@ -22,7 +22,7 @@ class AccrualCompositionWidget extends Widget
 
     protected string $view = 'filament.widgets.accrual-composition-widget';
 
-    protected ?string $heading = 'Пакеты начислений 1С';
+    protected ?string $heading = 'Состав начислений 1С';
 
     protected int|string|array $columnSpan = [
         'default' => 'full',
@@ -87,7 +87,7 @@ class AccrualCompositionWidget extends Widget
 
         if ($tailPackages !== []) {
             $visiblePackages[] = $this->formatPackageRow([
-                'name' => 'Прочие пакеты',
+                'name' => 'Прочие группы',
                 'amount' => array_sum(array_column($tailPackages, 'amount')),
                 'rows' => array_sum(array_column($tailPackages, 'rows')),
             ], count($visiblePackages), $totalAmount, count($tailPackages));
@@ -95,7 +95,7 @@ class AccrualCompositionWidget extends Widget
 
         return [
             'heading' => $this->heading,
-            'description' => $this->formatMonthLabel($effectiveMonthYm, $tz) . ' • пакеты service_name из 1С',
+            'description' => $this->formatMonthLabel($effectiveMonthYm, $tz) . ' • группировка по составу услуг',
             'packages' => $visiblePackages,
             'totalAmount' => round($totalAmount, 2),
             'rowsCount' => array_sum(array_column($packages, 'rows')),
