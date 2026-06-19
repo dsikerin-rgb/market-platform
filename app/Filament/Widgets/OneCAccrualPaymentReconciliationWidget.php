@@ -18,6 +18,8 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
     use InteractsWithPageFilters;
     use ResolvesDashboardFilterMonth;
 
+    protected string $view = 'filament.widgets.one-c-accrual-payment-reconciliation-widget';
+
     protected ?string $heading = 'Начислено / оплачено по 1С';
 
     protected int|string|array $columnSpan = [
@@ -25,7 +27,7 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
         'lg' => 2,
     ];
 
-    protected ?string $maxHeight = '320px';
+    protected ?string $maxHeight = '250px';
 
     protected function getType(): string
     {
@@ -116,7 +118,8 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
         $hasAnyData = false;
         $accruedData = [];
         $paidData = [];
-        $deltaData = [];
+        $deltaBars = [];
+        $deltaMaxAbs = 0.0;
 
         foreach ($months as $month) {
             $accrued = round((float) ($accrualsByMonth[$month] ?? 0.0), 2);
@@ -125,7 +128,13 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
 
             $accruedData[] = $accrued;
             $paidData[] = $paid;
-            $deltaData[] = $delta;
+            $deltaBars[] = [
+                'label' => $this->formatMonthLabel($month, $tz),
+                'value' => $delta,
+                'accrued' => $accrued,
+                'paid' => $paid,
+            ];
+            $deltaMaxAbs = max($deltaMaxAbs, abs($delta));
 
             if (abs($accrued) > 0.009 || abs($paid) > 0.009) {
                 $hasAnyData = true;
@@ -156,18 +165,9 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
                     'borderColor' => '#34d399',
                     'borderWidth' => 1,
                 ],
-                [
-                    'type' => 'line',
-                    'label' => 'Разница',
-                    'data' => $deltaData,
-                    'borderColor' => '#ef4444',
-                    'backgroundColor' => '#ef4444',
-                    'borderWidth' => 2,
-                    'pointRadius' => 2,
-                    'tension' => 0.25,
-                    'fill' => false,
-                ],
             ],
+            'deltaBars' => $deltaBars,
+            'deltaMaxAbs' => $deltaMaxAbs,
         ];
     }
 
@@ -549,6 +549,8 @@ class OneCAccrualPaymentReconciliationWidget extends ChartWidget
     {
         return [
             'labels' => [$label],
+            'deltaBars' => [],
+            'deltaMaxAbs' => 0.0,
             'datasets' => [
                 [
                     'label' => 'Начислено',

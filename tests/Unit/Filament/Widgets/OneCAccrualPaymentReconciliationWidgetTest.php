@@ -106,8 +106,9 @@ class OneCAccrualPaymentReconciliationWidgetTest extends TestCase
         })->exposedGetData();
 
         self::assertSame('03.2026', $data['labels'][12]);
+        self::assertCount(2, $data['datasets']);
         self::assertSame(1000.0, $data['datasets'][0]['data'][12]);
         self::assertSame(1500.0, $data['datasets'][1]['data'][12]);
-        self::assertSame(-500.0, $data['datasets'][2]['data'][12]);
+        self::assertSame(-500.0, $data['deltaBars'][12]['value']);
     }
 }
