@@ -1133,22 +1133,13 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $total = (int) (clone $baseQuery)->count();
 
         if (Schema::hasTable('market_space_map_shapes')) {
-            MarketSpaceShapePolicy::scopeRequiresOwnMapShape($withoutShapesBaseQuery);
+            MarketSpaceShapePolicy::scopeRequiresOwnMapShape($withoutShapesBaseQuery, (int) $market->id);
             $withoutShapesBaseQuery->whereDoesntHave('mapShapes', function ($q) {
-                $q->where('is_active', true)
-                  ->where(function ($sub) {
-                      $sub->whereNotNull('bbox_x1')
-                          ->whereNotNull('bbox_y1')
-                          ->whereNotNull('bbox_x2')
-                          ->whereNotNull('bbox_y2')
-                          ->whereColumn('bbox_x1', '<', 'bbox_x2')
-                          ->whereColumn('bbox_y1', '<', 'bbox_y2');
-                      $sub->orWhereJsonLength('polygon', '>=', 3);
-                  });
+                MarketSpaceShapePolicy::scopeUsableMapShape($q);
             });
         }
 
-        $withoutShapesTotal = (clone $withoutShapesBaseQuery)->count('id');
+        $withoutShapesAllTotal = (clone $withoutShapesBaseQuery)->count('id');
 
         if (! $hasMapReviewColumns()) {
             return [
@@ -1156,8 +1147,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 'reviewed' => 0,
                 'remaining' => $total,
                 'percent' => 0,
-                'without_shapes_total' => $withoutShapesTotal,
-                'without_shapes_pending' => $withoutShapesTotal,
+                'without_shapes_total' => $withoutShapesAllTotal,
+                'without_shapes_pending' => $withoutShapesAllTotal,
+                'without_shapes_all_total' => $withoutShapesAllTotal,
                 'counts' => [],
                 'labels' => [],
             ];
@@ -1182,8 +1174,9 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'reviewed' => $reviewed,
             'remaining' => $remaining,
             'percent' => $total > 0 ? (int) round(($reviewed / $total) * 100) : 0,
-            'without_shapes_total' => $withoutShapesTotal,
+            'without_shapes_total' => $withoutShapesPending,
             'without_shapes_pending' => $withoutShapesPending,
+            'without_shapes_all_total' => $withoutShapesAllTotal,
             'counts' => $counts,
             'labels' => collect(array_keys($counts))
                 ->mapWithKeys(fn (string $status): array => [$status => $mapReviewStatusLabel($status) ?? $status])
@@ -1893,6 +1886,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'number' => ['nullable', 'string', 'max:64'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
             'without_shapes' => ['nullable', 'boolean'],
+            'include_reviewed' => ['nullable', 'boolean'],
             'group_parents_only' => ['nullable', 'boolean'],
         ]);
 
@@ -1901,6 +1895,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         // Режим: список мест без usable bbox для ревизии
         if ($withoutShapes) {
             $limit = (int) ($validated['limit'] ?? 200);
+            $includeReviewed = (bool) ($validated['include_reviewed'] ?? false);
 
             // Проверяем наличие таблиц и колонок
             if (! Schema::hasTable('market_space_map_shapes')) {
@@ -1919,7 +1914,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ], 422);
             }
 
-            // Запрос: активные места без usable shape, независимо от map_review_status
+            // Запрос: активные места без usable shape.
             // Usable bbox = active shape с (bbox_x1/bbox_y1/bbox_x2/bbox_y2 NOT NULL) ИЛИ (polygon ≥3 точек)
             $baseWithoutShapesQuery = MarketSpace::query()
                 ->with([
@@ -1935,7 +1930,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
             // Parent-группы не считаются "местами без фигур":
             // у группы может не быть собственной фигуры, она отображается через дочерние места.
-            MarketSpaceShapePolicy::scopeRequiresOwnMapShape($baseWithoutShapesQuery);
+            MarketSpaceShapePolicy::scopeRequiresOwnMapShape($baseWithoutShapesQuery, (int) $market->id);
 
             // Исключаем места у которых ЕСТЬ usable shape для review navigation
             // (согласовано с buildReviewNavItemsFromShapes() на фронте)
@@ -1947,25 +1942,13 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             //
             // whereDoesntHave инвертирует: вернёт места БЕЗ usable shape
             $baseWithoutShapesQuery->whereDoesntHave('mapShapes', function ($q) {
-                $q->where('is_active', true)
-                  ->where(function ($sub) {
-                      // Вариант 1: есть bbox с корректными размерами (x1 < x2 и y1 < y2)
-                      $sub->whereNotNull('bbox_x1')
-                          ->whereNotNull('bbox_y1')
-                          ->whereNotNull('bbox_x2')
-                          ->whereNotNull('bbox_y2')
-                          ->whereColumn('bbox_x1', '<', 'bbox_x2')
-                          ->whereColumn('bbox_y1', '<', 'bbox_y2');
-                      
-                      // Вариант 2: polygon с ≥3 точками (fallback для вычисляемого bbox)
-                      // orWhere внутри $sub гарантирует что это условие
-                      // применяется вместе с is_active = true (внешний where)
-                      $sub->orWhereJsonLength('polygon', '>=', 3);
-                  });
+                MarketSpaceShapePolicy::scopeUsableMapShape($q);
             });
 
             // Поиск по строке q (номер / код / display_name / арендатор)
-            $query = clone $baseWithoutShapesQuery;
+            $allWithoutShapesQuery = clone $baseWithoutShapesQuery;
+            $pendingWithoutShapesQuery = (clone $baseWithoutShapesQuery)->whereNull('map_review_status');
+            $query = clone ($includeReviewed ? $allWithoutShapesQuery : $pendingWithoutShapesQuery);
 
             $rawQ = trim((string) ($validated['q'] ?? ''));
             if ($rawQ !== '') {
@@ -2001,63 +1984,6 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                     'map_reviewed_at',
                     'map_reviewed_by',
                 ]);
-
-            // Фильтр shared-use participant-псевдо-мест (с pattern __t\d+ или _t\d+ в number),
-            // если у основного места есть фигура на карте.
-            // Participant-псевдо-места имеют number вида "Склад 21__t210" или "Склад 21_t210".
-            // Основное место — это "Склад 21" (без suffix).
-            //
-            // Собираем base numbers всех participant-псевдо-мест
-            $participantBaseNumbers = [];
-            foreach ($rows as $row) {
-                $number = (string) $row->number;
-                $baseNumber = preg_replace('/__t[0-9]+$/', '', $number);
-                if ($baseNumber === $number) {
-                    $baseNumber = preg_replace('/_t[0-9]+$/', '', $number);
-                }
-                if ($baseNumber !== $number) {
-                    // Это participant-псевдо-место
-                    $participantBaseNumbers[$baseNumber] = true;
-                }
-            }
-
-            // Проверяем, у каких base numbers ЕСТЬ фигура
-            $baseNumbersWithShapes = [];
-            if (!empty($participantBaseNumbers)) {
-                $spacesWithShapes = MarketSpace::query()
-                    ->where('market_id', (int) $market->id)
-                    ->whereIn('number', array_keys($participantBaseNumbers))
-                    ->whereHas('mapShapes', function ($q) use ($market) {
-                        $q->where('market_id', (int) $market->id)
-                          ->where('is_active', true)
-                          ->where(function ($sub) {
-                              $sub->whereNotNull('bbox_x1')
-                                  ->whereNotNull('bbox_y1')
-                                  ->whereNotNull('bbox_x2')
-                                  ->whereNotNull('bbox_y2')
-                                  ->whereColumn('bbox_x1', '<', 'bbox_x2')
-                                  ->whereColumn('bbox_y1', '<', 'bbox_y2');
-                              $sub->orWhereJsonLength('polygon', '>=', 3);
-                          });
-                    })
-                    ->pluck('number')
-                    ->toArray();
-                $baseNumbersWithShapes = array_fill_keys($spacesWithShapes, true);
-            }
-
-            // Исключаем participant-псевдо-места, у которых основное место с фигурой
-            $rows = $rows->filter(function ($row) use ($baseNumbersWithShapes) {
-                $number = (string) $row->number;
-                $baseNumber = preg_replace('/__t[0-9]+$/', '', $number);
-                if ($baseNumber === $number) {
-                    $baseNumber = preg_replace('/_t[0-9]+$/', '', $number);
-                }
-                if ($baseNumber !== $number) {
-                    // Это participant-псевдо-место — исключаем, если у base есть фигура
-                    return !isset($baseNumbersWithShapes[$baseNumber]);
-                }
-                return true;
-            });
 
             $spaceIds = $rows->pluck('id')->map(static fn ($id): int => (int) $id)->values();
             $today = now()->toDateString();
@@ -2157,14 +2083,17 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
                 ];
             })->values();
 
-            $totalWithoutShapesCount = (clone $baseWithoutShapesQuery)->count('id');
-            $pendingWithoutShapesCount = (clone $baseWithoutShapesQuery)->whereNull('map_review_status')->count('id');
+            $allWithoutShapesCount = (clone $allWithoutShapesQuery)->count('id');
+            $pendingWithoutShapesCount = (clone $pendingWithoutShapesQuery)->count('id');
+            $totalWithoutShapesCount = $includeReviewed ? $allWithoutShapesCount : $pendingWithoutShapesCount;
 
             return response()->json(['ok' => true, 'items' => $items, 'meta' => [
                 'without_shapes' => true,
                 'count' => count($items),
                 'total_count' => $totalWithoutShapesCount,
                 'pending_count' => $pendingWithoutShapesCount,
+                'all_count' => $allWithoutShapesCount,
+                'include_reviewed' => $includeReviewed,
                 'shape_policy' => [
                     'parent_groups_require_own_shape' => false,
                     'parent_group_label' => 'Фигура не требуется',

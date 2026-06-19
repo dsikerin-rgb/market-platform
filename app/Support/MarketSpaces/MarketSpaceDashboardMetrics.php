@@ -299,7 +299,7 @@ class MarketSpaceDashboardMetrics
             ->where('market_spaces.market_id', $marketId)
             ->where('market_spaces.is_active', true));
 
-        MarketSpaceShapePolicy::scopeRequiresOwnMapShape($query);
+        MarketSpaceShapePolicy::scopeRequiresOwnMapShape($query, $marketId);
 
         if (! Schema::hasTable('market_space_map_shapes')) {
             return $query;
