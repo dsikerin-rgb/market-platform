@@ -9571,15 +9571,18 @@
         }
 
         async function loadPdfJs() {
+          const localPdfJsUrl = '/vendor/pdfjs/pdf.min.mjs?v=pdfjs-mjs-20260619';
+          const localPdfWorkerUrl = '/vendor/pdfjs/pdf.worker.min.mjs?v=pdfjs-mjs-20260619';
+
           const localMjsDirect = await withMapLoadTimeout(
-            tryImportDirect('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs'),
+            tryImportDirect(localPdfJsUrl, localPdfWorkerUrl),
             4000,
             'local direct pdfjs'
           );
           if (localMjsDirect) return localMjsDirect;
 
           const localMjsBlob = await withMapLoadTimeout(
-            tryImportBlob('/vendor/pdfjs/pdf.min.mjs', '/vendor/pdfjs/pdf.worker.min.mjs'),
+            tryImportBlob(localPdfJsUrl, localPdfWorkerUrl),
             15000,
             'local blob pdfjs'
           );
