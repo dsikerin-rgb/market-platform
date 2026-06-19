@@ -5682,26 +5682,7 @@
 
         function saveChosenSpaceToLS() {
           try {
-            if (!chosenSpace) {
-              localStorage.removeItem(LS_KEY_CHOSEN);
-              return;
-            }
-              const payload = {
-                id: chosenSpace.id,
-                number: chosenSpace.number,
-                code: chosenSpace.code,
-                displayName: chosenSpace.displayName,
-                spaceGroupRole: chosenSpace.spaceGroupRole || '',
-                spaceGroupParentId: chosenSpace.spaceGroupParentId ?? null,
-                spaceGroupSlot: chosenSpace.spaceGroupSlot ?? '',
-                isSpaceGroupParent: !!chosenSpace.isSpaceGroupParent,
-                resultType: chosenSpace.resultType || 'space',
-                tenantName: chosenSpace.tenantName,
-                reviewStatus: chosenSpace.reviewStatus,
-                reviewStatusLabel: chosenSpace.reviewStatusLabel,
-                bindingRisk: chosenSpace.bindingRisk ?? null,
-              };
-            localStorage.setItem(LS_KEY_CHOSEN, JSON.stringify(payload));
+            localStorage.removeItem(LS_KEY_CHOSEN);
           } catch {}
         }
 
@@ -5889,17 +5870,7 @@
           }
         }
 
-        if (CAN_EDIT) {
-          try {
-            const saved = localStorage.getItem(LS_KEY_CHOSEN);
-            if (saved) {
-              const parsed = JSON.parse(saved);
-              const restored = normalizeChosenSpace(parsed);
-              if (restored) setChosenSpace(restored, { announce: false });
-            }
-          } catch {}
-        }
-
+        saveChosenSpaceToLS();
         loadLayerModeFromLS();
         updateLegendVisibility();
 

@@ -279,6 +279,15 @@ class MarketMapLinkingTest extends TestCase
         $response->assertViewHas('returnUrl', $returnUrl);
     }
 
+    public function test_market_map_does_not_restore_chosen_space_from_local_storage(): void
+    {
+        $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+
+        $this->assertStringContainsString('localStorage.removeItem(LS_KEY_CHOSEN);', $blade);
+        $this->assertStringNotContainsString('localStorage.getItem(LS_KEY_CHOSEN)', $blade);
+        $this->assertStringNotContainsString('localStorage.setItem(LS_KEY_CHOSEN', $blade);
+    }
+
     public function test_market_map_uses_honest_review_labels_for_tenant_fallback_cases(): void
     {
         $this->actingAsSuperAdmin();
