@@ -11,7 +11,7 @@ class AiAgentAnswerPresenterTest extends TestCase
 {
     public function test_moves_internal_tenant_url_to_chip_and_removes_identifier(): void
     {
-        $presented = (new AiAgentAnswerPresenter)->present(
+        $presented = (new AiAgentAnswerPresenter(['market.176.108.244.218.nip.io']))->present(
             "Самый большой долг у арендатора «ТД ЭЛЕКТРОТЕХМОНТАЖ АО».\n\nОткройте карточку арендатора с идентификатором `52`.\n\nhttps://market.176.108.244.218.nip.io/admin/tenants/view/52",
         );
 
@@ -34,5 +34,15 @@ class AiAgentAnswerPresenterTest extends TestCase
         self::assertCount(1, $presented['chips']);
         self::assertSame('Открыть задачу', $presented['chips'][0]['label']);
         self::assertSame('/admin/tasks/9/edit', $presented['chips'][0]['url']);
+    }
+
+    public function test_keeps_off_site_admin_urls_out_of_chips(): void
+    {
+        $presented = (new AiAgentAnswerPresenter(['market.176.108.244.218.nip.io']))->present(
+            'Открой [задачу](https://evil.example/admin/tasks/9/edit)',
+        );
+
+        self::assertStringContainsString('https://evil.example/admin/tasks/9/edit', $presented['answer']);
+        self::assertSame([], $presented['chips']);
     }
 }

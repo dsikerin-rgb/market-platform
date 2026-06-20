@@ -9,6 +9,13 @@ use Illuminate\Support\Str;
 class AiAgentAnswerPresenter
 {
     /**
+     * @param  list<string>  $trustedHosts
+     */
+    public function __construct(
+        private readonly array $trustedHosts = [],
+    ) {}
+
+    /**
      * @param  list<array{label:string,url:string}>  $chips
      * @return array{answer:string,chips:list<array{label:string,url:string}>}
      */
@@ -79,7 +86,7 @@ class AiAgentAnswerPresenter
     {
         $url = trim($url, " \t\n\r\0\x0B.,;\"'`*");
         $path = parse_url($url, PHP_URL_PATH);
-        if (! is_string($path) || ! str_starts_with($path, '/admin')) {
+        if (! is_string($path) || ! str_starts_with($path, '/admin') || ! $this->isAllowedInternalUrl($url)) {
             return null;
         }
 
@@ -87,6 +94,50 @@ class AiAgentAnswerPresenter
             'label' => $this->humanLabel($path, $label),
             'url' => $url,
         ];
+    }
+
+    private function isAllowedInternalUrl(string $url): bool
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+        if ($host === null || $host === false || trim((string) $host) === '') {
+            return str_starts_with($url, '/admin/');
+        }
+
+        $allowedHosts = $this->allowedHosts();
+
+        return in_array(Str::lower((string) $host), $allowedHosts, true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function allowedHosts(): array
+    {
+        $hosts = collect($this->trustedHosts)
+            ->map(static fn (string $host): string => Str::lower(trim($host)))
+            ->filter()
+            ->values()
+            ->all();
+
+        try {
+            if (function_exists('config')) {
+                $configuredHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+                if (is_string($configuredHost) && $configuredHost !== '') {
+                    $hosts[] = Str::lower($configuredHost);
+                }
+            }
+
+            if (function_exists('request')) {
+                $requestHost = request()->getHost();
+                if (is_string($requestHost) && $requestHost !== '') {
+                    $hosts[] = Str::lower($requestHost);
+                }
+            }
+        } catch (\Throwable) {
+            // If the presenter is used outside Laravel bootstrap, keep only relative links eligible.
+        }
+
+        return array_values(array_unique($hosts));
     }
 
     private function humanLabel(string $path, ?string $label): string
