@@ -118,7 +118,7 @@ class QuickChatDrawerTest extends TestCase
         $this->actingAsMarketAdmin($market);
 
         app()->instance(AiConsultantService::class, new class extends AiConsultantService {
-            public function answer(User $user, int $marketId, string $question): array
+            public function answer(User $user, int $marketId, string $question, array $history = []): array
             {
                 return [
                     'answer' => 'Ответ по базе для рынка #' . $marketId . ': ' . $question,
