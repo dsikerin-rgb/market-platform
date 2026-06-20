@@ -1,20 +1,23 @@
 <?php
-# app/Livewire/Admin/QuickChatDrawer.php
+
+// app/Livewire/Admin/QuickChatDrawer.php
 
 declare(strict_types=1);
 
 namespace App\Livewire\Admin;
 
-use App\Services\Ai\AiConsultantService;
+use App\Models\AiConversation;
+use App\Models\AiMessage;
 use App\Models\StaffConversation;
 use App\Models\StaffConversationMessage;
 use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\TicketChatNotification;
-use App\Support\StaffConversationService;
+use App\Services\Ai\AiConsultantService;
 use App\Support\MessageAttachmentStorage;
 use App\Support\Search\LooseSearch;
+use App\Support\StaffConversationService;
 use App\Support\TicketAccessService;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -32,6 +35,8 @@ class QuickChatDrawer extends Component
 {
     use WithFileUploads;
 
+    private const AI_GREETING_MESSAGE = 'Здравствуйте. Чем помочь по этой странице или данным рынка? Могу проверить информацию, подготовить ссылку, создать задачу, напоминание или отправить сообщение.';
+
     public bool $isOpen = false;
 
     public ?string $selectedType = null;
@@ -41,9 +46,14 @@ class QuickChatDrawer extends Component
     public string $messageBody = '';
 
     /**
-     * @var list<array{id:string,user_name:string,body:string,is_own:bool,created_at:string,date_key:string,date_label:string,attachments:list<array<string,mixed>>}>
+     * @var list<array{id:string,user_name:string,body:string,is_own:bool,created_at:string,date_key:string,date_label:string,attachments:list<array<string,mixed>>,chips:list<array{label:string,url:string}>}>
      */
     public array $aiMessages = [];
+
+    /**
+     * @var array{url?:string,path?:string,title?:string,heading?:string}
+     */
+    public array $pageContext = [];
 
     /**
      * @var array<int, TemporaryUploadedFile>
@@ -85,6 +95,7 @@ class QuickChatDrawer extends Component
             $this->selectedType = 'ai';
             $this->selectedId = 1;
             $this->isOpen = true;
+            $this->loadAiMessages();
 
             return;
         }
@@ -139,6 +150,24 @@ class QuickChatDrawer extends Component
         $this->resetErrorBag();
     }
 
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public function updatePageContext(array $context): void
+    {
+        $this->pageContext = [
+            'url' => Str::limit(trim((string) ($context['url'] ?? '')), 500, ''),
+            'path' => Str::limit(trim((string) ($context['path'] ?? '')), 300, ''),
+            'title' => Str::limit(trim((string) ($context['title'] ?? '')), 160, ''),
+            'heading' => Str::limit(trim((string) ($context['heading'] ?? '')), 160, ''),
+        ];
+
+        $user = $this->currentUser();
+        if ($user && $this->selectedType === 'ai') {
+            $this->touchAiConversationPageContext($user);
+        }
+    }
+
     public function selectChat(string $type, int $id): void
     {
         $type = in_array($type, ['ai', 'staff', 'ticket'], true) ? $type : 'ticket';
@@ -158,7 +187,7 @@ class QuickChatDrawer extends Component
         }
 
         if ($type === 'ai') {
-            // Virtual read-only consultant chat. Access is controlled by the current Filament session.
+            $this->loadAiMessages();
         } elseif ($type === 'staff') {
             if (! $this->staffTablesAvailable()) {
                 return;
@@ -228,8 +257,8 @@ class QuickChatDrawer extends Component
             $history = $this->aiConversationHistory();
             $this->appendAiMessage($user->name ?: 'Вы', $body, true);
 
-            $answer = $aiConsultant->answer($user, $this->resolveMarketId($user), $body, $history);
-            $this->appendAiMessage('ИИ-консультант', $answer['answer'], false);
+            $answer = $aiConsultant->answer($user, $this->resolveMarketId($user), $body, $history, $this->pageContext);
+            $this->appendAiMessage('ИИ-консультант', $answer['answer'], false, $answer['chips'] ?? []);
 
             $this->messageBody = '';
             $this->messageAttachments = [];
@@ -341,9 +370,9 @@ class QuickChatDrawer extends Component
             'id' => 1,
             'title' => 'ИИ-консультант',
             'subtitle' => 'База данных рынка',
-            'preview' => 'Спросите про арендаторов, места, договоры, задолженность или 1С.',
-            'meta' => 'read-only',
-            'count' => count($this->aiMessages),
+            'preview' => 'Спросите про арендаторов, места, договоры, задолженность, задачи или сообщения.',
+            'meta' => 'помощник',
+            'count' => $this->aiMessageCount(),
             'unread_count' => 0,
             'sort_at' => now()->subYears(10),
         ];
@@ -451,7 +480,7 @@ class QuickChatDrawer extends Component
     }
 
     /**
-     * @param list<int> $existingPeerIds
+     * @param  list<int>  $existingPeerIds
      * @return Collection<int, array<string, mixed>>
      */
     private function staffSearchCandidates(User $user, array $existingPeerIds): Collection
@@ -548,10 +577,10 @@ class QuickChatDrawer extends Component
             'type' => 'ai',
             'id' => 1,
             'title' => 'ИИ-консультант',
-            'subtitle' => 'Read-only доступ к данным текущего рынка',
-            'description' => 'Можно спросить про места, арендаторов, договоры, задолженность, обращения и 1С-сверку. Ответ не меняет данные.',
+            'subtitle' => 'Помощник по данным и рабочим действиям текущего рынка',
+            'description' => 'Можно спросить про места, арендаторов, договоры, задолженность, обращения, задачи, события и 1С-сверку.',
             'meta' => config('gigachat.auth_key') ? 'GigaChat подключён' : 'ИИ отключён',
-            'count' => count($this->aiMessages),
+            'count' => $this->aiMessageCount(),
         ];
     }
 
@@ -576,7 +605,7 @@ class QuickChatDrawer extends Component
             'title' => trim((string) $ticket->subject) !== '' ? trim((string) $ticket->subject) : 'Диалог с арендатором',
             'subtitle' => trim((string) ($ticket->tenant?->display_name ?? '')) ?: 'Арендатор',
             'description' => trim((string) $ticket->description),
-            'meta' => 'Обновлено: ' . $this->formatDateTime($ticket->updated_at),
+            'meta' => 'Обновлено: '.$this->formatDateTime($ticket->updated_at),
             'count' => $this->ticketMessagesCount($ticket),
         ];
     }
@@ -633,7 +662,7 @@ class QuickChatDrawer extends Component
             'title' => trim((string) $peer->name) !== '' ? trim((string) $peer->name) : 'Сотрудник',
             'subtitle' => trim((string) $peer->email),
             'description' => '',
-            'meta' => 'Обновлено: ' . $this->formatDateTime($latestConversation->last_message_at ?: $latestConversation->updated_at),
+            'meta' => 'Обновлено: '.$this->formatDateTime($latestConversation->last_message_at ?: $latestConversation->updated_at),
             'count' => $messagesCount,
         ];
     }
@@ -700,7 +729,7 @@ class QuickChatDrawer extends Component
 
         if ($description !== '') {
             $initial->push([
-                'id' => 'ticket-' . (int) $ticket->id . '-initial',
+                'id' => 'ticket-'.(int) $ticket->id.'-initial',
                 'user_name' => trim((string) ($ticket->tenant?->display_name ?? '')) ?: 'Арендатор',
                 'body' => $description,
                 'is_own' => false,
@@ -724,7 +753,7 @@ class QuickChatDrawer extends Component
             ->oldest('created_at')
             ->get()
             ->map(fn (TicketComment $comment): array => [
-                'id' => 'ticket-comment-' . (int) $comment->id,
+                'id' => 'ticket-comment-'.(int) $comment->id,
                 'user_name' => trim((string) ($comment->user?->name ?? '')) ?: 'Пользователь',
                 'body' => trim((string) $comment->body),
                 'is_own' => (int) $comment->user_id === (int) $user->id,
@@ -737,12 +766,36 @@ class QuickChatDrawer extends Component
         return $initial->merge($comments)->values();
     }
 
-    private function appendAiMessage(string $userName, string $body, bool $isOwn): void
+    /**
+     * @param  list<array{label:string,url:string}>  $chips
+     */
+    private function appendAiMessage(string $userName, string $body, bool $isOwn, array $chips = []): void
     {
-        $now = now()->timezone(config('app.timezone'));
+        $user = $this->currentUser();
+        $conversation = $user ? $this->aiConversation($user, create: true) : null;
 
+        if ($conversation instanceof AiConversation) {
+            $this->touchAiConversationPageContext($user, $conversation);
+
+            $message = AiMessage::query()->create([
+                'ai_conversation_id' => (int) $conversation->id,
+                'role' => $isOwn ? AiMessage::ROLE_USER : AiMessage::ROLE_ASSISTANT,
+                'body' => $body,
+                'metadata' => [
+                    'user_name' => $userName,
+                    'chips' => $this->normalizeAiChips($chips),
+                ],
+            ]);
+
+            $conversation->touch();
+            $this->aiMessages[] = $this->formatAiMessage($message);
+
+            return;
+        }
+
+        $now = now()->timezone(config('app.timezone'));
         $this->aiMessages[] = [
-            'id' => 'ai-message-' . count($this->aiMessages) . '-' . $now->format('Hisv'),
+            'id' => 'ai-message-'.count($this->aiMessages).'-'.$now->format('Hisv'),
             'user_name' => $userName,
             'body' => $body,
             'is_own' => $isOwn,
@@ -750,6 +803,7 @@ class QuickChatDrawer extends Component
             'date_key' => $now->toDateString(),
             'date_label' => $this->formatDateLabel($now),
             'attachments' => [],
+            'chips' => $this->normalizeAiChips($chips),
         ];
     }
 
@@ -758,6 +812,25 @@ class QuickChatDrawer extends Component
      */
     private function aiConversationHistory(): array
     {
+        $user = $this->currentUser();
+        $conversation = $user ? $this->aiConversation($user, create: true) : null;
+
+        if ($conversation instanceof AiConversation) {
+            return $conversation->messages()
+                ->whereIn('role', [AiMessage::ROLE_USER, AiMessage::ROLE_ASSISTANT])
+                ->latest('created_at')
+                ->limit(40)
+                ->get()
+                ->reverse()
+                ->map(static fn (AiMessage $message): array => [
+                    'role' => (string) $message->role,
+                    'content' => trim((string) $message->body),
+                ])
+                ->filter(static fn (array $message): bool => $message['content'] !== '')
+                ->values()
+                ->all();
+        }
+
         return collect($this->aiMessages)
             ->map(static fn (array $message): array => [
                 'role' => (bool) ($message['is_own'] ?? false) ? 'user' : 'assistant',
@@ -766,6 +839,165 @@ class QuickChatDrawer extends Component
             ->filter(static fn (array $message): bool => $message['content'] !== '')
             ->values()
             ->all();
+    }
+
+    private function loadAiMessages(): void
+    {
+        $user = $this->currentUser();
+        if (! $user) {
+            $this->aiMessages = [];
+
+            return;
+        }
+
+        $conversation = $this->aiConversation($user, create: true);
+        if (! $conversation instanceof AiConversation) {
+            return;
+        }
+
+        $this->touchAiConversationPageContext($user, $conversation);
+        $this->ensureAiGreetingMessage($conversation);
+
+        $this->aiMessages = $conversation->messages()
+            ->latest('created_at')
+            ->limit(120)
+            ->get()
+            ->reverse()
+            ->map(fn (AiMessage $message): array => $this->formatAiMessage($message))
+            ->values()
+            ->all();
+    }
+
+    private function aiMessageCount(): int
+    {
+        $user = $this->currentUser();
+        if (! $user) {
+            return count($this->aiMessages);
+        }
+
+        $conversation = $this->aiConversation($user, create: false);
+
+        return $conversation instanceof AiConversation
+            ? (int) $conversation->messages()->count()
+            : count($this->aiMessages);
+    }
+
+    private function aiConversation(User $user, bool $create): ?AiConversation
+    {
+        if (! $this->aiTablesAvailable()) {
+            return null;
+        }
+
+        $marketId = $this->resolveMarketId($user);
+        $marketValue = $marketId > 0 ? $marketId : null;
+
+        $query = AiConversation::query()
+            ->where('user_id', (int) $user->id)
+            ->where('market_id', $marketValue);
+
+        $conversation = $query
+            ->latest('updated_at')
+            ->latest('id')
+            ->first();
+
+        if (! $conversation && $create) {
+            $conversation = AiConversation::query()->create([
+                'market_id' => $marketValue,
+                'user_id' => (int) $user->id,
+                'title' => 'ИИ-консультант',
+            ]);
+        }
+
+        return $conversation;
+    }
+
+    private function ensureAiGreetingMessage(AiConversation $conversation): void
+    {
+        if ($conversation->messages()->exists()) {
+            return;
+        }
+
+        AiMessage::query()->create([
+            'ai_conversation_id' => (int) $conversation->id,
+            'role' => AiMessage::ROLE_ASSISTANT,
+            'body' => self::AI_GREETING_MESSAGE,
+            'metadata' => [
+                'user_name' => 'ИИ-консультант',
+                'chips' => [],
+                'kind' => 'greeting',
+            ],
+        ]);
+
+        $conversation->touch();
+    }
+
+    private function touchAiConversationPageContext(User $user, ?AiConversation $conversation = null): void
+    {
+        if (! $this->aiTablesAvailable()) {
+            return;
+        }
+
+        $conversation ??= $this->aiConversation($user, create: false);
+        if (! $conversation instanceof AiConversation) {
+            return;
+        }
+
+        $url = trim((string) ($this->pageContext['url'] ?? ''));
+        $label = trim((string) ($this->pageContext['heading'] ?? ''));
+        if ($label === '') {
+            $label = trim((string) ($this->pageContext['title'] ?? ''));
+        }
+
+        if ($url === '' && $label === '') {
+            return;
+        }
+
+        $conversation->forceFill([
+            'context_page_url' => $url !== '' ? $url : $conversation->context_page_url,
+            'context_page_label' => $label !== '' ? $label : $conversation->context_page_label,
+        ])->save();
+    }
+
+    private function formatAiMessage(AiMessage $message): array
+    {
+        $metadata = (array) ($message->metadata ?? []);
+        $createdAt = $message->created_at?->timezone(config('app.timezone'));
+        $isOwn = $message->role === AiMessage::ROLE_USER;
+
+        return [
+            'id' => 'ai-message-'.(int) $message->id,
+            'user_name' => trim((string) ($metadata['user_name'] ?? '')) ?: ($isOwn ? 'Вы' : 'ИИ-консультант'),
+            'body' => trim((string) $message->body),
+            'is_own' => $isOwn,
+            'created_at' => $this->formatDateTime($createdAt),
+            'date_key' => optional($createdAt)->toDateString(),
+            'date_label' => $this->formatDateLabel($createdAt),
+            'attachments' => [],
+            'chips' => $this->normalizeAiChips((array) ($metadata['chips'] ?? [])),
+        ];
+    }
+
+    /**
+     * @param  array<int, mixed>  $chips
+     * @return list<array{label:string,url:string}>
+     */
+    private function normalizeAiChips(array $chips): array
+    {
+        return collect($chips)
+            ->filter(static fn (mixed $chip): bool => is_array($chip))
+            ->map(static fn (array $chip): array => [
+                'label' => Str::limit(trim((string) ($chip['label'] ?? '')), 120, ''),
+                'url' => trim((string) ($chip['url'] ?? '')),
+            ])
+            ->filter(static fn (array $chip): bool => $chip['label'] !== '' && $chip['url'] !== '')
+            ->values()
+            ->all();
+    }
+
+    private function aiTablesAvailable(): bool
+    {
+        return Schema::hasTable('ai_conversations')
+            && Schema::hasTable('ai_messages');
     }
 
     /**
@@ -804,7 +1036,7 @@ class QuickChatDrawer extends Component
             ->select('staff_conversation_messages.*')
             ->get()
             ->map(fn (StaffConversationMessage $message): array => [
-                'id' => 'staff-message-' . (int) $message->id,
+                'id' => 'staff-message-'.(int) $message->id,
                 'user_name' => trim((string) ($message->user?->name ?? '')) ?: 'Пользователь',
                 'body' => trim((string) $message->body),
                 'is_own' => (int) $message->user_id === (int) $user->id,

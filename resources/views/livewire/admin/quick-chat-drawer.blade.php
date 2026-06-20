@@ -5,8 +5,23 @@
 <div
     class="quick-chat"
     @if ($isOpen) wire:poll.15s @endif
-    x-data
-    x-on:mp-open-quick-chat.window="$wire.openDrawer($event.detail?.type || null, Number($event.detail?.id || 0) || null)"
+    x-data="{
+        pageContext() {
+            const heading = document.querySelector('main h1, main h2, h1, h2');
+
+            return {
+                url: window.location.href,
+                path: window.location.pathname + window.location.search,
+                title: document.title || '',
+                heading: heading ? heading.textContent.trim() : '',
+            };
+        },
+        syncPageContext() {
+            $wire.updatePageContext(this.pageContext());
+        },
+    }"
+    x-init="syncPageContext()"
+    x-on:mp-open-quick-chat.window="syncPageContext(); $wire.openDrawer($event.detail?.type || null, Number($event.detail?.id || 0) || null)"
     x-on:keydown.escape.window="document.documentElement.classList.remove('quick-chat-open'); $wire.closeDrawer()"
 >
     <style>
@@ -441,6 +456,35 @@
             white-space: pre-wrap;
         }
 
+        .quick-chat__chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.55rem;
+        }
+
+        .quick-chat__chip {
+            display: inline-flex;
+            align-items: center;
+            max-width: 100%;
+            border: 1px solid rgba(14, 165, 233, 0.24);
+            border-radius: 999px;
+            background: rgba(224, 242, 254, 0.86);
+            padding: 0.28rem 0.62rem;
+            color: #075985;
+            font-size: 0.78rem;
+            font-weight: 850;
+            line-height: 1.2;
+            text-decoration: none;
+        }
+
+        .quick-chat__chip:hover,
+        .quick-chat__chip:focus-visible {
+            border-color: rgba(14, 116, 144, 0.42);
+            background: #bae6fd;
+            outline: none;
+        }
+
         .quick-chat__attachments {
             display: grid;
             gap: 0.45rem;
@@ -698,6 +742,12 @@
             color: #94a3b8;
         }
 
+        html.dark .quick-chat__chip {
+            border-color: rgba(56, 189, 248, 0.22);
+            background: rgba(14, 165, 233, 0.16);
+            color: #bae6fd;
+        }
+
         html.dark .quick-chat__file-label,
         html.dark .quick-chat__selected-file {
             background: rgba(30, 41, 59, 0.82);
@@ -760,7 +810,7 @@
         }
     </style>
 
-    <button type="button" class="quick-chat__launcher" wire:click="openDrawer" aria-label="Открыть диалоги">
+    <button type="button" class="quick-chat__launcher" x-on:click="syncPageContext()" wire:click="openDrawer" aria-label="Открыть диалоги">
         <x-filament::icon icon="heroicon-o-chat-bubble-left-right" class="h-5 w-5" />
         <span>Диалоги</span>
         @if ($unreadCount > 0)
@@ -889,6 +939,21 @@
                                         </div>
                                         @if (filled($message['body']))
                                             <div class="quick-chat__bubble-text">{{ $message['body'] }}</div>
+                                        @endif
+
+                                        @if (! empty($message['chips']))
+                                            <div class="quick-chat__chips">
+                                                @foreach ($message['chips'] as $chip)
+                                                    @php
+                                                        $chipLabel = trim((string) ($chip['label'] ?? ''));
+                                                        $chipUrl = trim((string) ($chip['url'] ?? ''));
+                                                    @endphp
+
+                                                    @if ($chipLabel !== '' && $chipUrl !== '')
+                                                        <a class="quick-chat__chip" href="{{ $chipUrl }}">{{ $chipLabel }}</a>
+                                                    @endif
+                                                @endforeach
+                                            </div>
                                         @endif
 
                                         @if (! empty($message['attachments']))

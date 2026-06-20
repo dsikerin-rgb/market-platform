@@ -66,6 +66,16 @@ class AiAgentSettingsPage extends Page
                             ->helperText('Сводка по арендаторам, местам, договорам, обращениям и заметным проблемам.')
                             ->default(true),
 
+                        Forms\Components\Toggle::make('page_context_enabled')
+                            ->label('Передавать текущую страницу')
+                            ->helperText('Агент будет видеть адрес и заголовок страницы, на которой сотрудник открыл диалог.')
+                            ->default(true),
+
+                        Forms\Components\Toggle::make('action_tools_enabled')
+                            ->label('Разрешить рабочие действия')
+                            ->helperText('Создание задач, событий, напоминаний, сообщений сотрудникам и обращений арендаторам через проверки приложения.')
+                            ->default(true),
+
                         Forms\Components\Textarea::make('system_prompt')
                             ->label('Системный промпт')
                             ->rows(12)
@@ -75,11 +85,11 @@ class AiAgentSettingsPage extends Page
                     ->columns(2),
 
                 Section::make('Самостоятельные проверки')
-                    ->description('Агент может сам выполнять безопасные проверки данных. Запросы проходят через read-only шлюз приложения.')
+                    ->description('Агент может сам выполнять безопасные проверки данных. Приложение пропускает только проверки без изменения записей.')
                     ->schema([
                         Forms\Components\Toggle::make('read_only_sql_enabled')
-                            ->label('Разрешить read-only SQL-инструмент')
-                            ->helperText('Модель не получает пароль от базы. Приложение проверяет SELECT-запрос и выполняет его в read-only режиме.')
+                            ->label('Разрешить проверку данных без записи')
+                            ->helperText('Модель не получает пароль от базы. Приложение проверяет запрос и выполняет его в режиме без изменения данных.')
                             ->default(true),
 
                         Forms\Components\TextInput::make('max_tool_rounds')
@@ -105,8 +115,8 @@ class AiAgentSettingsPage extends Page
                             ->suffix('мс'),
 
                         Forms\Components\Textarea::make('allowed_tables')
-                            ->label('Разрешенные таблицы')
-                            ->helperText('Одна таблица на строку. Все запросы также обязаны фильтроваться по текущему market_id.')
+                            ->label('Разделы данных для проверки')
+                            ->helperText('Одно служебное имя на строку. Все проверки также ограничиваются текущим рынком.')
                             ->rows(8)
                             ->columnSpanFull(),
                     ])
@@ -136,6 +146,30 @@ class AiAgentSettingsPage extends Page
                             ->maxValue(20)
                             ->step(1)
                             ->helperText('Помогает понимать продолжения вроде "проверь сам" или "а по этому месту?".'),
+
+                        Forms\Components\TextInput::make('history_budget_tokens')
+                            ->label('Лимит памяти диалога')
+                            ->numeric()
+                            ->minValue(300)
+                            ->maxValue(4000)
+                            ->step(100)
+                            ->helperText('Ограничивает, сколько прошлой переписки агент берет в новый ответ.'),
+
+                        Forms\Components\TextInput::make('context_budget_tokens')
+                            ->label('Лимит контекста')
+                            ->numeric()
+                            ->minValue(400)
+                            ->maxValue(8000)
+                            ->step(100)
+                            ->helperText('Ограничивает пакет данных по рынку и текущей странице, чтобы не тратить лишнее.'),
+
+                        Forms\Components\TextInput::make('context_item_limit')
+                            ->label('Записей в списках контекста')
+                            ->numeric()
+                            ->minValue(1)
+                            ->maxValue(20)
+                            ->step(1)
+                            ->helperText('Сколько арендаторов, мест, договоров и других записей передавать сразу.'),
                     ])
                     ->columns(3),
             ]);
