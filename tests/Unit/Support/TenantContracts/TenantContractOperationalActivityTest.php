@@ -55,6 +55,24 @@ class TenantContractOperationalActivityTest extends TestCase
         $this->assertFalse($activity->shouldArchiveAsStale($contract->fresh()));
     }
 
+    public function test_old_signed_contract_with_recent_starts_at_is_stale_without_recent_activity(): void
+    {
+        [$market, $tenant, $space] = $this->createMarketTenantAndSpace();
+        $contract = $this->createContract($market, $tenant, $space);
+        $contract->forceFill([
+            'starts_at' => '2026-06-01',
+            'signed_at' => '2024-02-01',
+            'created_at' => '2026-03-10 00:00:00',
+        ])->save();
+
+        $this->insertUnrelatedLatestAccrual($market);
+
+        $activity = app(TenantContractOperationalActivity::class);
+
+        $this->assertFalse($activity->isOperationalForCurrentMap($contract->fresh()));
+        $this->assertTrue($activity->shouldArchiveAsStale($contract->fresh()));
+    }
+
     /**
      * @return array{Market,Tenant,MarketSpace}
      */
@@ -84,7 +102,7 @@ class TenantContractOperationalActivityTest extends TestCase
 
     private function createContract(Market $market, Tenant $tenant, MarketSpace $space): TenantContract
     {
-        return TenantContract::query()->create([
+        $contract = TenantContract::query()->create([
             'external_id' => 'contract-'.uniqid(),
             'market_id' => (int) $market->id,
             'tenant_id' => (int) $tenant->id,
@@ -96,6 +114,13 @@ class TenantContractOperationalActivityTest extends TestCase
             'signed_at' => '2025-01-01',
             'is_active' => true,
         ]);
+
+        $contract->forceFill([
+            'created_at' => '2025-01-01 00:00:00',
+            'updated_at' => '2025-01-01 00:00:00',
+        ])->save();
+
+        return $contract;
     }
 
     private function insertUnrelatedLatestAccrual(Market $market): void

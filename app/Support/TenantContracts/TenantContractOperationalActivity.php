@@ -195,12 +195,12 @@ final class TenantContractOperationalActivity
         }
 
         $query->where(function ($inner) use ($contractAlias, $cutoff): void {
-            if (Schema::hasColumn('tenant_contracts', 'starts_at')) {
-                $inner->whereDate($contractAlias.'.starts_at', '>=', $cutoff->toDateString());
+            if (Schema::hasColumn('tenant_contracts', 'signed_at')) {
+                $inner->whereDate($contractAlias.'.signed_at', '>=', $cutoff->toDateString());
             }
 
-            if (Schema::hasColumn('tenant_contracts', 'signed_at')) {
-                $inner->orWhereDate($contractAlias.'.signed_at', '>=', $cutoff->toDateString());
+            if (Schema::hasColumn('tenant_contracts', 'created_at')) {
+                $inner->orWhereDate($contractAlias.'.created_at', '>=', $cutoff->toDateString());
             }
 
             $inner->orWhereExists(function ($sub) use ($contractAlias, $cutoff): void {
@@ -284,7 +284,7 @@ final class TenantContractOperationalActivity
 
     private function contractIsRecentEnoughToWaitForFirstAccrual(TenantContract $contract, CarbonImmutable $cutoffPeriod): bool
     {
-        foreach ([$contract->starts_at, $contract->signed_at] as $date) {
+        foreach ([$contract->signed_at, $contract->created_at] as $date) {
             if ($date && $date->copy()->startOfDay()->greaterThanOrEqualTo($cutoffPeriod)) {
                 return true;
             }

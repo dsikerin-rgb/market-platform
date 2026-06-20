@@ -94,7 +94,7 @@ class ArchiveStaleTenantContractsCommandTest extends TestCase
 
     private function createContract(Market $market, Tenant $tenant, MarketSpace $space): TenantContract
     {
-        return TenantContract::query()->create([
+        $contract = TenantContract::query()->create([
             'external_id' => 'archive-stale-'.uniqid(),
             'market_id' => (int) $market->id,
             'tenant_id' => (int) $tenant->id,
@@ -106,6 +106,13 @@ class ArchiveStaleTenantContractsCommandTest extends TestCase
             'signed_at' => '2024-01-01',
             'is_active' => true,
         ]);
+
+        $contract->forceFill([
+            'created_at' => '2024-01-01 00:00:00',
+            'updated_at' => '2024-01-01 00:00:00',
+        ])->save();
+
+        return $contract;
     }
 
     private function insertUnrelatedLatestAccrual(Market $market): void
