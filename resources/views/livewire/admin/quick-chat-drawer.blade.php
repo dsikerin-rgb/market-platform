@@ -291,12 +291,12 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 1.45rem;
-            height: 1.45rem;
-            border-radius: 999px;
+            width: 100%;
+            height: 100%;
+            border-radius: inherit;
             background: linear-gradient(135deg, #19c37d 0%, #2563eb 100%);
             color: #fff;
-            font-size: 0.78rem;
+            font-size: 1.08rem;
             font-weight: 950;
             letter-spacing: -0.05em;
             line-height: 1;
@@ -546,35 +546,47 @@
 
         .quick-chat__composer {
             border-top: 1px solid rgba(148, 163, 184, 0.22);
-            background: rgba(255, 255, 255, 0.92);
-            padding: 0.65rem 0.9rem 0.8rem;
+            background: #fff;
+            padding: 0;
         }
 
         .quick-chat__composer-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.35rem;
+            min-height: 4.35rem;
+            padding: 0.62rem 0.72rem;
+        }
+
+        .quick-chat__composer-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .quick-chat__input-shell {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            gap: 0.65rem;
-            align-items: end;
+            grid-template-columns: auto minmax(0, 1fr);
+            align-items: center;
+            gap: 0.55rem;
+            min-width: 0;
         }
 
         .quick-chat__textarea {
             width: 100%;
-            min-height: 2.75rem;
-            max-height: 6rem;
+            min-height: 2.35rem;
             resize: none;
-            border: 1px solid rgba(148, 163, 184, 0.28);
-            border-radius: 0.9rem;
-            background: #fff;
-            padding: 0.68rem 0.82rem;
+            overflow: hidden;
+            border: 0;
+            background: transparent;
+            padding: 0.35rem 0;
             color: #0f172a;
-            font-size: 0.92rem;
+            font-size: 0.95rem;
             line-height: 1.3;
             outline: none;
         }
 
         .quick-chat__textarea:focus {
-            border-color: rgba(14, 165, 233, 0.68);
-            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
+            box-shadow: none;
         }
 
         .quick-chat__selected-files {
@@ -605,30 +617,35 @@
         }
 
         .quick-chat__composer-tools {
-            display: flex;
-            align-items: center;
-            gap: 0.45rem;
-            margin-top: 0.45rem;
+            display: none;
         }
 
+        .quick-chat__icon-spacer,
         .quick-chat__file-label {
             display: inline-flex;
             align-items: center;
-            gap: 0.32rem;
+            justify-content: center;
+            width: 2.25rem;
+            height: 2.25rem;
             border: 0;
             border-radius: 999px;
-            background: rgba(15, 23, 42, 0.06);
-            padding: 0.38rem 0.62rem;
-            color: #334155;
-            font-size: 0.78rem;
-            font-weight: 800;
+            background: transparent;
+            padding: 0;
+            color: #8a94a6;
+            font-size: 0.92rem;
             cursor: pointer;
+        }
+
+        .quick-chat__icon-spacer {
+            visibility: hidden;
+            cursor: default;
         }
 
         .quick-chat__file-label:hover,
         .quick-chat__file-label:focus-within {
-            background: rgba(14, 165, 233, 0.14);
+            background: rgba(14, 165, 233, 0.08);
             color: #075985;
+            outline: none;
         }
 
         .quick-chat__file-input {
@@ -650,21 +667,21 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.42rem;
-            min-height: 2.75rem;
+            flex: 0 0 auto;
+            width: 2.65rem;
+            height: 2.65rem;
             border: 0;
-            border-radius: 0.9rem;
-            background: #0ea5e9;
-            padding: 0.7rem 0.9rem;
-            color: #fff;
-            font-size: 0.86rem;
-            font-weight: 900;
+            border-radius: 999px;
+            background: transparent;
+            padding: 0;
+            color: #0ea5e9;
             cursor: pointer;
         }
 
         .quick-chat__send:hover,
         .quick-chat__send:focus-visible {
-            background: #0284c7;
+            background: rgba(14, 165, 233, 0.08);
+            color: #0284c7;
             outline: none;
         }
 
@@ -802,10 +819,6 @@
 
             .quick-chat__bubble {
                 max-width: 88%;
-            }
-
-            .quick-chat__composer-row {
-                grid-template-columns: minmax(0, 1fr);
             }
         }
     </style>
@@ -987,15 +1000,27 @@
 
                         <form class="quick-chat__composer" wire:submit.prevent="sendMessage">
                             <div class="quick-chat__composer-row">
-                                <div>
-                                    <textarea
-                                        class="quick-chat__textarea"
-                                        wire:model.live.debounce.250ms="messageBody"
-                                        placeholder="{{ $isAiChat ? 'Спросите по данным рынка...' : 'Сообщение...' }}"
-                                        rows="1"
-                                        x-data
-                                        x-on:input="$el.style.height = 'auto'; $el.style.height = Math.min($el.scrollHeight, 96) + 'px'"
-                                    ></textarea>
+                                <div class="quick-chat__composer-main">
+                                    <div class="quick-chat__input-shell">
+                                        @unless ($isAiChat)
+                                            <label class="quick-chat__file-label" title="До 5 файлов, до 20 МБ каждый.">
+                                                <x-filament::icon icon="heroicon-o-paper-clip" class="h-6 w-6" />
+                                                <input class="quick-chat__file-input" type="file" wire:model="messageAttachments" multiple>
+                                            </label>
+                                        @else
+                                            <span class="quick-chat__icon-spacer" aria-hidden="true"></span>
+                                        @endunless
+
+                                        <textarea
+                                            class="quick-chat__textarea"
+                                            wire:model.live.debounce.250ms="messageBody"
+                                            placeholder="{{ $isAiChat ? 'Спросите по данным рынка...' : 'Сообщение...' }}"
+                                            rows="1"
+                                            x-data
+                                            x-init="$el.style.height = 'auto'; $el.style.height = Math.min($el.scrollHeight, 160) + 'px'"
+                                            x-on:input="$el.style.height = 'auto'; const height = Math.min($el.scrollHeight, 160); $el.style.height = height + 'px'; $el.style.overflowY = $el.scrollHeight > 160 ? 'auto' : 'hidden'"
+                                        ></textarea>
+                                    </div>
 
                                     @error('messageBody')
                                         <div class="quick-chat__error">{{ $message }}</div>
@@ -1022,22 +1047,11 @@
                                         </div>
                                     @endif
 
-                                    @unless ($isAiChat)
-                                        <div class="quick-chat__composer-tools">
-                                            <label class="quick-chat__file-label" title="До 5 файлов, до 20 МБ каждый.">
-                                                <x-filament::icon icon="heroicon-o-paper-clip" class="h-4 w-4" />
-                                                Вложить файл
-                                                <input class="quick-chat__file-input" type="file" wire:model="messageAttachments" multiple>
-                                            </label>
-
-                                            <span class="quick-chat__uploading" wire:loading wire:target="messageAttachments">Загрузка...</span>
-                                        </div>
-                                    @endunless
+                                    <span class="quick-chat__uploading" wire:loading wire:target="messageAttachments">Загрузка...</span>
                                 </div>
 
-                                <button type="submit" class="quick-chat__send" wire:loading.attr="disabled" wire:target="sendMessage,messageAttachments">
-                                    <x-filament::icon icon="heroicon-o-paper-airplane" class="h-5 w-5" />
-                                    <span>{{ $isAiChat ? 'Спросить' : 'Отправить' }}</span>
+                                <button type="submit" class="quick-chat__send" wire:loading.attr="disabled" wire:target="sendMessage,messageAttachments" aria-label="{{ $isAiChat ? 'Спросить' : 'Отправить' }}">
+                                    <x-filament::icon icon="heroicon-o-paper-airplane" class="h-7 w-7" />
                                 </button>
                             </div>
                         </form>

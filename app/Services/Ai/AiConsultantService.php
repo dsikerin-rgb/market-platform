@@ -70,7 +70,7 @@ class AiConsultantService
         );
 
         $messages = [
-            ['role' => 'system', 'content' => $this->systemPrompt($settings, $marketId)],
+            ['role' => 'system', 'content' => $this->systemPrompt($settings, $marketId, $user)],
             ...$budgeter->compactHistory($history, $settings),
             ['role' => 'user', 'content' => $this->userPrompt($question, $context)],
         ];
@@ -101,10 +101,12 @@ class AiConsultantService
             ];
         }
 
+        $presented = app(AiAgentAnswerPresenter::class)->present($answer, $response['chips'] ?? []);
+
         return [
-            'answer' => Str::limit($answer, 6000, '...'),
+            'answer' => Str::limit($presented['answer'], 6000, '...'),
             'error_type' => null,
-            'chips' => $response['chips'] ?? [],
+            'chips' => $presented['chips'],
         ];
     }
 
@@ -180,10 +182,11 @@ class AiConsultantService
     /**
      * @param  array<string, mixed>  $settings
      */
-    private function systemPrompt(array $settings, int $marketId): string
+    private function systemPrompt(array $settings, int $marketId, User $user): string
     {
         $settings['_market_id'] = $marketId;
         $prompt = trim((string) $settings['system_prompt']);
+        $friendlyName = $this->friendlyUserName($user);
 
         if ((bool) $settings['read_only_sql_enabled']) {
             $prompt .= "\n\n".app(AiReadOnlySqlTool::class)->schemaHint($marketId, $settings);
@@ -193,7 +196,12 @@ class AiConsultantService
             $prompt .= "\n\n".app(AiAgentActionTool::class)->schemaHint();
         }
 
-        $prompt .= "\n\nКонтекст может быть сокращён для экономии. Если деталей не хватает, сам проверь нужные данные доступным действием и не выдумывай ответ.";
+        if ($friendlyName !== '') {
+            $prompt .= "\n\nСотрудника зовут {$friendlyName}. Обращайся к нему по имени, дружелюбно и спокойно, без полного ФИО и без официального канцелярского тона. Не начинай каждое сообщение с имени, используй имя естественно, когда это уместно.";
+        }
+
+        $prompt .= "\n\nКонтекст может быть сокращён для экономии. Если деталей не хватает, сам проверь нужные данные доступным действием и не выдумывай ответ. Не говори, что база недоступна, если инструмент чтения данных не вернул явную ошибку.";
+        $prompt .= "\n\nНе упоминай пользователю идентификаторы, ID, названия таблиц, адреса страниц и сырые ссылки. Если нужно дать переход на арендатора, место, задачу, обращение, событие или настройки, используй действие resource_link/make_link, чтобы приложение показало ссылку отдельным чипом.";
 
         return $prompt;
     }
@@ -205,6 +213,19 @@ class AiConsultantService
     {
         return "Вопрос сотрудника:\n{$question}\n\nКонтекст из БД:\n"
             .json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    }
+
+    private function friendlyUserName(User $user): string
+    {
+        $name = trim((string) ($user->name ?? ''));
+
+        if ($name === '') {
+            return '';
+        }
+
+        $parts = preg_split('/\s+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return trim((string) ($parts[0] ?? ''));
     }
 
     /**
