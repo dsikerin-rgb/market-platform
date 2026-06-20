@@ -493,6 +493,152 @@
             outline: none;
         }
 
+        .quick-chat__action-card {
+            display: grid;
+            gap: 0.55rem;
+            margin-top: 0.65rem;
+            border: 1px solid rgba(14, 165, 233, 0.22);
+            border-radius: 0.75rem;
+            background: rgba(240, 249, 255, 0.82);
+            padding: 0.72rem;
+        }
+
+        .quick-chat__action-card--confirmed {
+            border-color: rgba(34, 197, 94, 0.26);
+            background: rgba(240, 253, 244, 0.84);
+        }
+
+        .quick-chat__action-card--cancelled {
+            border-color: rgba(148, 163, 184, 0.32);
+            background: rgba(248, 250, 252, 0.86);
+        }
+
+        .quick-chat__action-card--failed {
+            border-color: rgba(248, 113, 113, 0.34);
+            background: rgba(254, 242, 242, 0.86);
+        }
+
+        .quick-chat__action-head {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+
+        .quick-chat__action-title {
+            color: #0f172a;
+            font-size: 0.84rem;
+            font-weight: 850;
+            line-height: 1.25;
+        }
+
+        .quick-chat__action-status {
+            flex: 0 0 auto;
+            border-radius: 999px;
+            background: rgba(14, 165, 233, 0.14);
+            padding: 0.18rem 0.48rem;
+            color: #0369a1;
+            font-size: 0.68rem;
+            font-weight: 850;
+            line-height: 1.15;
+        }
+
+        .quick-chat__action-card--confirmed .quick-chat__action-status {
+            background: rgba(34, 197, 94, 0.14);
+            color: #15803d;
+        }
+
+        .quick-chat__action-card--cancelled .quick-chat__action-status {
+            background: rgba(148, 163, 184, 0.18);
+            color: #475569;
+        }
+
+        .quick-chat__action-card--failed .quick-chat__action-status {
+            background: rgba(248, 113, 113, 0.16);
+            color: #b91c1c;
+        }
+
+        .quick-chat__action-summary {
+            display: grid;
+            gap: 0.4rem;
+        }
+
+        .quick-chat__action-row {
+            display: grid;
+            gap: 0.1rem;
+            min-width: 0;
+        }
+
+        .quick-chat__action-label {
+            color: #64748b;
+            font-size: 0.68rem;
+            font-weight: 800;
+            line-height: 1.2;
+        }
+
+        .quick-chat__action-value {
+            color: #1e293b;
+            font-size: 0.8rem;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+        }
+
+        .quick-chat__action-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+        }
+
+        .quick-chat__action-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid transparent;
+            border-radius: 999px;
+            padding: 0.34rem 0.68rem;
+            font-size: 0.76rem;
+            font-weight: 850;
+            line-height: 1.15;
+            cursor: pointer;
+        }
+
+        .quick-chat__action-button:disabled {
+            cursor: wait;
+            opacity: 0.65;
+        }
+
+        .quick-chat__action-button--primary {
+            background: #0ea5e9;
+            color: #ffffff;
+        }
+
+        .quick-chat__action-button--primary:hover,
+        .quick-chat__action-button--primary:focus-visible {
+            background: #0284c7;
+            outline: none;
+        }
+
+        .quick-chat__action-button--secondary {
+            border-color: rgba(100, 116, 139, 0.24);
+            background: rgba(255, 255, 255, 0.8);
+            color: #475569;
+        }
+
+        .quick-chat__action-button--secondary:hover,
+        .quick-chat__action-button--secondary:focus-visible {
+            border-color: rgba(100, 116, 139, 0.42);
+            background: #ffffff;
+            outline: none;
+        }
+
+        .quick-chat__action-result {
+            color: #475569;
+            font-size: 0.76rem;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+
         .quick-chat__attachments {
             display: grid;
             gap: 0.45rem;
@@ -974,6 +1120,56 @@
                                                         <a class="quick-chat__chip" href="{{ $chipUrl }}">{{ $chipLabel }}</a>
                                                     @endif
                                                 @endforeach
+                                            </div>
+                                        @endif
+
+                                        @if (! empty($message['pending_action']))
+                                            @php
+                                                $action = $message['pending_action'];
+                                                $actionStatus = $action['status'] ?? 'pending';
+                                            @endphp
+
+                                            <div class="quick-chat__action-card quick-chat__action-card--{{ $actionStatus }}">
+                                                <div class="quick-chat__action-head">
+                                                    <div class="quick-chat__action-title">{{ $action['title'] ?? 'Действие агента' }}</div>
+                                                    <div class="quick-chat__action-status">{{ $action['status_label'] ?? 'Ожидает подтверждения' }}</div>
+                                                </div>
+
+                                                @if (! empty($action['summary']))
+                                                    <div class="quick-chat__action-summary">
+                                                        @foreach ($action['summary'] as $row)
+                                                            <div class="quick-chat__action-row">
+                                                                <div class="quick-chat__action-label">{{ $row['label'] }}</div>
+                                                                <div class="quick-chat__action-value">{{ $row['value'] }}</div>
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
+                                                @endif
+
+                                                @if ($actionStatus === 'pending')
+                                                    <div class="quick-chat__action-controls">
+                                                        <button
+                                                            type="button"
+                                                            class="quick-chat__action-button quick-chat__action-button--primary"
+                                                            wire:click="confirmAiAction('{{ $message['id'] }}')"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="confirmAiAction('{{ $message['id'] }}'),cancelAiAction('{{ $message['id'] }}')"
+                                                        >
+                                                            {{ $action['confirm_label'] ?? 'Подтвердить' }}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            class="quick-chat__action-button quick-chat__action-button--secondary"
+                                                            wire:click="cancelAiAction('{{ $message['id'] }}')"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="confirmAiAction('{{ $message['id'] }}'),cancelAiAction('{{ $message['id'] }}')"
+                                                        >
+                                                            {{ $action['cancel_label'] ?? 'Отменить' }}
+                                                        </button>
+                                                    </div>
+                                                @elseif (! empty($action['result_message']))
+                                                    <div class="quick-chat__action-result">{{ $action['result_message'] }}</div>
+                                                @endif
                                             </div>
                                         @endif
 
