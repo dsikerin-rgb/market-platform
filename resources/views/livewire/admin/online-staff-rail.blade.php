@@ -189,12 +189,12 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 1.5rem;
-            height: 1.5rem;
-            border-radius: 999px;
+            width: 100%;
+            height: 100%;
+            border-radius: inherit;
             background: linear-gradient(135deg, #19c37d 0%, #2563eb 100%);
             color: #fff;
-            font-size: 0.82rem;
+            font-size: 1.08rem;
             font-weight: 950;
             letter-spacing: -0.05em;
             line-height: 1;

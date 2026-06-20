@@ -101,10 +101,12 @@ class AiConsultantService
             ];
         }
 
+        $presented = app(AiAgentAnswerPresenter::class)->present($answer, $response['chips'] ?? []);
+
         return [
-            'answer' => Str::limit($answer, 6000, '...'),
+            'answer' => Str::limit($presented['answer'], 6000, '...'),
             'error_type' => null,
-            'chips' => $response['chips'] ?? [],
+            'chips' => $presented['chips'],
         ];
     }
 
@@ -194,6 +196,7 @@ class AiConsultantService
         }
 
         $prompt .= "\n\nКонтекст может быть сокращён для экономии. Если деталей не хватает, сам проверь нужные данные доступным действием и не выдумывай ответ.";
+        $prompt .= "\n\nНе упоминай пользователю идентификаторы, ID, названия таблиц, адреса страниц и сырые ссылки. Если нужно дать переход на арендатора, место, задачу, обращение, событие или настройки, используй действие resource_link/make_link, чтобы приложение показало ссылку отдельным чипом.";
 
         return $prompt;
     }
