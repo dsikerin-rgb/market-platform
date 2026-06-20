@@ -8,12 +8,14 @@ use App\Filament\Pages\Requests;
 use App\Filament\Resources\MarketHolidayResource;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TaskResource;
+use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Models\ContractDebt;
 use App\Models\MarketHoliday;
 use App\Models\MarketSpace;
 use App\Models\Task;
 use App\Models\Tenant;
+use App\Models\TenantContract;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Support\StaffConversationService;
@@ -49,6 +51,10 @@ class AiAgentActionTool
                 'find_resource', 'find_record' => $this->findResource($actor, $marketId, $payload),
                 'debt_leaders', 'top_debt_tenants' => $this->debtLeaders($marketId, $payload),
                 'rent_rate_extremes', 'rent_rates' => $this->rentRateExtremes($marketId, $payload),
+                'vacant_spaces', 'free_spaces' => $this->vacantSpaces($marketId, $payload),
+                'tenant_profile', 'tenant_summary' => $this->tenantProfile($marketId, $payload),
+                'open_tickets_summary', 'ticket_summary' => $this->openTicketsSummary($marketId, $payload),
+                'expiring_contracts', 'contract_expirations' => $this->expiringContracts($marketId, $payload),
                 'resource_link', 'make_link' => $this->resourceLink($actor, $marketId, $payload),
                 default => $this->failure('Неизвестное действие агента.'),
             };
@@ -59,22 +65,50 @@ class AiAgentActionTool
         }
     }
 
-    public function schemaHint(): string
+    public function schemaHint(bool $includeReadOnlyActions = true, bool $includeMutatingActions = true): string
     {
+        $examples = [];
+
+        if ($includeMutatingActions) {
+            $examples = [
+                ...$examples,
+                '{"tool":"create_task","title":"...","description":"...","due_at":"2026-06-21 10:00","assignee_user_id":123,"assignee_query":"имя сотрудника","priority":"normal"}',
+                '{"tool":"create_reminder","title":"...","description":"...","due_at":"2026-06-21 10:00","assignee_user_id":123}',
+                '{"tool":"create_event","title":"...","description":"...","starts_at":"2026-06-21","ends_at":"2026-06-21","all_day":true}',
+                '{"tool":"send_staff_message","recipient_user_id":123,"recipient_query":"имя сотрудника","subject":"...","message":"..."}',
+                '{"tool":"send_tenant_message","tenant_id":123,"tenant_query":"название арендатора","subject":"...","message":"...","market_space_id":456}',
+            ];
+        }
+
+        if ($includeReadOnlyActions) {
+            $examples = [
+                ...$examples,
+                '{"tool":"find_resource","resource_type":"tenant|space|task|ticket|event|staff","query":"название, номер или фраза","limit":5}',
+                '{"tool":"debt_leaders","limit":5}',
+                '{"tool":"rent_rate_extremes","direction":"lowest|highest","limit":5}',
+                '{"tool":"vacant_spaces","limit":10}',
+                '{"tool":"tenant_profile","tenant_id":123,"tenant_query":"название арендатора"}',
+                '{"tool":"open_tickets_summary","limit":10}',
+                '{"tool":"expiring_contracts","days":30,"limit":10}',
+                '{"tool":"resource_link","resource_type":"tenant|space|task|ticket|event|settings|current_page","id":123,"query":"название или номер","label":"понятное название"}',
+            ];
+        }
+
+        if ($examples === []) {
+            return '';
+        }
+
+        $examplesText = implode("\n", $examples);
+
         return <<<'PROMPT'
 
 Если для выполнения просьбы сотрудника нужно действие в сервисе, сначала верни только JSON одного из видов:
-{"tool":"create_task","title":"...","description":"...","due_at":"2026-06-21 10:00","assignee_user_id":123,"assignee_query":"имя сотрудника","priority":"normal"}
-{"tool":"create_reminder","title":"...","description":"...","due_at":"2026-06-21 10:00","assignee_user_id":123}
-{"tool":"create_event","title":"...","description":"...","starts_at":"2026-06-21","ends_at":"2026-06-21","all_day":true}
-{"tool":"send_staff_message","recipient_user_id":123,"recipient_query":"имя сотрудника","subject":"...","message":"..."}
-{"tool":"send_tenant_message","tenant_id":123,"tenant_query":"название арендатора","subject":"...","message":"...","market_space_id":456}
-{"tool":"find_resource","resource_type":"tenant|space|task|ticket|event|staff","query":"название, номер или фраза","limit":5}
-{"tool":"debt_leaders","limit":5}
-{"tool":"rent_rate_extremes","direction":"lowest|highest","limit":5}
-{"tool":"resource_link","resource_type":"tenant|space|task|ticket|event|settings|current_page","id":123,"query":"название или номер","label":"понятное название"}
+PROMPT
+            .$examplesText.
+            <<<'PROMPT'
 
 Для поиска записи или ссылки по человеческому названию сначала используй find_resource или resource_link с query, а не угадывай номер записи. Для вопросов "кто больше должен" используй debt_leaders. Для вопросов о самой низкой или высокой арендной ставке используй rent_rate_extremes; если результата нет, только тогда проверяй данные через read_sql.
+Для вопросов о свободных местах используй vacant_spaces. Для краткой сводки по арендатору используй tenant_profile. Для вопросов о проблемных обращениях используй open_tickets_summary. Для договоров, которые скоро заканчиваются, используй expiring_contracts.
 Используй действия только когда сотрудник просит выполнить работу, отправить сообщение, создать задачу, событие, напоминание, проверить типовую аналитику или дать ссылку на запись. Если в ответе нужна карточка арендатора, места, задачи, обращения, события или настроек, всегда используй resource_link/make_link. Не показывай пользователю JSON, ID, идентификаторы и сырые адреса страниц. После результата действия отвечай простым русским языком и опирайся на приложенные чипы.
 PROMPT;
     }
@@ -461,6 +495,232 @@ PROMPT;
         })->values()->all();
 
         return $this->success('Арендные ставки проверены.', $chips, ['items' => $items]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function vacantSpaces(int $marketId, array $payload): array
+    {
+        if (! Schema::hasTable('market_spaces')) {
+            return $this->failure('Данные по местам сейчас недоступны.');
+        }
+
+        $limit = max(1, min((int) ($payload['limit'] ?? 10), 20));
+        $query = MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->where(function (Builder $builder): void {
+                $builder
+                    ->whereNull('tenant_id')
+                    ->orWhereIn('status', ['free', 'vacant']);
+            })
+            ->orderByRaw('COALESCE(number, display_name, code)')
+            ->limit($limit);
+
+        if (Schema::hasColumn('market_spaces', 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        $spaces = $query->get();
+        if ($spaces->isEmpty()) {
+            return $this->success('Свободные места не найдены.', [], ['items' => []]);
+        }
+
+        $chips = [];
+        $items = $spaces->map(function (MarketSpace $space) use (&$chips): array {
+            $label = $this->spaceLabel($space);
+            $chip = $this->spaceChip((int) $space->market_id, (int) $space->id, 'Открыть место: '.$label);
+            if ($chip) {
+                $chips[] = $chip;
+            }
+
+            return [
+                'space' => $label,
+                'status' => (string) ($space->status ?? ''),
+                'area_sqm' => $space->area_sqm !== null ? round((float) $space->area_sqm, 2) : null,
+                'rent_rate_rub' => $space->rent_rate_value !== null ? round((float) $space->rent_rate_value, 2) : null,
+                'rent_rate_unit' => (string) ($space->rent_rate_unit ?? ''),
+            ];
+        })->values()->all();
+
+        return $this->success('Свободные места проверены.', $chips, ['items' => $items]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function tenantProfile(int $marketId, array $payload): array
+    {
+        $tenant = $this->resolveTenant($marketId, $payload['tenant_id'] ?? null, $payload['tenant_query'] ?? $payload['query'] ?? null);
+        if (! $tenant) {
+            return $this->failure('Не удалось найти арендатора.');
+        }
+
+        $debtAmount = null;
+        $debtPeriod = null;
+        if (
+            Schema::hasTable('contract_debts')
+            && Schema::hasColumn('contract_debts', 'market_id')
+            && Schema::hasColumn('contract_debts', 'tenant_id')
+            && Schema::hasColumn('contract_debts', 'debt_amount')
+        ) {
+            $debtRow = DB::query()
+                ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+                ->where('cd.market_id', $marketId)
+                ->where('cd.tenant_id', (int) $tenant->id)
+                ->selectRaw('SUM(cd.debt_amount) as debt_amount')
+                ->selectRaw('MAX(cd.period) as latest_period')
+                ->first();
+            $debtAmount = $debtRow?->debt_amount !== null ? round((float) $debtRow->debt_amount, 2) : null;
+            $debtPeriod = $debtRow?->latest_period !== null ? (string) $debtRow->latest_period : null;
+        }
+
+        $spaces = MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->where('tenant_id', (int) $tenant->id)
+            ->orderBy('number')
+            ->limit(10)
+            ->get();
+
+        $openTicketsCount = Schema::hasTable('tickets')
+            ? (int) Ticket::query()
+                ->where('market_id', $marketId)
+                ->where('tenant_id', (int) $tenant->id)
+                ->whereNotIn('status', ['resolved', 'closed', 'cancelled'])
+                ->count()
+            : 0;
+
+        $activeContractsCount = Schema::hasTable('tenant_contracts')
+            ? (int) TenantContract::query()
+                ->where('market_id', $marketId)
+                ->where('tenant_id', (int) $tenant->id)
+                ->where('is_active', true)
+                ->count()
+            : 0;
+
+        $chips = array_values(array_filter([
+            $this->tenantChip($marketId, (int) $tenant->id, 'Открыть арендатора: '.$tenant->display_name),
+            ...$spaces
+                ->take(3)
+                ->map(fn (MarketSpace $space): ?array => $this->spaceChip($marketId, (int) $space->id, 'Открыть место: '.$this->spaceLabel($space)))
+                ->all(),
+        ]));
+
+        return $this->success('Сводка по арендатору подготовлена.', $chips, [
+            'tenant' => [
+                'name' => $tenant->display_name,
+                'is_active' => (bool) $tenant->is_active,
+                'debt_status' => (string) ($tenant->debt_status_label ?? 'Не указано'),
+                'debt_amount_rub' => $debtAmount,
+                'latest_debt_period' => $debtPeriod,
+                'active_contracts_count' => $activeContractsCount,
+                'open_tickets_count' => $openTicketsCount,
+                'spaces' => $spaces
+                    ->map(fn (MarketSpace $space): array => [
+                        'space' => $this->spaceLabel($space),
+                        'status' => (string) ($space->status ?? ''),
+                    ])
+                    ->values()
+                    ->all(),
+            ],
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function openTicketsSummary(int $marketId, array $payload): array
+    {
+        if (! Schema::hasTable('tickets')) {
+            return $this->failure('Данные по обращениям сейчас недоступны.');
+        }
+
+        $limit = max(1, min((int) ($payload['limit'] ?? 10), 20));
+        $tickets = Ticket::query()
+            ->with(['tenant:id,name,short_name', 'marketSpace:id,number,display_name,code,market_id'])
+            ->where('market_id', $marketId)
+            ->whereNotIn('status', ['resolved', 'closed', 'cancelled'])
+            ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END")
+            ->latest('updated_at')
+            ->limit($limit)
+            ->get();
+
+        if ($tickets->isEmpty()) {
+            return $this->success('Открытые обращения не найдены.', [], ['items' => []]);
+        }
+
+        $chips = [];
+        $items = $tickets->map(function (Ticket $ticket) use ($marketId, &$chips): array {
+            $chip = $this->ticketChip($marketId, (int) $ticket->id, 'Открыть обращение: '.$ticket->subject);
+            if ($chip && count($chips) < 8) {
+                $chips[] = $chip;
+            }
+
+            return [
+                'subject' => (string) $ticket->subject,
+                'tenant_name' => (string) ($ticket->tenant?->display_name ?? ''),
+                'space' => $ticket->marketSpace instanceof MarketSpace ? $this->spaceLabel($ticket->marketSpace) : '',
+                'status' => (string) ($ticket->status ?? ''),
+                'priority' => (string) ($ticket->priority ?? ''),
+                'updated_at' => $ticket->updated_at?->timezone(config('app.timezone'))->format('d.m.Y H:i'),
+            ];
+        })->values()->all();
+
+        return $this->success('Открытые обращения проверены.', $chips, ['items' => $items]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function expiringContracts(int $marketId, array $payload): array
+    {
+        if (! Schema::hasTable('tenant_contracts')) {
+            return $this->failure('Данные по договорам сейчас недоступны.');
+        }
+
+        $days = max(1, min((int) ($payload['days'] ?? 30), 365));
+        $limit = max(1, min((int) ($payload['limit'] ?? 10), 20));
+        $from = now()->toDateString();
+        $to = now()->addDays($days)->toDateString();
+
+        $contracts = TenantContract::query()
+            ->with(['tenant:id,market_id,name,short_name', 'marketSpace:id,market_id,number,display_name,code'])
+            ->where('market_id', $marketId)
+            ->where('is_active', true)
+            ->whereNotNull('ends_at')
+            ->whereBetween('ends_at', [$from, $to])
+            ->orderBy('ends_at')
+            ->limit($limit)
+            ->get();
+
+        if ($contracts->isEmpty()) {
+            return $this->success('Договоры с ближайшим окончанием не найдены.', [], ['items' => []]);
+        }
+
+        $chips = [];
+        $items = $contracts->map(function (TenantContract $contract) use ($marketId, &$chips): array {
+            $tenant = $contract->tenant;
+            $space = $contract->marketSpace;
+            $label = trim((string) ($contract->number ?? '')) !== ''
+                ? 'Открыть договор: '.$contract->number
+                : 'Открыть договор';
+            $chips[] = $this->chip($label, $this->contractUrl($contract));
+
+            return [
+                'contract_number' => (string) ($contract->number ?? ''),
+                'tenant_name' => $tenant instanceof Tenant ? $tenant->display_name : '',
+                'space' => $space instanceof MarketSpace ? $this->spaceLabel($space) : '',
+                'ends_at' => $contract->ends_at?->format('d.m.Y'),
+                'monthly_rent_rub' => $contract->monthly_rent !== null ? round((float) $contract->monthly_rent, 2) : null,
+                'status' => (string) ($contract->status ?? ''),
+            ];
+        })->values()->all();
+
+        return $this->success('Договоры с ближайшим окончанием проверены.', array_slice($chips, 0, 8), ['items' => $items]);
     }
 
     private function canUseMarket(User $actor, int $marketId): bool
@@ -1003,6 +1263,11 @@ PROMPT;
         } catch (Throwable) {
             return '/admin/requests?quick_chat=ticket&ticket_id='.(int) $ticket->id;
         }
+    }
+
+    private function contractUrl(TenantContract $contract): string
+    {
+        return $this->resourceUrl(TenantContractResource::class, 'edit', ['record' => $contract], '/admin/tenant-contracts/'.(int) $contract->id.'/edit');
     }
 
     private function staffConversationUrl(int $conversationId): string

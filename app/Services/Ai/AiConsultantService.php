@@ -18,12 +18,24 @@ class AiConsultantService
     public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
     {
         $question = trim($question);
-        $settings = app(AiAgentSettings::class)->get();
+        $settingsService = app(AiAgentSettings::class);
+        $settings = $settingsService->get();
         $settings['_market_id'] = $marketId;
+        $settings['_can_read_data'] = $settingsService->canReadData($user, $settings);
+        $settings['_allowed_action_labels'] = $settingsService->allowedActionLabelsForUser($user, $settings);
 
         if (! (bool) $settings['enabled']) {
             return [
                 'answer' => 'ИИ-консультант отключён в настройках.',
+                'error_type' => null,
+                'chips' => [],
+                'pending_action' => null,
+            ];
+        }
+
+        if (! $settingsService->canUseAgent($user, $settings)) {
+            return [
+                'answer' => 'ИИ-консультант недоступен для вашей роли. Обратитесь к администратору рынка, если нужен доступ.',
                 'error_type' => null,
                 'chips' => [],
                 'pending_action' => null,
@@ -48,7 +60,7 @@ class AiConsultantService
             ];
         }
 
-        $context = (bool) $settings['context_pack_enabled']
+        $context = (bool) $settings['context_pack_enabled'] && (bool) $settings['_can_read_data']
             ? app(AiConsultantContextBuilder::class)->build($user, $marketId, $question)
             : [
                 'scope' => [
@@ -132,7 +144,11 @@ class AiConsultantService
      */
     private function chatWithTools(GigaChatClient $client, array $messages, array $settings, User $user): array
     {
-        $toolsEnabled = (bool) $settings['read_only_sql_enabled'] || (bool) $settings['action_tools_enabled'];
+        $canUseBusinessTools = (bool) $settings['business_tools_enabled'] && (bool) $settings['_can_read_data'];
+        $canUseReadSql = (bool) $settings['read_only_sql_enabled'] && (bool) $settings['_can_read_data'];
+        $canUseActionTools = (bool) $settings['action_tools_enabled']
+            && ((array) ($settings['_allowed_action_labels'] ?? [])) !== [];
+        $toolsEnabled = $canUseReadSql || $canUseBusinessTools || $canUseActionTools;
         $maxRounds = $toolsEnabled
             ? (int) $settings['max_tool_rounds']
             : 0;
@@ -165,6 +181,12 @@ class AiConsultantService
                     $toolResult = [
                         'ok' => false,
                         'message' => 'Рабочие действия отключены в настройках.',
+                        'chips' => [],
+                    ];
+                } elseif (! app(AiAgentSettings::class)->canPrepareAction($user, $this->toolName($toolRequest), $settings)) {
+                    $toolResult = [
+                        'ok' => false,
+                        'message' => 'Для вашей роли это действие недоступно.',
                         'chips' => [],
                     ];
                 } else {
@@ -215,13 +237,21 @@ class AiConsultantService
         $prompt = trim((string) $settings['system_prompt']);
         $friendlyName = $this->friendlyUserName($user);
 
-        if ((bool) $settings['read_only_sql_enabled']) {
+        if ((bool) $settings['read_only_sql_enabled'] && (bool) ($settings['_can_read_data'] ?? false)) {
             $prompt .= "\n\n".app(AiReadOnlySqlTool::class)->schemaHint($marketId, $settings);
         }
 
+        if ((bool) ($settings['business_tools_enabled'] ?? true) && (bool) ($settings['_can_read_data'] ?? false)) {
+            $prompt .= "\n\n".app(AiAgentActionTool::class)->schemaHint(true, false);
+        }
+
         if ((bool) $settings['action_tools_enabled']) {
-            $prompt .= "\n\n".app(AiAgentActionTool::class)->schemaHint();
-            $prompt .= "\n\nДействия, которые меняют данные или отправляют сообщения, приложение покажет сотруднику как черновик с кнопкой подтверждения. Всё равно возвращай JSON действия, когда оно нужно для выполнения просьбы; не проси сотрудника подтверждать действие текстом.";
+            $allowedActions = (array) ($settings['_allowed_action_labels'] ?? []);
+            if ($allowedActions !== []) {
+                $prompt .= "\n\n".app(AiAgentActionTool::class)->schemaHint(false, true);
+                $prompt .= "\n\nПо роли сотруднику можно: ".implode(', ', $allowedActions).". Не предлагай другие действия с записью или отправкой.";
+                $prompt .= "\n\nДействия, которые меняют данные или отправляют сообщения, приложение покажет сотруднику как черновик с кнопкой подтверждения. Всё равно возвращай JSON действия, когда оно нужно для выполнения просьбы; не проси сотрудника подтверждать действие текстом.";
+            }
         }
 
         if ($friendlyName !== '') {
@@ -261,7 +291,7 @@ class AiConsultantService
      */
     private function toolRequiresConfirmation(array $toolRequest): bool
     {
-        $tool = strtolower(trim((string) ($toolRequest['tool'] ?? $toolRequest['name'] ?? '')));
+        $tool = $this->toolName($toolRequest);
 
         return in_array($tool, [
             'create_task',
@@ -270,6 +300,14 @@ class AiConsultantService
             'send_staff_message',
             'send_tenant_message',
         ], true);
+    }
+
+    /**
+     * @param  array<string,mixed>  $toolRequest
+     */
+    private function toolName(array $toolRequest): string
+    {
+        return strtolower(trim((string) ($toolRequest['tool'] ?? $toolRequest['name'] ?? '')));
     }
 
     /**
@@ -292,7 +330,7 @@ class AiConsultantService
      */
     private function pendingActionDraft(array $toolRequest): array
     {
-        $tool = strtolower(trim((string) ($toolRequest['tool'] ?? $toolRequest['name'] ?? '')));
+        $tool = $this->toolName($toolRequest);
         $payload = $this->sanitizePendingActionPayload($toolRequest);
 
         return [
@@ -454,13 +492,13 @@ class AiConsultantService
      */
     private function runTool(User $user, array $toolRequest, array $settings): array
     {
-        $tool = strtolower(trim((string) ($toolRequest['tool'] ?? $toolRequest['name'] ?? '')));
+        $tool = $this->toolName($toolRequest);
 
         if ($tool === 'read_sql') {
-            if (! (bool) $settings['read_only_sql_enabled']) {
+            if (! (bool) $settings['read_only_sql_enabled'] || ! (bool) ($settings['_can_read_data'] ?? false)) {
                 return [
                     'ok' => false,
-                    'message' => 'Проверка данных отключена в настройках.',
+                    'message' => 'Проверка данных недоступна для вашей роли или отключена в настройках.',
                     'chips' => [],
                 ];
             }
@@ -474,10 +512,18 @@ class AiConsultantService
             );
         }
 
-        if (! (bool) $settings['action_tools_enabled']) {
+        if ($this->toolRequiresConfirmation($toolRequest)) {
+            if (! (bool) $settings['action_tools_enabled'] || ! app(AiAgentSettings::class)->canPrepareAction($user, $tool, $settings)) {
+                return [
+                    'ok' => false,
+                    'message' => 'Для вашей роли это действие недоступно.',
+                    'chips' => [],
+                ];
+            }
+        } elseif (! (bool) ($settings['business_tools_enabled'] ?? true) || ! (bool) ($settings['_can_read_data'] ?? false)) {
             return [
                 'ok' => false,
-                'message' => 'Рабочие действия отключены в настройках.',
+                'message' => 'Типовые проверки недоступны для вашей роли или отключены в настройках.',
                 'chips' => [],
             ];
         }

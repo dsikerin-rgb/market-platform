@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Models\AiMessage;
 use App\Services\Ai\AiAgentSettings;
 use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
@@ -13,6 +14,7 @@ use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Str;
 
 class AiAgentSettingsPage extends Page
 {
@@ -29,6 +31,11 @@ class AiAgentSettingsPage extends Page
      */
     public array $data = [];
 
+    /**
+     * @var list<array<string, mixed>>
+     */
+    public array $actionLog = [];
+
     public static function canAccess(): bool
     {
         return AdminCapabilities::canAccessMarketSettings(Filament::auth()->user());
@@ -39,9 +46,10 @@ class AiAgentSettingsPage extends Page
         abort_unless(static::canAccess(), 403);
 
         $data = $settings->get();
-        $data['allowed_tables'] = implode("\n", (array) $data['allowed_tables']);
+        $data = $this->formatSettingsForForm($data);
 
         $this->form->fill($data);
+        $this->actionLog = $this->loadActionLog();
     }
 
     public function getHeading(): string|Htmlable|null
@@ -74,6 +82,11 @@ class AiAgentSettingsPage extends Page
                         Forms\Components\Toggle::make('action_tools_enabled')
                             ->label('Разрешить рабочие действия')
                             ->helperText('Создание задач, событий, напоминаний, сообщений сотрудникам и обращений арендаторам через проверки приложения.')
+                            ->default(true),
+
+                        Forms\Components\Toggle::make('business_tools_enabled')
+                            ->label('Разрешить типовые проверки')
+                            ->helperText('Быстрые рабочие проверки: должники, ставки, свободные места, сводка по арендатору, обращения и договоры.')
                             ->default(true),
 
                         Forms\Components\Textarea::make('system_prompt')
@@ -119,6 +132,35 @@ class AiAgentSettingsPage extends Page
                             ->helperText('Одно служебное имя на строку. Все проверки также ограничиваются текущим рынком.')
                             ->rows(8)
                             ->columnSpanFull(),
+                    ])
+                    ->columns(2),
+
+                Section::make('Права по ролям')
+                    ->description('Одна роль на строку. Эти правила применяются не только к интерфейсу, но и к серверной проверке действий агента.')
+                    ->schema([
+                        Forms\Components\Textarea::make('roles_can_use_agent')
+                            ->label('Кто может открыть ИИ-консультанта')
+                            ->rows(5),
+
+                        Forms\Components\Textarea::make('roles_can_read_data')
+                            ->label('Кто может проверять данные рынка')
+                            ->rows(5),
+
+                        Forms\Components\Textarea::make('roles_can_prepare_tasks')
+                            ->label('Кто может создавать задачи и напоминания')
+                            ->rows(5),
+
+                        Forms\Components\Textarea::make('roles_can_prepare_events')
+                            ->label('Кто может создавать события')
+                            ->rows(5),
+
+                        Forms\Components\Textarea::make('roles_can_send_staff_messages')
+                            ->label('Кто может отправлять сообщения сотрудникам')
+                            ->rows(5),
+
+                        Forms\Components\Textarea::make('roles_can_send_tenant_messages')
+                            ->label('Кто может отправлять сообщения арендаторам')
+                            ->rows(5),
                     ])
                     ->columns(2),
 
@@ -180,10 +222,109 @@ class AiAgentSettingsPage extends Page
         abort_unless(static::canAccess(), 403);
 
         $settings->save($this->form->getState());
+        $this->form->fill($this->formatSettingsForForm($settings->get()));
+        $this->actionLog = $this->loadActionLog();
 
         Notification::make()
             ->title('Настройки ИИ-агента сохранены')
             ->success()
             ->send();
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function formatSettingsForForm(array $data): array
+    {
+        foreach ([
+            'allowed_tables',
+            'roles_can_use_agent',
+            'roles_can_read_data',
+            'roles_can_prepare_tasks',
+            'roles_can_prepare_events',
+            'roles_can_send_staff_messages',
+            'roles_can_send_tenant_messages',
+        ] as $key) {
+            $data[$key] = implode("\n", (array) ($data[$key] ?? []));
+        }
+
+        return $data;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadActionLog(): array
+    {
+        return AiMessage::query()
+            ->with(['conversation.user:id,name,email', 'conversation.market:id,name'])
+            ->where('role', AiMessage::ROLE_ASSISTANT)
+            ->latest()
+            ->limit(200)
+            ->get()
+            ->filter(static fn (AiMessage $message): bool => is_array(data_get($message->metadata, 'pending_action')))
+            ->take(50)
+            ->map(function (AiMessage $message): array {
+                $action = (array) data_get($message->metadata, 'pending_action', []);
+                $status = strtolower(trim((string) ($action['status'] ?? 'pending')));
+                if (! in_array($status, ['pending', 'running', 'confirmed', 'cancelled', 'failed'], true)) {
+                    $status = 'pending';
+                }
+
+                return [
+                    'created_at' => $this->formatActionLogDate($message->created_at),
+                    'actor' => Str::limit(trim((string) ($message->conversation?->user?->name ?? 'Сотрудник')), 80, ''),
+                    'market' => Str::limit(trim((string) ($message->conversation?->market?->name ?? 'Рынок')), 80, ''),
+                    'title' => Str::limit(trim((string) ($action['title'] ?? 'Действие агента')), 120, ''),
+                    'status' => $status,
+                    'status_label' => $this->actionStatusLabel($status),
+                    'summary' => $this->actionSummary((array) ($action['summary'] ?? [])),
+                    'result_message' => Str::limit(trim((string) ($action['result_message'] ?? '')), 220, ''),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, mixed>  $summary
+     * @return list<array{label:string,value:string}>
+     */
+    private function actionSummary(array $summary): array
+    {
+        return collect($summary)
+            ->filter(static fn (mixed $row): bool => is_array($row))
+            ->map(static fn (array $row): array => [
+                'label' => Str::limit(trim((string) ($row['label'] ?? '')), 80, ''),
+                'value' => Str::limit(trim((string) ($row['value'] ?? '')), 180, ''),
+            ])
+            ->filter(static fn (array $row): bool => $row['label'] !== '' && $row['value'] !== '')
+            ->values()
+            ->all();
+    }
+
+    private function actionStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'running' => 'Выполняется',
+            'confirmed' => 'Выполнено',
+            'cancelled' => 'Отменено',
+            'failed' => 'Не выполнено',
+            default => 'Ожидает подтверждения',
+        };
+    }
+
+    private function formatActionLogDate(mixed $value): string
+    {
+        if (! $value) {
+            return '';
+        }
+
+        try {
+            return $value->timezone(config('app.timezone'))->format('d.m.Y H:i');
+        } catch (\Throwable) {
+            return '';
+        }
     }
 }

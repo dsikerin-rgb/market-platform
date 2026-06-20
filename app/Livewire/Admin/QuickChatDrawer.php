@@ -15,6 +15,7 @@ use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\TicketChatNotification;
 use App\Services\Ai\AiAgentActionTool;
+use App\Services\Ai\AiAgentSettings;
 use App\Services\Ai\AiConsultantService;
 use App\Support\MessageAttachmentStorage;
 use App\Support\Search\LooseSearch;
@@ -355,6 +356,25 @@ class QuickChatDrawer extends Component
                 return null;
             }
 
+            $payload = (array) ($pendingAction['payload'] ?? []);
+            $tool = strtolower(trim((string) ($payload['tool'] ?? $pendingAction['tool'] ?? '')));
+            $settingsService = app(AiAgentSettings::class);
+            $settings = $settingsService->get();
+            if (! (bool) ($settings['action_tools_enabled'] ?? false) || ! $settingsService->canPrepareAction($user, $tool, $settings)) {
+                $pendingAction['status'] = 'failed';
+                $pendingAction['confirmed_by_user_id'] = (int) $user->id;
+                $pendingAction['confirmed_at'] = now()->toIso8601String();
+                $pendingAction['result_message'] = 'Не выполнено: для вашей роли это действие недоступно.';
+                $metadata['pending_action'] = $pendingAction;
+                $message->forceFill(['metadata' => $metadata])->save();
+
+                return [
+                    'message_id' => (int) $message->id,
+                    'denied' => true,
+                    'message' => $pendingAction['result_message'],
+                ];
+            }
+
             $pendingAction['status'] = 'running';
             $pendingAction['started_by_user_id'] = (int) $user->id;
             $pendingAction['started_at'] = now()->toIso8601String();
@@ -363,11 +383,30 @@ class QuickChatDrawer extends Component
 
             return [
                 'message_id' => (int) $message->id,
-                'payload' => (array) ($pendingAction['payload'] ?? []),
+                'payload' => $payload,
             ];
         });
 
         if (! is_array($claimedAction)) {
+            return;
+        }
+
+        if ((bool) ($claimedAction['denied'] ?? false)) {
+            $this->appendAiMessage(
+                'ИИ-консультант',
+                trim((string) ($claimedAction['message'] ?? 'Не выполнено: для вашей роли это действие недоступно.')),
+                false,
+                [],
+                [
+                    'kind' => 'action_result',
+                    'action_message_id' => (int) ($claimedAction['message_id'] ?? 0),
+                    'action_status' => 'failed',
+                ],
+            );
+
+            $this->loadAiMessages();
+            $this->dispatch('quick-chat-updated');
+
             return;
         }
 

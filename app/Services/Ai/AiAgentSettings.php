@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Ai;
 
 use App\Models\SystemSetting;
+use App\Models\User;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class AiAgentSettings
 {
@@ -48,6 +51,7 @@ class AiAgentSettings
             'page_context_enabled' => array_key_exists('page_context_enabled', $data) ? (bool) $data['page_context_enabled'] : true,
             'read_only_sql_enabled' => array_key_exists('read_only_sql_enabled', $data) ? (bool) $data['read_only_sql_enabled'] : true,
             'action_tools_enabled' => array_key_exists('action_tools_enabled', $data) ? (bool) $data['action_tools_enabled'] : true,
+            'business_tools_enabled' => array_key_exists('business_tools_enabled', $data) ? (bool) $data['business_tools_enabled'] : true,
             'system_prompt' => $this->stringOrDefault($data['system_prompt'] ?? null, $this->defaultSystemPrompt()),
             'temperature' => max(0.0, min((float) ($data['temperature'] ?? 0.1), 1.0)),
             'max_tokens' => max(600, min((int) ($data['max_tokens'] ?? 1800), 6000)),
@@ -59,6 +63,12 @@ class AiAgentSettings
             'sql_row_limit' => max(5, min((int) ($data['sql_row_limit'] ?? 50), 200)),
             'sql_timeout_ms' => max(250, min((int) ($data['sql_timeout_ms'] ?? 2500), 10000)),
             'allowed_tables' => $this->normalizeTables($data['allowed_tables'] ?? self::defaultAllowedTables()),
+            'roles_can_use_agent' => $this->normalizeRoles($data['roles_can_use_agent'] ?? self::defaultStaffRoles()),
+            'roles_can_read_data' => $this->normalizeRoles($data['roles_can_read_data'] ?? self::defaultStaffRoles()),
+            'roles_can_prepare_tasks' => $this->normalizeRoles($data['roles_can_prepare_tasks'] ?? self::defaultTaskActionRoles()),
+            'roles_can_prepare_events' => $this->normalizeRoles($data['roles_can_prepare_events'] ?? self::defaultTaskActionRoles()),
+            'roles_can_send_staff_messages' => $this->normalizeRoles($data['roles_can_send_staff_messages'] ?? self::defaultStaffMessageRoles()),
+            'roles_can_send_tenant_messages' => $this->normalizeRoles($data['roles_can_send_tenant_messages'] ?? self::defaultTenantMessageRoles()),
         ];
     }
 
@@ -101,6 +111,140 @@ PROMPT;
     }
 
     /**
+     * @param  array<string, mixed>  $settings
+     */
+    public function canUseAgent(User $user, array $settings): bool
+    {
+        return $this->roleListAllowsUser($user, $settings['roles_can_use_agent'] ?? self::defaultStaffRoles());
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     */
+    public function canReadData(User $user, array $settings): bool
+    {
+        return $this->roleListAllowsUser($user, $settings['roles_can_read_data'] ?? self::defaultStaffRoles());
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     */
+    public function canPrepareAction(User $user, string $tool, array $settings): bool
+    {
+        $key = match (strtolower(trim($tool))) {
+            'create_task', 'create_reminder' => 'roles_can_prepare_tasks',
+            'create_event' => 'roles_can_prepare_events',
+            'send_staff_message' => 'roles_can_send_staff_messages',
+            'send_tenant_message' => 'roles_can_send_tenant_messages',
+            default => null,
+        };
+
+        return $key === null
+            || $this->roleListAllowsUser($user, $settings[$key] ?? []);
+    }
+
+    /**
+     * @param  array<string, mixed>  $settings
+     * @return list<string>
+     */
+    public function allowedActionLabelsForUser(User $user, array $settings): array
+    {
+        $actions = [];
+
+        if ($this->canPrepareAction($user, 'create_task', $settings)) {
+            $actions[] = 'создавать задачи и напоминания';
+        }
+
+        if ($this->canPrepareAction($user, 'create_event', $settings)) {
+            $actions[] = 'создавать события';
+        }
+
+        if ($this->canPrepareAction($user, 'send_staff_message', $settings)) {
+            $actions[] = 'готовить сообщения сотрудникам';
+        }
+
+        if ($this->canPrepareAction($user, 'send_tenant_message', $settings)) {
+            $actions[] = 'готовить сообщения арендаторам';
+        }
+
+        return $actions;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function defaultStaffRoles(): array
+    {
+        return [
+            'super-admin',
+            'market-admin',
+            'market-owner',
+            'market-owner-director',
+            'market-manager',
+            'market-operator',
+            'market-finance',
+            'market-accountant',
+            'market-debt-manager',
+            'market-contract-manager',
+            'market-space-manager',
+            'market-legal-admin',
+            'market-service-admin',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function defaultTaskActionRoles(): array
+    {
+        return [
+            'super-admin',
+            'market-admin',
+            'market-owner',
+            'market-owner-director',
+            'market-manager',
+            'market-operator',
+            'market-debt-manager',
+            'market-contract-manager',
+            'market-space-manager',
+            'market-service-admin',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function defaultStaffMessageRoles(): array
+    {
+        return [
+            'super-admin',
+            'market-admin',
+            'market-owner',
+            'market-owner-director',
+            'market-manager',
+            'market-service-admin',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function defaultTenantMessageRoles(): array
+    {
+        return [
+            'super-admin',
+            'market-admin',
+            'market-owner',
+            'market-owner-director',
+            'market-manager',
+            'market-debt-manager',
+            'market-contract-manager',
+            'market-legal-admin',
+            'market-service-admin',
+        ];
+    }
+
+    /**
      * @return list<string>
      */
     private function normalizeTables(mixed $value): array
@@ -117,6 +261,68 @@ PROMPT;
             ->all();
 
         return $tables !== [] ? $tables : self::defaultAllowedTables();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeRoles(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = preg_split('/[\s,;]+/u', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        }
+
+        return collect(is_array($value) ? $value : [])
+            ->map(static fn (mixed $role): string => Str::lower(trim((string) $role)))
+            ->filter(static fn (string $role): bool => preg_match('/^[a-z0-9][a-z0-9_-]*$/', $role) === 1)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  mixed  $roles
+     */
+    private function roleListAllowsUser(User $user, mixed $roles): bool
+    {
+        $allowed = $this->normalizeRoles($roles);
+        if ($allowed === []) {
+            return false;
+        }
+
+        return $this->roleKeysForUser($user)
+            ->intersect($allowed)
+            ->isNotEmpty();
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    private function roleKeysForUser(User $user): Collection
+    {
+        $roles = collect();
+
+        if (method_exists($user, 'getRoleNames')) {
+            $roles = $user->getRoleNames();
+        }
+
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $roles->push('super-admin');
+        }
+
+        if ((int) ($user->tenant_id ?? 0) > 0) {
+            $roles->push('tenant');
+        } else {
+            $roles->push('staff');
+        }
+
+        $roles->push('authenticated');
+
+        return $roles
+            ->map(static fn (mixed $role): string => Str::lower(trim((string) $role)))
+            ->filter()
+            ->unique()
+            ->values();
     }
 
     private function stringOrDefault(mixed $value, string $default): string
