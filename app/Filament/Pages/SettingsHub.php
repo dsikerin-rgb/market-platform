@@ -37,6 +37,7 @@ class SettingsHub extends Page
         }
 
         return MarketSettings::canAccess()
+            || AiAgentSettingsPage::canAccess()
             || MailDiagnostics::canAccess()
             || MarketplaceSettings::canAccess()
             || ReportResource::canViewAny()
@@ -52,6 +53,11 @@ class SettingsHub extends Page
     public function getMarketplaceSettingsUrl(): string
     {
         return MarketplaceSettings::getUrl();
+    }
+
+    public function getAiAgentSettingsUrl(): string
+    {
+        return AiAgentSettingsPage::getUrl();
     }
 
     public function getMailDiagnosticsUrl(): string

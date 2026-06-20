@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login as AdminLogin;
+use App\Filament\Pages\AiAgentSettingsPage;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\MailDiagnostics;
 use App\Filament\Pages\MapReviewResults;
@@ -149,6 +150,7 @@ class AdminPanelProvider extends PanelProvider
                 SettingsHub::class,
                 MarketSettings::class,
                 MarketplaceSettings::class,
+                AiAgentSettingsPage::class,
                 MapReviewResults::class,
                 OneCReconciliation::class,
                 OneCSettlements::class,

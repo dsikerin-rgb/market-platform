@@ -81,6 +81,16 @@
                 </a>
             @endif
 
+            @if (\App\Filament\Pages\AiAgentSettingsPage::canAccess())
+                <a href="{{ $this->getAiAgentSettingsUrl() }}" class="settings-card">
+                    <div class="settings-card-title">Настройки ИИ-агента</div>
+                    <div class="settings-card-text">
+                        Промпт, стиль ответа, история диалога и безопасный read-only доступ к данным рынка для GigaChat-консультанта.
+                    </div>
+                    <div class="settings-card-footer">Открыть</div>
+                </a>
+            @endif
+
             @if (\App\Filament\Pages\MailDiagnostics::canAccess())
                 <a href="{{ $this->getMailDiagnosticsUrl() }}" class="settings-card">
                     <div class="settings-card-title">Почта</div>

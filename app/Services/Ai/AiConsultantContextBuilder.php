@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Services\Ai;
 
+use App\Models\ContractDebt;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -53,6 +55,7 @@ class AiConsultantContextBuilder
             ],
             'attention' => [
                 'debt_tenants' => $this->debtTenants($marketId),
+                'top_debt_tenants' => $this->topDebtTenants($marketId),
                 'map_review_spaces' => $this->mapReviewSpaces($marketId),
                 'open_tickets' => $this->openTickets($marketId),
             ],
@@ -265,6 +268,45 @@ class AiConsultantContextBuilder
                 'debt_status' => (string) $tenant->debt_status,
                 'debt_label' => $tenant->debt_status_label,
                 'updated_at' => $tenant->debt_status_updated_at?->toDateTimeString(),
+            ])
+            ->all();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function topDebtTenants(int $marketId): array
+    {
+        if (
+            ! Schema::hasTable('contract_debts')
+            || ! Schema::hasColumn('contract_debts', 'market_id')
+            || ! Schema::hasColumn('contract_debts', 'tenant_id')
+            || ! Schema::hasColumn('contract_debts', 'debt_amount')
+        ) {
+            return [];
+        }
+
+        return DB::query()
+            ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+            ->leftJoin('tenants as t', 't.id', '=', 'cd.tenant_id')
+            ->where('cd.market_id', $marketId)
+            ->where('cd.debt_amount', '>', 0)
+            ->selectRaw('cd.tenant_id')
+            ->selectRaw("COALESCE(MAX(t.short_name), MAX(t.name), 'Арендатор #' || cd.tenant_id) as tenant_name")
+            ->selectRaw('SUM(cd.debt_amount) as debt_amount')
+            ->selectRaw('MAX(cd.period) as latest_period')
+            ->selectRaw('COUNT(DISTINCT cd.contract_external_id) as contracts_count')
+            ->groupBy('cd.tenant_id')
+            ->orderByDesc(DB::raw('SUM(cd.debt_amount)'))
+            ->limit(10)
+            ->get()
+            ->map(static fn (object $row): array => [
+                'tenant_id' => (int) $row->tenant_id,
+                'tenant_name' => (string) $row->tenant_name,
+                'debt_amount_rub' => round((float) $row->debt_amount, 2),
+                'latest_period' => (string) ($row->latest_period ?? ''),
+                'contracts_count' => (int) $row->contracts_count,
+                'source' => 'contract_debts latest current state',
             ])
             ->all();
     }

@@ -268,8 +268,23 @@
         }
 
         .quick-chat__avatar--ai {
-            background: #ede9fe;
-            color: #6d28d9;
+            background: linear-gradient(135deg, #eef2ff 0%, #dcfce7 100%);
+            color: #166534;
+        }
+
+        .quick-chat__giga-mark {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.45rem;
+            height: 1.45rem;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #19c37d 0%, #2563eb 100%);
+            color: #fff;
+            font-size: 0.78rem;
+            font-weight: 950;
+            letter-spacing: -0.05em;
+            line-height: 1;
         }
 
         .quick-chat__item-title {
@@ -797,7 +812,7 @@
                                     @if ($isCandidate)
                                         <x-filament::icon icon="heroicon-o-user-plus" class="h-5 w-5" />
                                     @elseif ($chat['type'] === 'ai')
-                                        <x-filament::icon icon="heroicon-o-sparkles" class="h-5 w-5" />
+                                        <span class="quick-chat__giga-mark" aria-hidden="true">G</span>
                                     @elseif ($chat['type'] === 'staff')
                                         <x-filament::icon icon="heroicon-o-user-group" class="h-5 w-5" />
                                     @else

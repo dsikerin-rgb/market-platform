@@ -75,8 +75,8 @@
 
         .staff-presence__stack--ai {
             bottom: 1.25rem;
-            border-color: rgba(124, 58, 237, 0.26);
-            background: rgba(245, 243, 255, 0.90);
+            border-color: rgba(22, 163, 74, 0.26);
+            background: rgba(240, 253, 244, 0.92);
             opacity: 1;
         }
 
@@ -87,8 +87,8 @@
         }
 
         html.dark .staff-presence__stack--ai {
-            border-color: rgba(167, 139, 250, 0.30);
-            background: rgba(30, 27, 75, 0.82);
+            border-color: rgba(34, 197, 94, 0.30);
+            background: rgba(20, 83, 45, 0.72);
         }
 
         .staff-presence__label {
@@ -170,19 +170,34 @@
         }
 
         .staff-presence__avatar--ai {
-            --staff-avatar-color: #7c3aed;
-            border-color: rgba(124, 58, 237, 0.28);
-            background: linear-gradient(180deg, #f5f3ff 0%, #ddd6fe 100%);
-            color: #6d28d9;
+            --staff-avatar-color: #16a34a;
+            border-color: rgba(22, 163, 74, 0.28);
+            background: linear-gradient(135deg, #eef2ff 0%, #dcfce7 100%);
+            color: #166534;
         }
 
         .staff-presence__avatar--ai::after {
-            background: #8b5cf6;
+            background: #22c55e;
         }
 
         html.dark .staff-presence__avatar--ai {
-            background: linear-gradient(180deg, rgba(124, 58, 237, 0.55) 0%, #1e1b4b 100%);
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.62) 0%, rgba(22, 163, 74, 0.86) 100%);
             color: #ffffff;
+        }
+
+        .staff-presence__giga-mark {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.5rem;
+            height: 1.5rem;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #19c37d 0%, #2563eb 100%);
+            color: #fff;
+            font-size: 0.82rem;
+            font-weight: 950;
+            letter-spacing: -0.05em;
+            line-height: 1;
         }
 
         .staff-presence__unread-badge {
@@ -585,7 +600,7 @@
             title="ИИ-консультант · открыть диалог"
             x-on:click="window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'ai', id: 1 } }))"
         >
-            <x-filament::icon icon="heroicon-o-sparkles" class="h-5 w-5" />
+            <span class="staff-presence__giga-mark" aria-hidden="true">G</span>
         </button>
     </div>
 

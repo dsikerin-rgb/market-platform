@@ -11,11 +11,22 @@ use Illuminate\Support\Str;
 class AiConsultantService
 {
     /**
+     * @param list<array{role:string,content:string}> $history
      * @return array{answer:string,error_type:'provider'|'auth'|'connectivity'|null}
      */
-    public function answer(User $user, int $marketId, string $question): array
+    public function answer(User $user, int $marketId, string $question, array $history = []): array
     {
         $question = trim($question);
+        $settings = app(AiAgentSettings::class)->get();
+        $settings['_market_id'] = $marketId;
+
+        if (! (bool) $settings['enabled']) {
+            return [
+                'answer' => 'ИИ-консультант отключён в настройках.',
+                'error_type' => null,
+            ];
+        }
+
         if ($question === '') {
             return [
                 'answer' => 'Напишите вопрос по рынку, арендатору, месту, договору, задолженности или 1С-сверке.',
@@ -30,7 +41,14 @@ class AiConsultantService
             ];
         }
 
-        $context = app(AiConsultantContextBuilder::class)->build($user, $marketId, $question);
+        $context = (bool) $settings['context_pack_enabled']
+            ? app(AiConsultantContextBuilder::class)->build($user, $marketId, $question)
+            : [
+                'scope' => [
+                    'market_id' => $marketId > 0 ? $marketId : null,
+                    'user_id' => (int) $user->id,
+                ],
+            ];
 
         $client = new GigaChatClient(
             http: app(Http::class),
@@ -40,10 +58,13 @@ class AiConsultantService
             verifySsl: (bool) config('gigachat.verify_ssl', true),
         );
 
-        $response = $client->chat([
-            ['role' => 'system', 'content' => $this->systemPrompt()],
+        $messages = [
+            ['role' => 'system', 'content' => $this->systemPrompt($settings, $marketId)],
+            ...$this->historyMessages($history, (int) $settings['history_messages']),
             ['role' => 'user', 'content' => $this->userPrompt($question, $context)],
-        ], temperature: 0.0, maxTokens: 1600);
+        ];
+
+        $response = $this->chatWithTools($client, $messages, $settings);
 
         if (! $response['ok']) {
             logger()->warning('AI consultant request failed', [
@@ -73,17 +94,80 @@ class AiConsultantService
         ];
     }
 
-    private function systemPrompt(): string
+    /**
+     * @param array<int, array{role: string, content: string}> $messages
+     * @param array<string, mixed> $settings
+     * @return array{
+     *   ok: bool,
+     *   content: string|null,
+     *   error: string|null,
+     *   model_used: string|null,
+     *   status: int|null,
+     *   failure_kind: 'billing'|'rate_limit'|'auth'|'provider_http'|'network'|'empty_content'|null
+     * }
+     */
+    private function chatWithTools(GigaChatClient $client, array $messages, array $settings): array
     {
-        return <<<'PROMPT'
-Ты ИИ-консультант Market Platform для сотрудников рынка.
-Отвечай по-русски, коротко и предметно.
-Используй только переданный read-only контекст из базы данных.
-Не утверждай факты, которых нет в контексте. Если данных не хватает, прямо скажи, что нужно открыть карточку или уточнить запрос.
-Не предлагай выполнить изменение в базе напрямую. Можно предлагать только проверку, ручное действие сотрудника или переход в карточку сущности.
-Не раскрывай технические секреты, токены, пароли и системные настройки.
-Если в контексте есть ID сущностей, указывай их, чтобы сотрудник мог быстро найти запись.
-PROMPT;
+        $maxRounds = (bool) $settings['read_only_sql_enabled']
+            ? (int) $settings['max_tool_rounds']
+            : 0;
+
+        for ($round = 0; $round <= $maxRounds; $round++) {
+            $response = $client->chat(
+                $messages,
+                temperature: (float) $settings['temperature'],
+                maxTokens: (int) $settings['max_tokens'],
+            );
+
+            if (! $response['ok']) {
+                return $response;
+            }
+
+            $content = trim((string) $response['content']);
+            $toolRequest = $round < $maxRounds ? $this->extractReadSqlToolRequest($content) : null;
+
+            if ($toolRequest === null) {
+                return $response;
+            }
+
+            $toolResult = app(AiReadOnlySqlTool::class)->run(
+                marketId: (int) data_get($settings, '_market_id', 0),
+                sql: $toolRequest,
+                settings: $settings,
+            );
+
+            $messages[] = ['role' => 'assistant', 'content' => $content];
+            $messages[] = [
+                'role' => 'user',
+                'content' => "Результат проверки данных read_sql:\n"
+                    . json_encode($toolResult, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+                    . "\n\nСформулируй ответ для сотрудника простым русским языком. Не показывай JSON и не упоминай SQL, если это не нужно.",
+            ];
+        }
+
+        return [
+            'ok' => false,
+            'content' => null,
+            'error' => 'AI consultant reached tool round limit',
+            'model_used' => null,
+            'status' => null,
+            'failure_kind' => 'provider_http',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $settings
+     */
+    private function systemPrompt(array $settings, int $marketId): string
+    {
+        $settings['_market_id'] = $marketId;
+        $prompt = trim((string) $settings['system_prompt']);
+
+        if ((bool) $settings['read_only_sql_enabled']) {
+            $prompt .= "\n\n" . app(AiReadOnlySqlTool::class)->schemaHint($marketId, $settings);
+        }
+
+        return $prompt;
     }
 
     /**
@@ -93,6 +177,71 @@ PROMPT;
     {
         return "Вопрос сотрудника:\n{$question}\n\nКонтекст из БД:\n"
             . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    }
+
+    /**
+     * @param list<array{role:string,content:string}> $history
+     * @return list<array{role:string,content:string}>
+     */
+    private function historyMessages(array $history, int $limit): array
+    {
+        if ($limit <= 0) {
+            return [];
+        }
+
+        return collect($history)
+            ->filter(static fn (array $message): bool => in_array($message['role'] ?? '', ['user', 'assistant'], true)
+                && trim((string) ($message['content'] ?? '')) !== '')
+            ->take(-$limit)
+            ->map(static fn (array $message): array => [
+                'role' => (string) $message['role'],
+                'content' => Str::limit(trim((string) $message['content']), 1800, '...'),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function extractReadSqlToolRequest(string $content): ?string
+    {
+        $payload = $this->decodeToolPayload($content);
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        $tool = strtolower(trim((string) ($payload['tool'] ?? $payload['name'] ?? '')));
+        $sql = trim((string) ($payload['sql'] ?? ''));
+
+        return $tool === 'read_sql' && $sql !== '' ? $sql : null;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function decodeToolPayload(string $content): ?array
+    {
+        $candidates = [trim($content)];
+
+        if (preg_match('/```(?:json)?\s*(\{.*?\})\s*```/is', $content, $match) === 1) {
+            $candidates[] = trim($match[1]);
+        }
+
+        if (preg_match('/(\{.*\})/s', $content, $match) === 1) {
+            $candidates[] = trim($match[1]);
+        }
+
+        foreach ($candidates as $candidate) {
+            try {
+                $decoded = json_decode($candidate, true, 8, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                continue;
+            }
+
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return null;
     }
 
     private function providerFallbackMessage(?string $failureKind): string

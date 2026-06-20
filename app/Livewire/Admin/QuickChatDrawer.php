@@ -225,9 +225,10 @@ class QuickChatDrawer extends Component
                 return;
             }
 
+            $history = $this->aiConversationHistory();
             $this->appendAiMessage($user->name ?: 'Вы', $body, true);
 
-            $answer = $aiConsultant->answer($user, $this->resolveMarketId($user), $body);
+            $answer = $aiConsultant->answer($user, $this->resolveMarketId($user), $body, $history);
             $this->appendAiMessage('ИИ-консультант', $answer['answer'], false);
 
             $this->messageBody = '';
@@ -750,6 +751,21 @@ class QuickChatDrawer extends Component
             'date_label' => $this->formatDateLabel($now),
             'attachments' => [],
         ];
+    }
+
+    /**
+     * @return list<array{role:string,content:string}>
+     */
+    private function aiConversationHistory(): array
+    {
+        return collect($this->aiMessages)
+            ->map(static fn (array $message): array => [
+                'role' => (bool) ($message['is_own'] ?? false) ? 'user' : 'assistant',
+                'content' => trim((string) ($message['body'] ?? '')),
+            ])
+            ->filter(static fn (array $message): bool => $message['content'] !== '')
+            ->values()
+            ->all();
     }
 
     /**
