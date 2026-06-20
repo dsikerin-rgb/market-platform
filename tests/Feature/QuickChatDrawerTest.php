@@ -311,6 +311,18 @@ class QuickChatDrawerTest extends TestCase
             'priority' => Task::PRIORITY_HIGH,
         ]);
 
+        $component
+            ->call('confirmAiAction', 'ai-message-'.(int) $message->id)
+            ->assertHasNoErrors();
+
+        $this->assertSame(
+            1,
+            Task::query()
+                ->where('market_id', (int) $market->id)
+                ->where('title', 'Проверить витрину')
+                ->count(),
+        );
+
         $metadata = (array) $message->refresh()->metadata;
 
         $this->assertSame('confirmed', $metadata['pending_action']['status'] ?? null);

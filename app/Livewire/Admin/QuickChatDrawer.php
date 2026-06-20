@@ -343,20 +343,46 @@ class QuickChatDrawer extends Component
         }
 
         $conversation = $this->aiConversation($user, create: false);
-        $message = $this->aiMessageForAction($conversation, $messageId);
+        $claimedAction = DB::transaction(function () use ($conversation, $messageId, $user): ?array {
+            $message = $this->aiMessageForAction($conversation, $messageId, lockForUpdate: true);
+            if (! $message instanceof AiMessage) {
+                return null;
+            }
+
+            $metadata = (array) ($message->metadata ?? []);
+            $pendingAction = (array) ($metadata['pending_action'] ?? []);
+            if (($pendingAction['status'] ?? null) !== 'pending') {
+                return null;
+            }
+
+            $pendingAction['status'] = 'running';
+            $pendingAction['started_by_user_id'] = (int) $user->id;
+            $pendingAction['started_at'] = now()->toIso8601String();
+            $metadata['pending_action'] = $pendingAction;
+            $message->forceFill(['metadata' => $metadata])->save();
+
+            return [
+                'message_id' => (int) $message->id,
+                'payload' => (array) ($pendingAction['payload'] ?? []),
+            ];
+        });
+
+        if (! is_array($claimedAction)) {
+            return;
+        }
+
+        $result = app(AiAgentActionTool::class)->run($user, $this->resolveMarketId($user), (array) ($claimedAction['payload'] ?? []));
+        $ok = (bool) ($result['ok'] ?? false);
+
+        $message = AiMessage::query()
+            ->whereKey((int) $claimedAction['message_id'])
+            ->first();
         if (! $message instanceof AiMessage) {
             return;
         }
 
         $metadata = (array) ($message->metadata ?? []);
         $pendingAction = (array) ($metadata['pending_action'] ?? []);
-        if (($pendingAction['status'] ?? null) !== 'pending') {
-            return;
-        }
-
-        $payload = (array) ($pendingAction['payload'] ?? []);
-        $result = app(AiAgentActionTool::class)->run($user, $this->resolveMarketId($user), $payload);
-        $ok = (bool) ($result['ok'] ?? false);
 
         $pendingAction['status'] = $ok ? 'confirmed' : 'failed';
         $pendingAction['confirmed_by_user_id'] = (int) $user->id;
@@ -391,24 +417,32 @@ class QuickChatDrawer extends Component
         }
 
         $conversation = $this->aiConversation($user, create: false);
-        $message = $this->aiMessageForAction($conversation, $messageId);
-        if (! $message instanceof AiMessage) {
+        $cancelled = DB::transaction(function () use ($conversation, $messageId, $user): bool {
+            $message = $this->aiMessageForAction($conversation, $messageId, lockForUpdate: true);
+            if (! $message instanceof AiMessage) {
+                return false;
+            }
+
+            $metadata = (array) ($message->metadata ?? []);
+            $pendingAction = (array) ($metadata['pending_action'] ?? []);
+            if (($pendingAction['status'] ?? null) !== 'pending') {
+                return false;
+            }
+
+            $pendingAction['status'] = 'cancelled';
+            $pendingAction['cancelled_by_user_id'] = (int) $user->id;
+            $pendingAction['cancelled_at'] = now()->toIso8601String();
+            $pendingAction['result_message'] = 'Отменено. Ничего не сделал.';
+
+            $metadata['pending_action'] = $pendingAction;
+            $message->forceFill(['metadata' => $metadata])->save();
+
+            return true;
+        });
+
+        if (! $cancelled) {
             return;
         }
-
-        $metadata = (array) ($message->metadata ?? []);
-        $pendingAction = (array) ($metadata['pending_action'] ?? []);
-        if (($pendingAction['status'] ?? null) !== 'pending') {
-            return;
-        }
-
-        $pendingAction['status'] = 'cancelled';
-        $pendingAction['cancelled_by_user_id'] = (int) $user->id;
-        $pendingAction['cancelled_at'] = now()->toIso8601String();
-        $pendingAction['result_message'] = 'Отменено. Ничего не сделал.';
-
-        $metadata['pending_action'] = $pendingAction;
-        $message->forceFill(['metadata' => $metadata])->save();
 
         $this->appendAiMessage(
             'ИИ-консультант',
@@ -906,7 +940,7 @@ class QuickChatDrawer extends Component
         ];
     }
 
-    private function aiMessageForAction(?AiConversation $conversation, string $messageId): ?AiMessage
+    private function aiMessageForAction(?AiConversation $conversation, string $messageId, bool $lockForUpdate = false): ?AiMessage
     {
         if (! $conversation instanceof AiConversation) {
             return null;
@@ -916,11 +950,16 @@ class QuickChatDrawer extends Component
             return null;
         }
 
-        return AiMessage::query()
+        $query = AiMessage::query()
             ->where('ai_conversation_id', (int) $conversation->id)
             ->where('role', AiMessage::ROLE_ASSISTANT)
-            ->whereKey((int) $match[1])
-            ->first();
+            ->whereKey((int) $match[1]);
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
+        }
+
+        return $query->first();
     }
 
     /**
@@ -1104,7 +1143,7 @@ class QuickChatDrawer extends Component
         }
 
         $status = strtolower(trim((string) ($pendingAction['status'] ?? 'pending')));
-        if (! in_array($status, ['pending', 'confirmed', 'cancelled', 'failed'], true)) {
+        if (! in_array($status, ['pending', 'running', 'confirmed', 'cancelled', 'failed'], true)) {
             $status = 'pending';
         }
 
@@ -1132,6 +1171,7 @@ class QuickChatDrawer extends Component
     private function aiPendingActionStatusLabel(string $status): string
     {
         return match ($status) {
+            'running' => 'Выполняется',
             'confirmed' => 'Выполнено',
             'cancelled' => 'Отменено',
             'failed' => 'Не выполнено',
