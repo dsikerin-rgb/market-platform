@@ -3458,6 +3458,24 @@ JS;
         $this->assertStringContainsString('Договоры 1С, начисления и общий финансовый статус должны проверяться по основной группе.', $blade);
     }
 
+    public function test_market_map_popup_has_single_parent_group_open_action_for_child_space(): void
+    {
+        $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+        $start = strpos($blade, "const btns = [];");
+        $end = strpos($blade, "if (showPopupEditActions && CAN_EDIT && hasGroupMembershipSpace", $start);
+
+        $this->assertIsInt($start);
+        $this->assertIsInt($end);
+        $this->assertGreaterThan($start, $end);
+
+        $actionsBlock = substr($blade, $start, $end - $start);
+
+        $this->assertSame(1, substr_count($actionsBlock, 'data-action="open-group"'));
+        $this->assertStringContainsString('Открыть карточку группы', $actionsBlock);
+        $this->assertStringContainsString('Назначить арендатора группе', $actionsBlock);
+        $this->assertStringNotContainsString('Открыть группу', $actionsBlock);
+    }
+
     public function test_market_map_review_navigation_skips_stale_reviewed_candidate_for_next_pending(): void
     {
         $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
