@@ -236,6 +236,99 @@ class QuickChatDrawerTest extends TestCase
         );
     }
 
+    public function test_ai_consultant_requires_confirmation_before_mutating_action(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        app()->instance(AiConsultantService::class, new class extends AiConsultantService
+        {
+            public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
+            {
+                return [
+                    'answer' => 'Подготовил задачу. Проверьте детали и подтвердите, чтобы я её создал.',
+                    'error_type' => null,
+                    'chips' => [],
+                    'pending_action' => [
+                        'status' => 'pending',
+                        'tool' => 'create_task',
+                        'payload' => [
+                            'tool' => 'create_task',
+                            'title' => 'Проверить витрину',
+                            'description' => 'Проверить витрину после обращения арендатора.',
+                            'due_at' => '2026-06-21 10:00',
+                            'priority' => 'high',
+                        ],
+                        'title' => 'Новая задача',
+                        'summary' => [
+                            ['label' => 'Название', 'value' => 'Проверить витрину'],
+                            ['label' => 'Описание', 'value' => 'Проверить витрину после обращения арендатора.'],
+                            ['label' => 'Срок', 'value' => '2026-06-21 10:00'],
+                        ],
+                        'confirm_label' => 'Создать задачу',
+                        'cancel_label' => 'Отменить',
+                    ],
+                ];
+            }
+        });
+
+        $component = Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->set('messageBody', 'Создай задачу проверить витрину')
+            ->call('sendMessage')
+            ->assertHasNoErrors()
+            ->assertSee('Подготовил задачу')
+            ->assertSee('Новая задача')
+            ->assertSee('Создать задачу')
+            ->assertSee('Проверить витрину');
+
+        $this->assertDatabaseMissing('tasks', [
+            'market_id' => (int) $market->id,
+            'title' => 'Проверить витрину',
+        ]);
+
+        $message = AiMessage::query()
+            ->where('role', AiMessage::ROLE_ASSISTANT)
+            ->where('body', 'Подготовил задачу. Проверьте детали и подтвердите, чтобы я её создал.')
+            ->firstOrFail();
+
+        $component
+            ->call('confirmAiAction', 'ai-message-'.(int) $message->id)
+            ->assertHasNoErrors()
+            ->assertSee('Выполнено')
+            ->assertSee('Задача создана.')
+            ->assertSee('Задача: Проверить витрину');
+
+        $this->assertDatabaseHas('tasks', [
+            'market_id' => (int) $market->id,
+            'title' => 'Проверить витрину',
+            'description' => 'Проверить витрину после обращения арендатора.',
+            'priority' => Task::PRIORITY_HIGH,
+        ]);
+
+        $component
+            ->call('confirmAiAction', 'ai-message-'.(int) $message->id)
+            ->assertHasNoErrors();
+
+        $this->assertSame(
+            1,
+            Task::query()
+                ->where('market_id', (int) $market->id)
+                ->where('title', 'Проверить витрину')
+                ->count(),
+        );
+
+        $metadata = (array) $message->refresh()->metadata;
+
+        $this->assertSame('confirmed', $metadata['pending_action']['status'] ?? null);
+        $this->assertSame('Задача создана.', $metadata['pending_action']['result_message'] ?? null);
+    }
+
     public function test_ai_action_tool_creates_task_with_resource_chip(): void
     {
         $market = Market::query()->create([

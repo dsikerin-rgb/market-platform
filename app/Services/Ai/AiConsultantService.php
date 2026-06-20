@@ -13,7 +13,7 @@ class AiConsultantService
     /**
      * @param  list<array{role:string,content:string}>  $history
      * @param  array<string,mixed>  $pageContext
-     * @return array{answer:string,error_type:'provider'|'auth'|'connectivity'|null,chips:list<array{label:string,url:string}>}
+     * @return array{answer:string,error_type:'provider'|'auth'|'connectivity'|null,chips:list<array{label:string,url:string}>,pending_action?:array<string,mixed>|null}
      */
     public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
     {
@@ -26,6 +26,7 @@ class AiConsultantService
                 'answer' => 'ИИ-консультант отключён в настройках.',
                 'error_type' => null,
                 'chips' => [],
+                'pending_action' => null,
             ];
         }
 
@@ -34,6 +35,7 @@ class AiConsultantService
                 'answer' => 'Напишите вопрос по рынку, арендатору, месту, договору, задолженности или 1С-сверке.',
                 'error_type' => null,
                 'chips' => [],
+                'pending_action' => null,
             ];
         }
 
@@ -42,6 +44,7 @@ class AiConsultantService
                 'answer' => 'ИИ-консультант отключён: в окружении не задан GIGACHAT_AUTH_KEY.',
                 'error_type' => 'auth',
                 'chips' => [],
+                'pending_action' => null,
             ];
         }
 
@@ -89,6 +92,7 @@ class AiConsultantService
                 'answer' => $this->providerFallbackMessage($response['failure_kind'] ?? null),
                 'error_type' => ($response['failure_kind'] ?? null) === 'auth' ? 'auth' : 'provider',
                 'chips' => $response['chips'] ?? [],
+                'pending_action' => null,
             ];
         }
 
@@ -98,6 +102,7 @@ class AiConsultantService
                 'answer' => 'ИИ-консультант вернул пустой ответ. Попробуйте уточнить вопрос.',
                 'error_type' => 'provider',
                 'chips' => $response['chips'] ?? [],
+                'pending_action' => null,
             ];
         }
 
@@ -107,6 +112,7 @@ class AiConsultantService
             'answer' => Str::limit($presented['answer'], 6000, '...'),
             'error_type' => null,
             'chips' => $presented['chips'],
+            'pending_action' => $response['pending_action'] ?? null,
         ];
     }
 
@@ -120,7 +126,8 @@ class AiConsultantService
      *   model_used: string|null,
      *   status: int|null,
      *   failure_kind: 'billing'|'rate_limit'|'auth'|'provider_http'|'network'|'empty_content'|null,
-     *   chips?: list<array{label:string,url:string}>
+     *   chips?: list<array{label:string,url:string}>,
+     *   pending_action?: array<string,mixed>|null
      * }
      */
     private function chatWithTools(GigaChatClient $client, array $messages, array $settings, User $user): array
@@ -145,7 +152,7 @@ class AiConsultantService
             }
 
             $content = trim((string) $response['content']);
-            $toolRequest = $round < $maxRounds ? $this->extractToolRequest($content) : null;
+            $toolRequest = $this->extractToolRequest($content);
 
             if ($toolRequest === null) {
                 $response['chips'] = $chips;
@@ -153,7 +160,27 @@ class AiConsultantService
                 return $response;
             }
 
-            $toolResult = $this->runTool($user, $toolRequest, $settings);
+            if ($this->toolRequiresConfirmation($toolRequest)) {
+                if (! (bool) $settings['action_tools_enabled']) {
+                    $toolResult = [
+                        'ok' => false,
+                        'message' => 'Рабочие действия отключены в настройках.',
+                        'chips' => [],
+                    ];
+                } else {
+                    return [
+                        ...$response,
+                        'content' => $this->pendingActionAnswer($toolRequest),
+                        'chips' => $chips,
+                        'pending_action' => $this->pendingActionDraft($toolRequest),
+                    ];
+                }
+            } elseif ($round >= $maxRounds) {
+                break;
+            } else {
+                $toolResult = $this->runTool($user, $toolRequest, $settings);
+            }
+
             $chips = [
                 ...$chips,
                 ...$this->normalizeChips((array) ($toolResult['chips'] ?? [])),
@@ -194,6 +221,7 @@ class AiConsultantService
 
         if ((bool) $settings['action_tools_enabled']) {
             $prompt .= "\n\n".app(AiAgentActionTool::class)->schemaHint();
+            $prompt .= "\n\nДействия, которые меняют данные или отправляют сообщения, приложение покажет сотруднику как черновик с кнопкой подтверждения. Всё равно возвращай JSON действия, когда оно нужно для выполнения просьбы; не проси сотрудника подтверждать действие текстом.";
         }
 
         if ($friendlyName !== '') {
@@ -226,6 +254,182 @@ class AiConsultantService
         $parts = preg_split('/\s+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
         return trim((string) ($parts[0] ?? ''));
+    }
+
+    /**
+     * @param  array<string,mixed>  $toolRequest
+     */
+    private function toolRequiresConfirmation(array $toolRequest): bool
+    {
+        $tool = strtolower(trim((string) ($toolRequest['tool'] ?? $toolRequest['name'] ?? '')));
+
+        return in_array($tool, [
+            'create_task',
+            'create_reminder',
+            'create_event',
+            'send_staff_message',
+            'send_tenant_message',
+        ], true);
+    }
+
+    /**
+     * @param  array<string,mixed>  $toolRequest
+     */
+    private function pendingActionAnswer(array $toolRequest): string
+    {
+        return match (strtolower(trim((string) ($toolRequest['tool'] ?? $toolRequest['name'] ?? '')))) {
+            'create_reminder' => 'Подготовил напоминание. Проверьте детали и подтвердите, чтобы я его создал.',
+            'create_event' => 'Подготовил событие. Проверьте детали и подтвердите, чтобы я его создал.',
+            'send_staff_message' => 'Подготовил сообщение сотруднику. Проверьте текст и подтвердите отправку.',
+            'send_tenant_message' => 'Подготовил сообщение арендатору. Проверьте текст и подтвердите отправку.',
+            default => 'Подготовил задачу. Проверьте детали и подтвердите, чтобы я её создал.',
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $toolRequest
+     * @return array<string,mixed>
+     */
+    private function pendingActionDraft(array $toolRequest): array
+    {
+        $tool = strtolower(trim((string) ($toolRequest['tool'] ?? $toolRequest['name'] ?? '')));
+        $payload = $this->sanitizePendingActionPayload($toolRequest);
+
+        return [
+            'status' => 'pending',
+            'tool' => $tool,
+            'payload' => $payload,
+            'title' => $this->pendingActionTitle($tool),
+            'summary' => $this->pendingActionSummary($tool, $payload),
+            'confirm_label' => $this->pendingActionConfirmLabel($tool),
+            'cancel_label' => 'Отменить',
+            'created_at' => now()->toIso8601String(),
+        ];
+    }
+
+    private function pendingActionTitle(string $tool): string
+    {
+        return match ($tool) {
+            'create_reminder' => 'Новое напоминание',
+            'create_event' => 'Новое событие',
+            'send_staff_message' => 'Сообщение сотруднику',
+            'send_tenant_message' => 'Сообщение арендатору',
+            default => 'Новая задача',
+        };
+    }
+
+    private function pendingActionConfirmLabel(string $tool): string
+    {
+        return match ($tool) {
+            'create_reminder' => 'Создать напоминание',
+            'create_event' => 'Создать событие',
+            'send_staff_message' => 'Отправить сотруднику',
+            'send_tenant_message' => 'Отправить арендатору',
+            default => 'Создать задачу',
+        };
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return list<array{label:string,value:string}>
+     */
+    private function pendingActionSummary(string $tool, array $payload): array
+    {
+        $rows = [];
+        $add = static function (string $label, mixed $value) use (&$rows): void {
+            $value = Str::limit(trim((string) $value), 260, '');
+            if ($value !== '') {
+                $rows[] = ['label' => $label, 'value' => $value];
+            }
+        };
+
+        if (in_array($tool, ['create_task', 'create_reminder'], true)) {
+            $add('Название', $payload['title'] ?? '');
+            $add('Описание', $payload['description'] ?? $payload['message'] ?? '');
+            $add('Срок', $payload['due_at'] ?? $payload['remind_at'] ?? '');
+            $add('Исполнитель', $payload['assignee_query'] ?? (($payload['assignee_user_id'] ?? null) ? 'выбранный сотрудник' : ''));
+            $add('Важность', $payload['priority'] ?? '');
+
+            return $rows;
+        }
+
+        if ($tool === 'create_event') {
+            $add('Название', $payload['title'] ?? '');
+            $add('Описание', $payload['description'] ?? '');
+            $add('Начало', $payload['starts_at'] ?? $payload['date'] ?? '');
+            $add('Окончание', $payload['ends_at'] ?? '');
+
+            return $rows;
+        }
+
+        if ($tool === 'send_staff_message') {
+            $add('Кому', $payload['recipient_query'] ?? (($payload['recipient_user_id'] ?? null) ? 'выбранный сотрудник' : ''));
+            $add('Тема', $payload['subject'] ?? '');
+            $add('Сообщение', $payload['message'] ?? $payload['body'] ?? '');
+
+            return $rows;
+        }
+
+        if ($tool === 'send_tenant_message') {
+            $add('Кому', $payload['tenant_query'] ?? (($payload['tenant_id'] ?? null) ? 'выбранный арендатор' : ''));
+            $add('Тема', $payload['subject'] ?? '');
+            $add('Сообщение', $payload['message'] ?? $payload['body'] ?? '');
+            $add('Важность', $payload['priority'] ?? '');
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     */
+    private function sanitizePendingActionPayload(array $payload): array
+    {
+        $tool = strtolower(trim((string) ($payload['tool'] ?? $payload['name'] ?? '')));
+        $allowedKeys = [
+            'tool',
+            'title',
+            'description',
+            'message',
+            'body',
+            'due_at',
+            'remind_at',
+            'starts_at',
+            'ends_at',
+            'date',
+            'all_day',
+            'assignee_user_id',
+            'assignee_query',
+            'recipient_user_id',
+            'recipient_query',
+            'tenant_id',
+            'tenant_query',
+            'market_space_id',
+            'subject',
+            'priority',
+        ];
+
+        $result = ['tool' => $tool];
+
+        foreach ($allowedKeys as $key) {
+            if ($key === 'tool' || ! array_key_exists($key, $payload)) {
+                continue;
+            }
+
+            $value = $payload[$key];
+            if (is_bool($value) || is_int($value) || is_float($value) || $value === null) {
+                $result[$key] = $value;
+
+                continue;
+            }
+
+            if (is_string($value) || is_numeric($value)) {
+                $result[$key] = Str::limit(trim((string) $value), 5000, '');
+            }
+        }
+
+        return $result;
     }
 
     /**
