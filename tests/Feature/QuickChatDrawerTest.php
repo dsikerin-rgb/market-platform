@@ -1,17 +1,22 @@
 <?php
-# tests/Feature/QuickChatDrawerTest.php
+
+// tests/Feature/QuickChatDrawerTest.php
 
 declare(strict_types=1);
 
 namespace Tests\Feature;
 
 use App\Livewire\Admin\QuickChatDrawer;
+use App\Models\AiConversation;
+use App\Models\AiMessage;
 use App\Models\Market;
 use App\Models\StaffConversation;
 use App\Models\StaffConversationMessage;
+use App\Models\Task;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketChatNotification;
+use App\Services\Ai\AiAgentActionTool;
 use App\Services\Ai\AiConsultantService;
 use App\Support\StaffConversationService;
 use Filament\Facades\Filament;
@@ -104,7 +109,13 @@ class QuickChatDrawerTest extends TestCase
             ->assertSet('isOpen', true)
             ->assertSet('selectedType', 'ai')
             ->assertSet('selectedId', 1)
-            ->assertSee('ИИ-консультант');
+            ->assertSee('ИИ-консультант')
+            ->assertSee('Чем помочь по этой странице');
+
+        $this->assertDatabaseHas('ai_messages', [
+            'role' => AiMessage::ROLE_ASSISTANT,
+            'body' => 'Здравствуйте. Чем помочь по этой странице или данным рынка? Могу проверить информацию, подготовить ссылку, создать задачу, напоминание или отправить сообщение.',
+        ]);
     }
 
     public function test_ai_consultant_dialog_accepts_question_and_renders_answer(): void
@@ -117,12 +128,14 @@ class QuickChatDrawerTest extends TestCase
 
         $this->actingAsMarketAdmin($market);
 
-        app()->instance(AiConsultantService::class, new class extends AiConsultantService {
-            public function answer(User $user, int $marketId, string $question, array $history = []): array
+        app()->instance(AiConsultantService::class, new class extends AiConsultantService
+        {
+            public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
             {
                 return [
-                    'answer' => 'Ответ по базе для рынка #' . $marketId . ': ' . $question,
+                    'answer' => 'Ответ по базе для рынка #'.$marketId.': '.$question,
                     'error_type' => null,
+                    'chips' => [],
                 ];
             }
         });
@@ -131,11 +144,126 @@ class QuickChatDrawerTest extends TestCase
             ->call('openDrawer', 'ai', 1)
             ->assertSet('selectedType', 'ai')
             ->assertSee('База данных рынка')
+            ->assertSee('Чем помочь по этой странице')
             ->set('messageBody', 'Что по месту ОС8 22?')
             ->call('sendMessage')
             ->assertHasNoErrors()
             ->assertSee('Что по месту ОС8 22?')
-            ->assertSee('Ответ по базе для рынка #' . (int) $market->id);
+            ->assertSee('Ответ по базе для рынка #'.(int) $market->id);
+    }
+
+    public function test_ai_consultant_dialog_persists_history_page_context_and_chips(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        $fake = new class extends AiConsultantService
+        {
+            public array $lastHistory = [];
+
+            public array $lastPageContext = [];
+
+            public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
+            {
+                $this->lastHistory = $history;
+                $this->lastPageContext = $pageContext;
+
+                return [
+                    'answer' => 'Ответ с сохранённой ссылкой',
+                    'error_type' => null,
+                    'chips' => [
+                        [
+                            'label' => 'Открыть арендатора',
+                            'url' => '/admin/tenants/7/edit',
+                        ],
+                    ],
+                ];
+            }
+        };
+
+        app()->instance(AiConsultantService::class, $fake);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('updatePageContext', [
+                'url' => 'https://market.example.test/admin/tenants/7/edit',
+                'path' => '/admin/tenants/7/edit',
+                'title' => 'Карточка арендатора',
+                'heading' => 'Арендатор ОС8',
+            ])
+            ->call('openDrawer', 'ai', 1)
+            ->set('messageBody', 'Что по этому арендатору?')
+            ->call('sendMessage')
+            ->assertHasNoErrors()
+            ->assertSee('Ответ с сохранённой ссылкой')
+            ->assertSee('Открыть арендатора');
+
+        $conversation = AiConversation::query()->firstOrFail();
+
+        $this->assertSame((int) $market->id, (int) $conversation->market_id);
+        $this->assertSame('https://market.example.test/admin/tenants/7/edit', $conversation->context_page_url);
+        $this->assertSame('Арендатор ОС8', $conversation->context_page_label);
+        $this->assertSame('/admin/tenants/7/edit', $fake->lastPageContext['path'] ?? null);
+
+        $this->assertDatabaseHas('ai_messages', [
+            'ai_conversation_id' => (int) $conversation->id,
+            'role' => AiMessage::ROLE_USER,
+            'body' => 'Что по этому арендатору?',
+        ]);
+        $this->assertDatabaseHas('ai_messages', [
+            'ai_conversation_id' => (int) $conversation->id,
+            'role' => AiMessage::ROLE_ASSISTANT,
+            'body' => 'Ответ с сохранённой ссылкой',
+        ]);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->assertSee('Что по этому арендатору?')
+            ->assertSee('Ответ с сохранённой ссылкой')
+            ->assertSee('Открыть арендатора');
+
+        $this->assertSame(
+            1,
+            AiMessage::query()
+                ->where('role', AiMessage::ROLE_ASSISTANT)
+                ->where('body', 'Здравствуйте. Чем помочь по этой странице или данным рынка? Могу проверить информацию, подготовить ссылку, создать задачу, напоминание или отправить сообщение.')
+                ->count(),
+        );
+    }
+
+    public function test_ai_action_tool_creates_task_with_resource_chip(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+
+        $result = app(AiAgentActionTool::class)->run($admin, (int) $market->id, [
+            'tool' => 'create_task',
+            'title' => 'Проверить витрину',
+            'description' => 'Проверить витрину после обращения арендатора.',
+            'due_at' => '2026-06-21 10:00',
+            'priority' => 'high',
+        ]);
+
+        $this->assertTrue($result['ok'], $result['message']);
+        $this->assertSame('Задача: Проверить витрину', $result['chips'][0]['label'] ?? null);
+        $this->assertStringContainsString('/admin', $result['chips'][0]['url'] ?? '');
+
+        $this->assertDatabaseHas('tasks', [
+            'market_id' => (int) $market->id,
+            'title' => 'Проверить витрину',
+            'description' => 'Проверить витрину после обращения арендатора.',
+            'priority' => Task::PRIORITY_HIGH,
+            'created_by_user_id' => (int) $admin->id,
+        ]);
     }
 
     public function test_staff_conversations_are_grouped_by_counterparty(): void
@@ -490,7 +618,7 @@ class QuickChatDrawerTest extends TestCase
         $user = User::factory()->create([
             'market_id' => (int) $market->id,
             'tenant_id' => null,
-            'email' => 'quick-chat-admin-' . uniqid('', true) . '@example.test',
+            'email' => 'quick-chat-admin-'.uniqid('', true).'@example.test',
         ]);
         $user->assignRole('market-admin');
 
@@ -507,7 +635,7 @@ class QuickChatDrawerTest extends TestCase
         $user = User::factory()->create([
             'market_id' => null,
             'tenant_id' => null,
-            'email' => 'quick-chat-super-admin-' . uniqid('', true) . '@example.test',
+            'email' => 'quick-chat-super-admin-'.uniqid('', true).'@example.test',
         ]);
         $user->assignRole('super-admin');
 

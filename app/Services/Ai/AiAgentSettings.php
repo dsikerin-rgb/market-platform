@@ -21,7 +21,7 @@ class AiAgentSettings
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     public function save(array $data): array
@@ -37,7 +37,7 @@ class AiAgentSettings
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     public function normalize(array $data): array
@@ -45,11 +45,16 @@ class AiAgentSettings
         return [
             'enabled' => array_key_exists('enabled', $data) ? (bool) $data['enabled'] : true,
             'context_pack_enabled' => array_key_exists('context_pack_enabled', $data) ? (bool) $data['context_pack_enabled'] : true,
+            'page_context_enabled' => array_key_exists('page_context_enabled', $data) ? (bool) $data['page_context_enabled'] : true,
             'read_only_sql_enabled' => array_key_exists('read_only_sql_enabled', $data) ? (bool) $data['read_only_sql_enabled'] : true,
+            'action_tools_enabled' => array_key_exists('action_tools_enabled', $data) ? (bool) $data['action_tools_enabled'] : true,
             'system_prompt' => $this->stringOrDefault($data['system_prompt'] ?? null, $this->defaultSystemPrompt()),
             'temperature' => max(0.0, min((float) ($data['temperature'] ?? 0.1), 1.0)),
             'max_tokens' => max(600, min((int) ($data['max_tokens'] ?? 1800), 6000)),
             'history_messages' => max(0, min((int) ($data['history_messages'] ?? 8), 20)),
+            'history_budget_tokens' => max(300, min((int) ($data['history_budget_tokens'] ?? 1000), 4000)),
+            'context_budget_tokens' => max(400, min((int) ($data['context_budget_tokens'] ?? 1800), 8000)),
+            'context_item_limit' => max(1, min((int) ($data['context_item_limit'] ?? 5), 20)),
             'max_tool_rounds' => max(0, min((int) ($data['max_tool_rounds'] ?? 3), 6)),
             'sql_row_limit' => max(5, min((int) ($data['sql_row_limit'] ?? 50), 200)),
             'sql_timeout_ms' => max(250, min((int) ($data['sql_timeout_ms'] ?? 2500), 10000)),
@@ -72,6 +77,10 @@ class AiAgentSettings
             'tenant_settlement_balances',
             'tickets',
             'ticket_comments',
+            'tenant_requests',
+            'tasks',
+            'market_holidays',
+            'users',
         ];
     }
 
@@ -90,7 +99,6 @@ PROMPT;
     }
 
     /**
-     * @param mixed $value
      * @return list<string>
      */
     private function normalizeTables(mixed $value): array

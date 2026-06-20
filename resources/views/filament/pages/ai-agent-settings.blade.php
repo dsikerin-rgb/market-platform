@@ -27,7 +27,7 @@
 
                     <div class="aw-stat-card">
                         <div class="aw-stat-label">Доступ</div>
-                        <div class="aw-stat-value" style="font-size: 1.25rem;">Read-only</div>
+                        <div class="aw-stat-value" style="font-size: 1.25rem;">Без записи</div>
                     </div>
                 </div>
             </div>
@@ -38,7 +38,7 @@
                 <div>
                     <h3 class="aw-panel-title">Параметры консультанта</h3>
                     <p class="aw-panel-copy">
-                        Изменения применяются к ИИ-чату в модалке "Диалоги". SQL-инструмент не меняет данные и ограничен текущим рынком.
+                        Изменения применяются к ИИ-чату в модалке "Диалоги". Проверки данных не меняют записи и ограничены текущим рынком.
                     </p>
                 </div>
             </div>

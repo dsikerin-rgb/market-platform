@@ -11,10 +11,11 @@ use Illuminate\Support\Str;
 class AiConsultantService
 {
     /**
-     * @param list<array{role:string,content:string}> $history
-     * @return array{answer:string,error_type:'provider'|'auth'|'connectivity'|null}
+     * @param  list<array{role:string,content:string}>  $history
+     * @param  array<string,mixed>  $pageContext
+     * @return array{answer:string,error_type:'provider'|'auth'|'connectivity'|null,chips:list<array{label:string,url:string}>}
      */
-    public function answer(User $user, int $marketId, string $question, array $history = []): array
+    public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
     {
         $question = trim($question);
         $settings = app(AiAgentSettings::class)->get();
@@ -24,6 +25,7 @@ class AiConsultantService
             return [
                 'answer' => 'ИИ-консультант отключён в настройках.',
                 'error_type' => null,
+                'chips' => [],
             ];
         }
 
@@ -31,6 +33,7 @@ class AiConsultantService
             return [
                 'answer' => 'Напишите вопрос по рынку, арендатору, месту, договору, задолженности или 1С-сверке.',
                 'error_type' => null,
+                'chips' => [],
             ];
         }
 
@@ -38,6 +41,7 @@ class AiConsultantService
             return [
                 'answer' => 'ИИ-консультант отключён: в окружении не задан GIGACHAT_AUTH_KEY.',
                 'error_type' => 'auth',
+                'chips' => [],
             ];
         }
 
@@ -50,6 +54,13 @@ class AiConsultantService
                 ],
             ];
 
+        if ((bool) $settings['page_context_enabled']) {
+            $context['current_page'] = $this->pageContext($pageContext);
+        }
+
+        $budgeter = app(AiContextBudgeter::class);
+        $context = $budgeter->compact($context, $settings);
+
         $client = new GigaChatClient(
             http: app(Http::class),
             authKey: config('gigachat.auth_key'),
@@ -60,11 +71,11 @@ class AiConsultantService
 
         $messages = [
             ['role' => 'system', 'content' => $this->systemPrompt($settings, $marketId)],
-            ...$this->historyMessages($history, (int) $settings['history_messages']),
+            ...$budgeter->compactHistory($history, $settings),
             ['role' => 'user', 'content' => $this->userPrompt($question, $context)],
         ];
 
-        $response = $this->chatWithTools($client, $messages, $settings);
+        $response = $this->chatWithTools($client, $messages, $settings, $user);
 
         if (! $response['ok']) {
             logger()->warning('AI consultant request failed', [
@@ -77,6 +88,7 @@ class AiConsultantService
             return [
                 'answer' => $this->providerFallbackMessage($response['failure_kind'] ?? null),
                 'error_type' => ($response['failure_kind'] ?? null) === 'auth' ? 'auth' : 'provider',
+                'chips' => $response['chips'] ?? [],
             ];
         }
 
@@ -85,32 +97,37 @@ class AiConsultantService
             return [
                 'answer' => 'ИИ-консультант вернул пустой ответ. Попробуйте уточнить вопрос.',
                 'error_type' => 'provider',
+                'chips' => $response['chips'] ?? [],
             ];
         }
 
         return [
             'answer' => Str::limit($answer, 6000, '...'),
             'error_type' => null,
+            'chips' => $response['chips'] ?? [],
         ];
     }
 
     /**
-     * @param array<int, array{role: string, content: string}> $messages
-     * @param array<string, mixed> $settings
+     * @param  array<int, array{role: string, content: string}>  $messages
+     * @param  array<string, mixed>  $settings
      * @return array{
      *   ok: bool,
      *   content: string|null,
      *   error: string|null,
      *   model_used: string|null,
      *   status: int|null,
-     *   failure_kind: 'billing'|'rate_limit'|'auth'|'provider_http'|'network'|'empty_content'|null
+     *   failure_kind: 'billing'|'rate_limit'|'auth'|'provider_http'|'network'|'empty_content'|null,
+     *   chips?: list<array{label:string,url:string}>
      * }
      */
-    private function chatWithTools(GigaChatClient $client, array $messages, array $settings): array
+    private function chatWithTools(GigaChatClient $client, array $messages, array $settings, User $user): array
     {
-        $maxRounds = (bool) $settings['read_only_sql_enabled']
+        $toolsEnabled = (bool) $settings['read_only_sql_enabled'] || (bool) $settings['action_tools_enabled'];
+        $maxRounds = $toolsEnabled
             ? (int) $settings['max_tool_rounds']
             : 0;
+        $chips = [];
 
         for ($round = 0; $round <= $maxRounds; $round++) {
             $response = $client->chat(
@@ -120,28 +137,32 @@ class AiConsultantService
             );
 
             if (! $response['ok']) {
+                $response['chips'] = $chips;
+
                 return $response;
             }
 
             $content = trim((string) $response['content']);
-            $toolRequest = $round < $maxRounds ? $this->extractReadSqlToolRequest($content) : null;
+            $toolRequest = $round < $maxRounds ? $this->extractToolRequest($content) : null;
 
             if ($toolRequest === null) {
+                $response['chips'] = $chips;
+
                 return $response;
             }
 
-            $toolResult = app(AiReadOnlySqlTool::class)->run(
-                marketId: (int) data_get($settings, '_market_id', 0),
-                sql: $toolRequest,
-                settings: $settings,
-            );
+            $toolResult = $this->runTool($user, $toolRequest, $settings);
+            $chips = [
+                ...$chips,
+                ...$this->normalizeChips((array) ($toolResult['chips'] ?? [])),
+            ];
 
             $messages[] = ['role' => 'assistant', 'content' => $content];
             $messages[] = [
                 'role' => 'user',
-                'content' => "Результат проверки данных read_sql:\n"
-                    . json_encode($toolResult, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
-                    . "\n\nСформулируй ответ для сотрудника простым русским языком. Не показывай JSON и не упоминай SQL, если это не нужно.",
+                'content' => "Результат действия приложения:\n"
+                    .json_encode($toolResult, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
+                    ."\n\nЕсли действие уже выполнено успешно, не вызывай его повторно. Сформулируй ответ для сотрудника простым русским языком. Не показывай JSON, названия инструментов и технические детали.",
             ];
         }
 
@@ -152,11 +173,12 @@ class AiConsultantService
             'model_used' => null,
             'status' => null,
             'failure_kind' => 'provider_http',
+            'chips' => $chips,
         ];
     }
 
     /**
-     * @param array<string, mixed> $settings
+     * @param  array<string, mixed>  $settings
      */
     private function systemPrompt(array $settings, int $marketId): string
     {
@@ -164,44 +186,31 @@ class AiConsultantService
         $prompt = trim((string) $settings['system_prompt']);
 
         if ((bool) $settings['read_only_sql_enabled']) {
-            $prompt .= "\n\n" . app(AiReadOnlySqlTool::class)->schemaHint($marketId, $settings);
+            $prompt .= "\n\n".app(AiReadOnlySqlTool::class)->schemaHint($marketId, $settings);
         }
+
+        if ((bool) $settings['action_tools_enabled']) {
+            $prompt .= "\n\n".app(AiAgentActionTool::class)->schemaHint();
+        }
+
+        $prompt .= "\n\nКонтекст может быть сокращён для экономии. Если деталей не хватает, сам проверь нужные данные доступным действием и не выдумывай ответ.";
 
         return $prompt;
     }
 
     /**
-     * @param array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     private function userPrompt(string $question, array $context): string
     {
         return "Вопрос сотрудника:\n{$question}\n\nКонтекст из БД:\n"
-            . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+            .json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
     }
 
     /**
-     * @param list<array{role:string,content:string}> $history
-     * @return list<array{role:string,content:string}>
+     * @return array<string,mixed>|null
      */
-    private function historyMessages(array $history, int $limit): array
-    {
-        if ($limit <= 0) {
-            return [];
-        }
-
-        return collect($history)
-            ->filter(static fn (array $message): bool => in_array($message['role'] ?? '', ['user', 'assistant'], true)
-                && trim((string) ($message['content'] ?? '')) !== '')
-            ->take(-$limit)
-            ->map(static fn (array $message): array => [
-                'role' => (string) $message['role'],
-                'content' => Str::limit(trim((string) $message['content']), 1800, '...'),
-            ])
-            ->values()
-            ->all();
-    }
-
-    private function extractReadSqlToolRequest(string $content): ?string
+    private function extractToolRequest(string $content): ?array
     {
         $payload = $this->decodeToolPayload($content);
         if (! is_array($payload)) {
@@ -209,9 +218,81 @@ class AiConsultantService
         }
 
         $tool = strtolower(trim((string) ($payload['tool'] ?? $payload['name'] ?? '')));
-        $sql = trim((string) ($payload['sql'] ?? ''));
 
-        return $tool === 'read_sql' && $sql !== '' ? $sql : null;
+        return $tool !== '' ? $payload : null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $toolRequest
+     * @param  array<string,mixed>  $settings
+     * @return array<string,mixed>
+     */
+    private function runTool(User $user, array $toolRequest, array $settings): array
+    {
+        $tool = strtolower(trim((string) ($toolRequest['tool'] ?? $toolRequest['name'] ?? '')));
+
+        if ($tool === 'read_sql') {
+            if (! (bool) $settings['read_only_sql_enabled']) {
+                return [
+                    'ok' => false,
+                    'message' => 'Проверка данных отключена в настройках.',
+                    'chips' => [],
+                ];
+            }
+
+            $sql = trim((string) ($toolRequest['sql'] ?? ''));
+
+            return app(AiReadOnlySqlTool::class)->run(
+                marketId: (int) data_get($settings, '_market_id', 0),
+                sql: $sql,
+                settings: $settings,
+            );
+        }
+
+        if (! (bool) $settings['action_tools_enabled']) {
+            return [
+                'ok' => false,
+                'message' => 'Рабочие действия отключены в настройках.',
+                'chips' => [],
+            ];
+        }
+
+        return app(AiAgentActionTool::class)->run(
+            actor: $user,
+            marketId: (int) data_get($settings, '_market_id', 0),
+            payload: $toolRequest,
+        );
+    }
+
+    /**
+     * @param  array<int, mixed>  $chips
+     * @return list<array{label:string,url:string}>
+     */
+    private function normalizeChips(array $chips): array
+    {
+        return collect($chips)
+            ->filter(static fn (mixed $chip): bool => is_array($chip))
+            ->map(static fn (array $chip): array => [
+                'label' => Str::limit(trim((string) ($chip['label'] ?? '')), 120, ''),
+                'url' => trim((string) ($chip['url'] ?? '')),
+            ])
+            ->filter(static fn (array $chip): bool => $chip['label'] !== '' && $chip['url'] !== '')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<string,mixed>  $pageContext
+     * @return array<string,string>
+     */
+    private function pageContext(array $pageContext): array
+    {
+        return [
+            'url' => Str::limit(trim((string) ($pageContext['url'] ?? '')), 500, ''),
+            'path' => Str::limit(trim((string) ($pageContext['path'] ?? '')), 300, ''),
+            'title' => Str::limit(trim((string) ($pageContext['title'] ?? '')), 160, ''),
+            'heading' => Str::limit(trim((string) ($pageContext['heading'] ?? '')), 160, ''),
+        ];
     }
 
     /**
