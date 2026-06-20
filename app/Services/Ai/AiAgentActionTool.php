@@ -9,6 +9,7 @@ use App\Filament\Resources\MarketHolidayResource;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TaskResource;
 use App\Filament\Resources\TenantResource;
+use App\Models\ContractDebt;
 use App\Models\MarketHoliday;
 use App\Models\MarketSpace;
 use App\Models\Task;
@@ -18,7 +19,9 @@ use App\Models\User;
 use App\Support\StaffConversationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -43,6 +46,9 @@ class AiAgentActionTool
                 'create_event' => $this->createEvent($actor, $marketId, $payload),
                 'send_staff_message' => $this->sendStaffMessage($actor, $marketId, $payload),
                 'send_tenant_message' => $this->sendTenantMessage($actor, $marketId, $payload),
+                'find_resource', 'find_record' => $this->findResource($actor, $marketId, $payload),
+                'debt_leaders', 'top_debt_tenants' => $this->debtLeaders($marketId, $payload),
+                'rent_rate_extremes', 'rent_rates' => $this->rentRateExtremes($marketId, $payload),
                 'resource_link', 'make_link' => $this->resourceLink($actor, $marketId, $payload),
                 default => $this->failure('Неизвестное действие агента.'),
             };
@@ -63,9 +69,13 @@ class AiAgentActionTool
 {"tool":"create_event","title":"...","description":"...","starts_at":"2026-06-21","ends_at":"2026-06-21","all_day":true}
 {"tool":"send_staff_message","recipient_user_id":123,"recipient_query":"имя сотрудника","subject":"...","message":"..."}
 {"tool":"send_tenant_message","tenant_id":123,"tenant_query":"название арендатора","subject":"...","message":"...","market_space_id":456}
-{"tool":"resource_link","resource_type":"tenant|space|task|ticket|event|settings|current_page","id":123,"label":"понятное название"}
+{"tool":"find_resource","resource_type":"tenant|space|task|ticket|event|staff","query":"название, номер или фраза","limit":5}
+{"tool":"debt_leaders","limit":5}
+{"tool":"rent_rate_extremes","direction":"lowest|highest","limit":5}
+{"tool":"resource_link","resource_type":"tenant|space|task|ticket|event|settings|current_page","id":123,"query":"название или номер","label":"понятное название"}
 
-Используй действия только когда сотрудник просит выполнить работу, отправить сообщение, создать задачу, событие, напоминание или дать ссылку на запись. Если в ответе нужна карточка арендатора, места, задачи, обращения, события или настроек, всегда используй resource_link/make_link. Не показывай пользователю JSON, ID, идентификаторы и сырые адреса страниц. После результата действия отвечай простым русским языком и опирайся на приложенные чипы.
+Для поиска записи или ссылки по человеческому названию сначала используй find_resource или resource_link с query, а не угадывай номер записи. Для вопросов "кто больше должен" используй debt_leaders. Для вопросов о самой низкой или высокой арендной ставке используй rent_rate_extremes; если результата нет, только тогда проверяй данные через read_sql.
+Используй действия только когда сотрудник просит выполнить работу, отправить сообщение, создать задачу, событие, напоминание, проверить типовую аналитику или дать ссылку на запись. Если в ответе нужна карточка арендатора, места, задачи, обращения, события или настроек, всегда используй resource_link/make_link. Не показывай пользователю JSON, ID, идентификаторы и сырые адреса страниц. После результата действия отвечай простым русским языком и опирайся на приложенные чипы.
 PROMPT;
     }
 
@@ -244,14 +254,15 @@ PROMPT;
     {
         $type = strtolower(trim((string) ($payload['resource_type'] ?? $payload['type'] ?? '')));
         $id = $this->nullableInt($payload['id'] ?? $payload['record_id'] ?? null);
+        $query = $payload['query'] ?? $payload['search'] ?? null;
         $label = $this->string($payload['label'] ?? null, 120);
 
         $chip = match ($type) {
-            'tenant' => $id ? $this->tenantChip($marketId, $id, $label) : null,
-            'space', 'market_space' => $id ? $this->spaceChip($marketId, $id, $label) : null,
-            'task' => $id ? $this->taskChip($marketId, $id, $label) : null,
-            'ticket', 'request' => $id ? $this->ticketChip($marketId, $id, $label) : null,
-            'event', 'holiday' => $id ? $this->eventChip($marketId, $id, $label) : null,
+            'tenant' => $this->tenantChipForPayload($marketId, $id, $query ?? $payload['tenant_query'] ?? null, $label),
+            'space', 'market_space' => $this->spaceChipForPayload($marketId, $id, $query ?? $payload['space_query'] ?? null, $label),
+            'task' => $this->taskChipForPayload($marketId, $id, $query ?? $payload['task_query'] ?? null, $label),
+            'ticket', 'request' => $this->ticketChipForPayload($marketId, $id, $query ?? $payload['ticket_query'] ?? null, $label),
+            'event', 'holiday' => $this->eventChipForPayload($marketId, $id, $query ?? $payload['event_query'] ?? null, $label),
             'settings', 'ai_settings' => $this->chip($label !== '' ? $label : 'Настройки ИИ-агента', '/admin/ai-agent-settings'),
             'current_page' => $this->currentPageChip($payload, $label),
             default => null,
@@ -262,6 +273,194 @@ PROMPT;
         }
 
         return $this->success('Ссылка подготовлена.', [$chip], ['resource_type' => $type, 'id' => $id]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function findResource(User $actor, int $marketId, array $payload): array
+    {
+        $type = strtolower(trim((string) ($payload['resource_type'] ?? $payload['type'] ?? '')));
+        $query = $this->string($payload['query'] ?? $payload['search'] ?? '', 160);
+        $limit = max(1, min((int) ($payload['limit'] ?? 5), 10));
+
+        if ($query === '') {
+            return $this->failure('Для поиска нужно указать название, номер или фразу.');
+        }
+
+        return match ($type) {
+            'tenant' => $this->resourceSearchResult('Найдены арендаторы.', $this->searchTenants($marketId, $query, $limit)),
+            'space', 'market_space' => $this->resourceSearchResult('Найдены места.', $this->searchSpaces($marketId, $query, $limit)),
+            'task' => $this->resourceSearchResult('Найдены задачи.', $this->searchTasks($marketId, $query, $limit)),
+            'ticket', 'request' => $this->resourceSearchResult('Найдены обращения.', $this->searchTickets($marketId, $query, $limit)),
+            'event', 'holiday' => $this->resourceSearchResult('Найдены события.', $this->searchEvents($marketId, $query, $limit)),
+            'staff' => $this->resourceSearchResult('Найдены сотрудники.', $this->searchStaff($actor, $marketId, $query, $limit)),
+            default => $this->failure('Неизвестный тип записи для поиска.'),
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function debtLeaders(int $marketId, array $payload): array
+    {
+        if (
+            ! Schema::hasTable('contract_debts')
+            || ! Schema::hasColumn('contract_debts', 'market_id')
+            || ! Schema::hasColumn('contract_debts', 'tenant_id')
+            || ! Schema::hasColumn('contract_debts', 'debt_amount')
+        ) {
+            return $this->failure('Данные по задолженности сейчас недоступны.');
+        }
+
+        $limit = max(1, min((int) ($payload['limit'] ?? 5), 10));
+
+        $rows = DB::query()
+            ->fromSub(ContractDebt::currentStateQuery($marketId), 'cd')
+            ->leftJoin('tenants as t', 't.id', '=', 'cd.tenant_id')
+            ->where('cd.market_id', $marketId)
+            ->where('cd.debt_amount', '>', 0)
+            ->selectRaw('cd.tenant_id')
+            ->selectRaw("COALESCE(NULLIF(MAX(t.short_name), ''), NULLIF(MAX(t.name), ''), 'Арендатор') as tenant_name")
+            ->selectRaw('SUM(cd.debt_amount) as debt_amount')
+            ->selectRaw('MAX(cd.period) as latest_period')
+            ->groupBy('cd.tenant_id')
+            ->orderByDesc(DB::raw('SUM(cd.debt_amount)'))
+            ->limit($limit)
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return $this->success('Должники не найдены.', [], ['items' => []]);
+        }
+
+        $chips = [];
+        $items = $rows->map(function (object $row) use ($marketId, &$chips): array {
+            $tenantId = (int) $row->tenant_id;
+            $tenantName = (string) ($row->tenant_name ?? 'Арендатор');
+            $chip = $this->tenantChip($marketId, $tenantId, 'Открыть арендатора: '.$tenantName);
+            if ($chip) {
+                $chips[] = $chip;
+            }
+
+            return [
+                'tenant_id' => $tenantId,
+                'tenant_name' => $tenantName,
+                'debt_amount_rub' => round((float) $row->debt_amount, 2),
+                'latest_period' => (string) ($row->latest_period ?? ''),
+            ];
+        })->values()->all();
+
+        return $this->success('Должники проверены.', $chips, ['items' => $items]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function rentRateExtremes(int $marketId, array $payload): array
+    {
+        $direction = strtolower(trim((string) ($payload['direction'] ?? 'lowest')));
+        $isHighest = in_array($direction, ['highest', 'max', 'maximum', 'высокая', 'самая высокая'], true);
+        $limit = max(1, min((int) ($payload['limit'] ?? 5), 10));
+        $rows = collect();
+        $source = null;
+
+        if (
+            Schema::hasTable('tenant_accruals')
+            && Schema::hasColumn('tenant_accruals', 'market_id')
+            && Schema::hasColumn('tenant_accruals', 'period')
+            && Schema::hasColumn('tenant_accruals', 'rent_rate')
+        ) {
+            $latestPeriod = DB::table('tenant_accruals')
+                ->where('market_id', $marketId)
+                ->whereNotNull('rent_rate')
+                ->where('rent_rate', '>', 0)
+                ->max('period');
+
+            if ($latestPeriod !== null) {
+                $query = DB::table('tenant_accruals as ta')
+                    ->leftJoin('tenants as t', 't.id', '=', 'ta.tenant_id')
+                    ->leftJoin('market_spaces as ms', 'ms.id', '=', 'ta.market_space_id')
+                    ->where('ta.market_id', $marketId)
+                    ->where('ta.period', $latestPeriod)
+                    ->whereNotNull('ta.rent_rate')
+                    ->where('ta.rent_rate', '>', 0)
+                    ->selectRaw('ta.tenant_id')
+                    ->selectRaw("COALESCE(NULLIF(MAX(t.short_name), ''), NULLIF(MAX(t.name), ''), 'Арендатор') as tenant_name")
+                    ->selectRaw('ta.market_space_id')
+                    ->selectRaw('MAX(COALESCE(ms.number, ta.source_place_code)) as space_number')
+                    ->selectRaw('MAX(COALESCE(ms.display_name, ta.source_place_name)) as space_name')
+                    ->selectRaw('MIN(ta.rent_rate) as rent_rate')
+                    ->selectRaw('MAX(ta.period) as period')
+                    ->groupBy('ta.tenant_id', 'ta.market_space_id');
+
+                $rows = ($isHighest ? $query->orderByDesc('rent_rate') : $query->orderBy('rent_rate'))
+                    ->limit($limit)
+                    ->get();
+                $source = 'latest_accruals';
+            }
+        }
+
+        if (
+            $rows->isEmpty()
+            && Schema::hasTable('market_space_tenant_bindings')
+            && Schema::hasColumn('market_space_tenant_bindings', 'market_id')
+            && Schema::hasColumn('market_space_tenant_bindings', 'tenant_id')
+            && Schema::hasColumn('market_space_tenant_bindings', 'market_space_id')
+            && Schema::hasColumn('market_space_tenant_bindings', 'ended_at')
+            && Schema::hasColumn('market_space_tenant_bindings', 'rent_rate')
+        ) {
+            $query = DB::table('market_space_tenant_bindings as b')
+                ->leftJoin('tenants as t', 't.id', '=', 'b.tenant_id')
+                ->leftJoin('market_spaces as ms', 'ms.id', '=', 'b.market_space_id')
+                ->where('b.market_id', $marketId)
+                ->whereNull('b.ended_at')
+                ->whereNotNull('b.rent_rate')
+                ->where('b.rent_rate', '>', 0)
+                ->selectRaw('b.tenant_id')
+                ->selectRaw("COALESCE(NULLIF(t.short_name, ''), NULLIF(t.name, ''), 'Арендатор') as tenant_name")
+                ->selectRaw('b.market_space_id')
+                ->selectRaw('ms.number as space_number')
+                ->selectRaw('ms.display_name as space_name')
+                ->selectRaw('b.rent_rate')
+                ->selectRaw('NULL as period');
+
+            $rows = ($isHighest ? $query->orderByDesc('b.rent_rate') : $query->orderBy('b.rent_rate'))
+                ->limit($limit)
+                ->get();
+            $source = 'active_bindings';
+        }
+
+        if ($rows->isEmpty()) {
+            return $this->success('Арендные ставки не найдены.', [], ['items' => []]);
+        }
+
+        $chips = [];
+        $items = $rows->map(function (object $row) use ($marketId, $source, &$chips): array {
+            $tenantId = $row->tenant_id !== null ? (int) $row->tenant_id : null;
+            $tenantName = (string) ($row->tenant_name ?? 'Арендатор');
+
+            if ($tenantId) {
+                $chip = $this->tenantChip($marketId, $tenantId, 'Открыть арендатора: '.$tenantName);
+                if ($chip) {
+                    $chips[] = $chip;
+                }
+            }
+
+            return [
+                'tenant_id' => $tenantId,
+                'tenant_name' => $tenantName,
+                'market_space_id' => $row->market_space_id !== null ? (int) $row->market_space_id : null,
+                'space' => trim((string) ($row->space_number ?? '').' '.(string) ($row->space_name ?? '')),
+                'rent_rate_rub' => round((float) $row->rent_rate, 2),
+                'period' => $row->period !== null ? (string) $row->period : null,
+                'source' => $source,
+            ];
+        })->values()->all();
+
+        return $this->success('Арендные ставки проверены.', $chips, ['items' => $items]);
     }
 
     private function canUseMarket(User $actor, int $marketId): bool
@@ -361,17 +560,120 @@ PROMPT;
         }
 
         $needle = mb_strtolower($search);
+        $pattern = $this->likePattern($needle);
 
         return Tenant::query()
             ->where('market_id', $marketId)
-            ->where(function (Builder $builder) use ($needle): void {
+            ->where(function (Builder $builder) use ($pattern): void {
                 $builder
-                    ->whereRaw('lower(name) like ?', ['%'.$needle.'%'])
-                    ->orWhereRaw('lower(short_name) like ?', ['%'.$needle.'%'])
-                    ->orWhereRaw('lower(inn) like ?', ['%'.$needle.'%']);
+                    ->whereRaw('lower(name) like ?', [$pattern])
+                    ->orWhereRaw('lower(short_name) like ?', [$pattern])
+                    ->orWhereRaw('lower(inn) like ?', [$pattern]);
             })
+            ->orderByRaw('CASE WHEN lower(short_name) = ? OR lower(name) = ? THEN 0 ELSE 1 END', [$needle, $needle])
             ->orderBy('short_name')
             ->orderBy('name')
+            ->first();
+    }
+
+    private function resolveSpace(int $marketId, mixed $id, mixed $query): ?MarketSpace
+    {
+        $spaceId = $this->nullableInt($id);
+
+        if ($spaceId) {
+            return MarketSpace::query()
+                ->whereKey($spaceId)
+                ->where('market_id', $marketId)
+                ->first();
+        }
+
+        $search = trim((string) $query);
+        if ($search === '') {
+            return null;
+        }
+
+        $needle = Str::lower($search);
+        $pattern = $this->likePattern($needle);
+
+        return MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->where(function (Builder $builder) use ($pattern): void {
+                $builder
+                    ->whereRaw('lower(number) like ?', [$pattern])
+                    ->orWhereRaw('lower(display_name) like ?', [$pattern])
+                    ->orWhereRaw('lower(code) like ?', [$pattern]);
+            })
+            ->orderByRaw('CASE WHEN lower(number) = ? OR lower(display_name) = ? OR lower(code) = ? THEN 0 ELSE 1 END', [$needle, $needle, $needle])
+            ->orderBy('number')
+            ->first();
+    }
+
+    private function resolveTask(int $marketId, mixed $id, mixed $query): ?Task
+    {
+        $taskId = $this->nullableInt($id);
+
+        if ($taskId) {
+            return Task::query()
+                ->whereKey($taskId)
+                ->where('market_id', $marketId)
+                ->first();
+        }
+
+        $search = trim((string) $query);
+        if ($search === '') {
+            return null;
+        }
+
+        return Task::query()
+            ->where('market_id', $marketId)
+            ->whereRaw('lower(title) like ?', [$this->likePattern(Str::lower($search))])
+            ->latest('updated_at')
+            ->first();
+    }
+
+    private function resolveTicket(int $marketId, mixed $id, mixed $query): ?Ticket
+    {
+        $ticketId = $this->nullableInt($id);
+
+        if ($ticketId) {
+            return Ticket::query()
+                ->whereKey($ticketId)
+                ->where('market_id', $marketId)
+                ->first();
+        }
+
+        $search = trim((string) $query);
+        if ($search === '') {
+            return null;
+        }
+
+        return Ticket::query()
+            ->where('market_id', $marketId)
+            ->whereRaw('lower(subject) like ?', [$this->likePattern(Str::lower($search))])
+            ->latest('updated_at')
+            ->first();
+    }
+
+    private function resolveEvent(int $marketId, mixed $id, mixed $query): ?MarketHoliday
+    {
+        $eventId = $this->nullableInt($id);
+
+        if ($eventId) {
+            return MarketHoliday::query()
+                ->whereKey($eventId)
+                ->where('market_id', $marketId)
+                ->first();
+        }
+
+        $search = trim((string) $query);
+        if ($search === '') {
+            return null;
+        }
+
+        return MarketHoliday::query()
+            ->where('market_id', $marketId)
+            ->whereRaw('lower(title) like ?', [$this->likePattern(Str::lower($search))])
+            ->latest('starts_at')
             ->first();
     }
 
@@ -437,6 +739,241 @@ PROMPT;
         }
 
         return $this->chip($label !== '' ? $label : 'Текущая страница', $url);
+    }
+
+    private function tenantChipForPayload(int $marketId, ?int $id, mixed $query, string $label): ?array
+    {
+        $tenant = $id
+            ? Tenant::query()->whereKey($id)->where('market_id', $marketId)->first()
+            : $this->resolveTenant($marketId, null, $query);
+
+        return $tenant ? $this->chip($label !== '' ? $label : 'Арендатор: '.$tenant->display_name, $this->tenantUrl($tenant)) : null;
+    }
+
+    private function spaceChipForPayload(int $marketId, ?int $id, mixed $query, string $label): ?array
+    {
+        $space = $id
+            ? MarketSpace::query()->whereKey($id)->where('market_id', $marketId)->first()
+            : $this->resolveSpace($marketId, null, $query);
+
+        return $space ? $this->chip($label !== '' ? $label : 'Место: '.$this->spaceLabel($space), $this->spaceUrl($space)) : null;
+    }
+
+    private function taskChipForPayload(int $marketId, ?int $id, mixed $query, string $label): ?array
+    {
+        $task = $id
+            ? Task::query()->whereKey($id)->where('market_id', $marketId)->first()
+            : $this->resolveTask($marketId, null, $query);
+
+        return $task ? $this->chip($label !== '' ? $label : 'Задача: '.$task->title, $this->taskUrl($task)) : null;
+    }
+
+    private function ticketChipForPayload(int $marketId, ?int $id, mixed $query, string $label): ?array
+    {
+        $ticket = $id
+            ? Ticket::query()->whereKey($id)->where('market_id', $marketId)->first()
+            : $this->resolveTicket($marketId, null, $query);
+
+        return $ticket ? $this->chip($label !== '' ? $label : 'Обращение: '.$ticket->subject, $this->ticketUrl($ticket)) : null;
+    }
+
+    private function eventChipForPayload(int $marketId, ?int $id, mixed $query, string $label): ?array
+    {
+        $event = $id
+            ? MarketHoliday::query()->whereKey($id)->where('market_id', $marketId)->first()
+            : $this->resolveEvent($marketId, null, $query);
+
+        return $event ? $this->chip($label !== '' ? $label : 'Событие: '.$event->title, $this->eventUrl($event)) : null;
+    }
+
+    /**
+     * @param  list<array<string,mixed>>  $items
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function resourceSearchResult(string $message, array $items): array
+    {
+        $chips = [];
+        $data = [];
+
+        foreach ($items as $item) {
+            $chip = $item['chip'] ?? null;
+            unset($item['chip']);
+
+            if (is_array($chip)) {
+                $chips[] = $chip;
+            }
+
+            $data[] = $item;
+        }
+
+        return $this->success($items === [] ? 'Ничего не найдено.' : $message, $chips, ['items' => $data]);
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function searchTenants(int $marketId, string $query, int $limit): array
+    {
+        $needle = Str::lower($query);
+        $pattern = $this->likePattern($needle);
+
+        return Tenant::query()
+            ->where('market_id', $marketId)
+            ->where(function (Builder $builder) use ($pattern): void {
+                $builder
+                    ->whereRaw('lower(name) like ?', [$pattern])
+                    ->orWhereRaw('lower(short_name) like ?', [$pattern])
+                    ->orWhereRaw('lower(inn) like ?', [$pattern]);
+            })
+            ->orderByRaw('CASE WHEN lower(short_name) = ? OR lower(name) = ? THEN 0 ELSE 1 END', [$needle, $needle])
+            ->orderByDesc('is_active')
+            ->orderBy('short_name')
+            ->orderBy('name')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Tenant $tenant): array => [
+                'resource_type' => 'tenant',
+                'tenant_id' => (int) $tenant->id,
+                'tenant_name' => $tenant->display_name,
+                'is_active' => (bool) $tenant->is_active,
+                'debt_status' => (string) ($tenant->debt_status ?? ''),
+                'chip' => $this->tenantChip((int) $tenant->market_id, (int) $tenant->id, 'Открыть арендатора: '.$tenant->display_name),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function searchSpaces(int $marketId, string $query, int $limit): array
+    {
+        $needle = Str::lower($query);
+        $pattern = $this->likePattern($needle);
+
+        return MarketSpace::query()
+            ->where('market_id', $marketId)
+            ->where(function (Builder $builder) use ($pattern): void {
+                $builder
+                    ->whereRaw('lower(number) like ?', [$pattern])
+                    ->orWhereRaw('lower(display_name) like ?', [$pattern])
+                    ->orWhereRaw('lower(code) like ?', [$pattern]);
+            })
+            ->orderByRaw('CASE WHEN lower(number) = ? OR lower(display_name) = ? OR lower(code) = ? THEN 0 ELSE 1 END', [$needle, $needle, $needle])
+            ->orderBy('number')
+            ->limit($limit)
+            ->get()
+            ->map(fn (MarketSpace $space): array => [
+                'resource_type' => 'space',
+                'market_space_id' => (int) $space->id,
+                'space' => $this->spaceLabel($space),
+                'status' => (string) ($space->status ?? ''),
+                'chip' => $this->spaceChip((int) $space->market_id, (int) $space->id, 'Открыть место: '.$this->spaceLabel($space)),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function searchTasks(int $marketId, string $query, int $limit): array
+    {
+        $pattern = $this->likePattern(Str::lower($query));
+
+        return Task::query()
+            ->where('market_id', $marketId)
+            ->whereRaw('lower(title) like ?', [$pattern])
+            ->latest('updated_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Task $task): array => [
+                'resource_type' => 'task',
+                'task_id' => (int) $task->id,
+                'title' => (string) $task->title,
+                'status' => (string) ($task->status ?? ''),
+                'chip' => $this->taskChip((int) $task->market_id, (int) $task->id, 'Открыть задачу: '.$task->title),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function searchTickets(int $marketId, string $query, int $limit): array
+    {
+        $pattern = $this->likePattern(Str::lower($query));
+
+        return Ticket::query()
+            ->where('market_id', $marketId)
+            ->whereRaw('lower(subject) like ?', [$pattern])
+            ->latest('updated_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn (Ticket $ticket): array => [
+                'resource_type' => 'ticket',
+                'ticket_id' => (int) $ticket->id,
+                'subject' => (string) $ticket->subject,
+                'status' => (string) ($ticket->status ?? ''),
+                'chip' => $this->ticketChip((int) $ticket->market_id, (int) $ticket->id, 'Открыть обращение: '.$ticket->subject),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function searchEvents(int $marketId, string $query, int $limit): array
+    {
+        $pattern = $this->likePattern(Str::lower($query));
+
+        return MarketHoliday::query()
+            ->where('market_id', $marketId)
+            ->whereRaw('lower(title) like ?', [$pattern])
+            ->latest('starts_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn (MarketHoliday $event): array => [
+                'resource_type' => 'event',
+                'event_id' => (int) $event->id,
+                'title' => (string) $event->title,
+                'starts_at' => $event->starts_at?->toDateString(),
+                'chip' => $this->eventChip((int) $event->market_id, (int) $event->id, 'Открыть событие: '.$event->title),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function searchStaff(User $actor, int $marketId, string $query, int $limit): array
+    {
+        $pattern = $this->likePattern(Str::lower($query));
+
+        return User::query()
+            ->where(function (Builder $builder): void {
+                $builder->whereNull('tenant_id')->orWhere('tenant_id', 0);
+            })
+            ->where(function (Builder $builder) use ($pattern): void {
+                $builder
+                    ->whereRaw('lower(name) like ?', [$pattern])
+                    ->orWhereRaw('lower(email) like ?', [$pattern]);
+            })
+            ->orderBy('name')
+            ->limit(max(50, $limit * 5))
+            ->get()
+            ->filter(fn (User $user): bool => $this->canAccessStaffPeer($actor, $user, $marketId))
+            ->take($limit)
+            ->map(static fn (User $user): array => [
+                'resource_type' => 'staff',
+                'user_id' => (int) $user->id,
+                'name' => (string) $user->name,
+            ])
+            ->values()
+            ->all();
     }
 
     private function taskUrl(Task $task): string
@@ -523,6 +1060,11 @@ PROMPT;
     private function string(mixed $value, int $limit): string
     {
         return Str::limit(trim((string) $value), $limit, '');
+    }
+
+    private function likePattern(string $value): string
+    {
+        return '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value).'%';
     }
 
     private function nullableInt(mixed $value): ?int

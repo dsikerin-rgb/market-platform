@@ -13,6 +13,7 @@ use App\Models\Market;
 use App\Models\StaffConversation;
 use App\Models\StaffConversationMessage;
 use App\Models\Task;
+use App\Models\Tenant;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketChatNotification;
@@ -264,6 +265,36 @@ class QuickChatDrawerTest extends TestCase
             'priority' => Task::PRIORITY_HIGH,
             'created_by_user_id' => (int) $admin->id,
         ]);
+    }
+
+    public function test_ai_action_tool_builds_tenant_chip_from_human_query(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+
+        $tenant = Tenant::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'ИП Бабушка Мария Ивановна',
+            'short_name' => 'Бабушка',
+            'external_id' => 'tenant-ai-link-query-001',
+            'is_active' => true,
+        ]);
+
+        $result = app(AiAgentActionTool::class)->run($admin, (int) $market->id, [
+            'tool' => 'resource_link',
+            'resource_type' => 'tenant',
+            'query' => 'Бабушка',
+        ]);
+
+        $this->assertTrue($result['ok'], $result['message']);
+        $this->assertSame('Арендатор: Бабушка', $result['chips'][0]['label'] ?? null);
+        $this->assertStringContainsString('/admin/tenants/'.(int) $tenant->id.'/edit', $result['chips'][0]['url'] ?? '');
+        $this->assertStringNotContainsString('/view/', $result['chips'][0]['url'] ?? '');
     }
 
     public function test_staff_conversations_are_grouped_by_counterparty(): void
