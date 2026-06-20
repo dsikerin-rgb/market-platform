@@ -190,11 +190,13 @@
         .quick-chat__layout {
             display: grid;
             min-height: 0;
+            min-width: 0;
             grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
         }
 
         .quick-chat__list {
             min-height: 0;
+            min-width: 0;
             overflow: hidden;
             border-right: 1px solid rgba(148, 163, 184, 0.22);
             background: #fff;
@@ -225,7 +227,9 @@
         .quick-chat__items {
             display: grid;
             max-height: calc(100vh - 7rem);
-            overflow: auto;
+            min-width: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
             padding: 0.2rem 0.45rem 0.85rem;
         }
 
@@ -234,13 +238,20 @@
             grid-template-columns: 2.65rem minmax(0, 1fr);
             gap: 0.58rem;
             width: 100%;
+            min-width: 0;
             border: 0;
             border-radius: 0.78rem;
             background: transparent;
             padding: 0.58rem;
+            overflow: hidden;
             text-align: left;
             cursor: pointer;
             touch-action: manipulation;
+        }
+
+        .quick-chat__item > span:last-child {
+            min-width: 0;
+            overflow: hidden;
         }
 
         .quick-chat__item:hover {
@@ -314,10 +325,14 @@
             font-size: 0.75rem;
             line-height: 1.25;
             min-width: 0;
+            overflow: hidden;
         }
 
         .quick-chat__item-meta > span {
             min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .quick-chat__item-meta > span:nth-child(3) {
