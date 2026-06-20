@@ -8746,6 +8746,9 @@
               const chosenShape = chosenId ? findUsableShapeForSpaceId(chosenId) : null;
               const chosenLabel = chosenSpace ? (formatSpaceLabel(chosenSpace) + ' (ID ' + String(chosenSpace.id) + ')') : '—';
               let reviewNotice = '';
+              const actionRawStatus = hit?.space?.status ? String(hit.space.status) : '';
+              const actionStatus = actionRawStatus === 'free' ? 'vacant' : actionRawStatus;
+              const groupOpenSpaceId = isChildInGroup ? groupParentId : 0;
 
               // UI для привязки непривязанной фигуры к месту (MVP) - вне actions
               let bindShapeHtml = '';
@@ -8785,10 +8788,15 @@
                 btns.push('<button type="button" data-action="open-space" data-space-id="' + String(hitSpaceId) + '" title="Открыть карточку торгового места в новой вкладке" aria-label="Открыть карточку торгового места в новой вкладке">Открыть место</button>');
               }
 
-              const spaceGroupRoleForParentNavigation = hit?.space?.space_group_role ?? hit?.space_group_role ?? '';
-              const groupParentIdForNavigation = Number(hit?.space?.group_parent?.id ?? hit?.space?.space_group_parent_id ?? hit?.space_group_parent_id ?? 0);
-              if (spaceGroupRoleForParentNavigation === 'child' && Number.isFinite(groupParentIdForNavigation) && groupParentIdForNavigation > 0) {
-                btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupParentIdForNavigation) + '" title="Открыть карточку группы в новой вкладке" aria-label="Открыть карточку группы в новой вкладке">Открыть карточку группы</button>');
+              if (groupOpenSpaceId > 0 && actionStatus !== 'maintenance') {
+                const groupOpenTitle = needsGroupTenantAssignment
+                  ? 'Открыть карточку группы, чтобы назначить арендатора'
+                  : 'Открыть карточку группы в новой вкладке';
+                const groupOpenLabel = needsGroupTenantAssignment
+                  ? 'Назначить арендатора группе'
+                  : 'Открыть карточку группы';
+                const groupDefaultAction = needsGroupTenantAssignment ? 'switch_tenant' : '';
+                btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupOpenSpaceId) + '" data-default-action="' + escapeHtml(groupDefaultAction) + '" title="' + escapeHtml(groupOpenTitle) + '" aria-label="' + escapeHtml(groupOpenTitle) + '">' + escapeHtml(groupOpenLabel) + '</button>');
               }
 
               if (hitTenantId && Number.isFinite(hitTenantId) && hitTenantId > 0 && !isSharedUse) {
@@ -8838,20 +8846,6 @@
               const spaceGroupRole = hit?.space?.space_group_role ?? hit?.space_group_role ?? '';
               const groupMembershipSpaceId = Number(hit?.market_space_id ?? hit?.space?.id ?? 0);
               const hasGroupMembershipSpace = Number.isFinite(groupMembershipSpaceId) && groupMembershipSpaceId > 0;
-              const groupOpenSpaceId = isChildInGroup ? groupParentId : 0;
-              const actionRawStatus = hit?.space?.status ? String(hit.space.status) : '';
-              const actionStatus = actionRawStatus === 'free' ? 'vacant' : actionRawStatus;
-
-              if (groupOpenSpaceId > 0 && actionStatus !== 'maintenance') {
-                const groupOpenTitle = needsGroupTenantAssignment
-                  ? 'Открыть карточку группы, чтобы назначить арендатора'
-                  : 'Открыть карточку группы в новой вкладке';
-                const groupOpenLabel = needsGroupTenantAssignment
-                  ? 'Назначить арендатора группе'
-                  : 'Открыть группу';
-                const groupDefaultAction = needsGroupTenantAssignment ? 'switch_tenant' : '';
-                btns.push('<button type="button" data-action="open-group" data-space-id="' + String(groupOpenSpaceId) + '" data-default-action="' + escapeHtml(groupDefaultAction) + '" title="' + escapeHtml(groupOpenTitle) + '" aria-label="' + escapeHtml(groupOpenTitle) + '">' + escapeHtml(groupOpenLabel) + '</button>');
-              }
 
               if (showPopupEditActions && CAN_EDIT && hasGroupMembershipSpace && !isSharedUse && actionStatus !== 'maintenance') {
                 if (spaceGroupRole === 'parent') {
