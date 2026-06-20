@@ -12,6 +12,7 @@ use App\Models\StaffConversationMessage;
 use App\Models\Ticket;
 use App\Models\User;
 use App\Notifications\TicketChatNotification;
+use App\Services\Ai\AiConsultantService;
 use App\Support\StaffConversationService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -84,6 +85,57 @@ class QuickChatDrawerTest extends TestCase
             ->assertSet('isOpen', true)
             ->assertSet('selectedType', 'ticket')
             ->assertSet('selectedId', (int) $ticket->id);
+    }
+
+    public function test_explicit_quick_chat_ai_query_auto_opens_consultant(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        Livewire::withQueryParams([
+            'quick_chat' => 'ai',
+        ])
+            ->test(QuickChatDrawer::class)
+            ->assertSet('isOpen', true)
+            ->assertSet('selectedType', 'ai')
+            ->assertSet('selectedId', 1)
+            ->assertSee('ИИ-консультант');
+    }
+
+    public function test_ai_consultant_dialog_accepts_question_and_renders_answer(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        app()->instance(AiConsultantService::class, new class extends AiConsultantService {
+            public function answer(User $user, int $marketId, string $question): array
+            {
+                return [
+                    'answer' => 'Ответ по базе для рынка #' . $marketId . ': ' . $question,
+                    'error_type' => null,
+                ];
+            }
+        });
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->assertSet('selectedType', 'ai')
+            ->assertSee('База данных рынка')
+            ->set('messageBody', 'Что по месту ОС8 22?')
+            ->call('sendMessage')
+            ->assertHasNoErrors()
+            ->assertSee('Что по месту ОС8 22?')
+            ->assertSee('Ответ по базе для рынка #' . (int) $market->id);
     }
 
     public function test_staff_conversations_are_grouped_by_counterparty(): void

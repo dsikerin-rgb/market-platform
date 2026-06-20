@@ -267,6 +267,11 @@
             color: #1d4ed8;
         }
 
+        .quick-chat__avatar--ai {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+
         .quick-chat__item-title {
             color: #0f172a;
             font-size: 0.88rem;
@@ -791,6 +796,8 @@
                                 <span class="quick-chat__avatar quick-chat__avatar--{{ $chat['type'] }}">
                                     @if ($isCandidate)
                                         <x-filament::icon icon="heroicon-o-user-plus" class="h-5 w-5" />
+                                    @elseif ($chat['type'] === 'ai')
+                                        <x-filament::icon icon="heroicon-o-sparkles" class="h-5 w-5" />
                                     @elseif ($chat['type'] === 'staff')
                                         <x-filament::icon icon="heroicon-o-user-group" class="h-5 w-5" />
                                     @else
@@ -829,6 +836,10 @@
                     x-on:quick-chat-updated.window="scroll()"
                 >
                     @if ($selectedChat)
+                        @php
+                            $isAiChat = ($selectedChat['type'] ?? null) === 'ai';
+                        @endphp
+
                         <div class="quick-chat__chat-head">
                             <div class="quick-chat__chat-title">{{ $selectedChat['title'] }}</div>
                             <div class="quick-chat__chat-meta">
@@ -900,7 +911,7 @@
                                     <textarea
                                         class="quick-chat__textarea"
                                         wire:model.live.debounce.250ms="messageBody"
-                                        placeholder="Сообщение..."
+                                        placeholder="{{ $isAiChat ? 'Спросите по данным рынка...' : 'Сообщение...' }}"
                                         rows="1"
                                         x-data
                                         x-on:input="$el.style.height = 'auto'; $el.style.height = Math.min($el.scrollHeight, 96) + 'px'"
@@ -931,20 +942,22 @@
                                         </div>
                                     @endif
 
-                                    <div class="quick-chat__composer-tools">
-                                        <label class="quick-chat__file-label" title="До 5 файлов, до 20 МБ каждый.">
-                                            <x-filament::icon icon="heroicon-o-paper-clip" class="h-4 w-4" />
-                                            Вложить файл
-                                            <input class="quick-chat__file-input" type="file" wire:model="messageAttachments" multiple>
-                                        </label>
+                                    @unless ($isAiChat)
+                                        <div class="quick-chat__composer-tools">
+                                            <label class="quick-chat__file-label" title="До 5 файлов, до 20 МБ каждый.">
+                                                <x-filament::icon icon="heroicon-o-paper-clip" class="h-4 w-4" />
+                                                Вложить файл
+                                                <input class="quick-chat__file-input" type="file" wire:model="messageAttachments" multiple>
+                                            </label>
 
-                                        <span class="quick-chat__uploading" wire:loading wire:target="messageAttachments">Загрузка...</span>
-                                    </div>
+                                            <span class="quick-chat__uploading" wire:loading wire:target="messageAttachments">Загрузка...</span>
+                                        </div>
+                                    @endunless
                                 </div>
 
                                 <button type="submit" class="quick-chat__send" wire:loading.attr="disabled" wire:target="sendMessage,messageAttachments">
                                     <x-filament::icon icon="heroicon-o-paper-airplane" class="h-5 w-5" />
-                                    <span>Отправить</span>
+                                    <span>{{ $isAiChat ? 'Спросить' : 'Отправить' }}</span>
                                 </button>
                             </div>
                         </form>
