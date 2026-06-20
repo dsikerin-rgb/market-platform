@@ -170,34 +170,33 @@
         }
 
         .staff-presence__avatar--ai {
-            --staff-avatar-color: #16a34a;
-            border-color: rgba(22, 163, 74, 0.28);
-            background: linear-gradient(135deg, #eef2ff 0%, #dcfce7 100%);
-            color: #166534;
+            --staff-avatar-color: #123fe6;
+            border-color: transparent;
+            background: #ffffff;
+            color: #123fe6;
+            box-shadow: none;
         }
 
         .staff-presence__avatar--ai::after {
             background: #22c55e;
         }
 
-        html.dark .staff-presence__avatar--ai {
-            background: linear-gradient(135deg, rgba(37, 99, 235, 0.62) 0%, rgba(22, 163, 74, 0.86) 100%);
-            color: #ffffff;
+        .staff-presence__avatar--ai:hover,
+        .staff-presence__avatar--ai:focus-visible {
+            box-shadow: none;
         }
 
-        .staff-presence__giga-mark {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+        html.dark .staff-presence__avatar--ai {
+            background: #ffffff;
+            color: #4f8cff;
+        }
+
+        .staff-presence__giga-logo {
+            display: block;
             width: 100%;
             height: 100%;
-            border-radius: inherit;
-            background: linear-gradient(135deg, #19c37d 0%, #2563eb 100%);
-            color: #fff;
-            font-size: 1.08rem;
-            font-weight: 950;
-            letter-spacing: -0.05em;
-            line-height: 1;
+            max-width: none;
+            object-fit: contain;
         }
 
         .staff-presence__unread-badge {
@@ -600,7 +599,7 @@
             title="ИИ-консультант · открыть диалог"
             x-on:click="window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'ai', id: 1 } }))"
         >
-            <span class="staff-presence__giga-mark" aria-hidden="true">G</span>
+            <img class="staff-presence__giga-logo" src="{{ asset('images/gigachat-logo.png') }}" alt="" aria-hidden="true" loading="lazy">
         </button>
     </div>
 
