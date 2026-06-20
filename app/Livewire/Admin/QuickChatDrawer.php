@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 namespace App\Livewire\Admin;
 
+use App\Services\Ai\AiConsultantService;
 use App\Models\StaffConversation;
 use App\Models\StaffConversationMessage;
 use App\Models\Ticket;
@@ -38,6 +39,11 @@ class QuickChatDrawer extends Component
     public ?int $selectedId = null;
 
     public string $messageBody = '';
+
+    /**
+     * @var list<array{id:string,user_name:string,body:string,is_own:bool,created_at:string,date_key:string,date_label:string,attachments:list<array<string,mixed>>}>
+     */
+    public array $aiMessages = [];
 
     /**
      * @var array<int, TemporaryUploadedFile>
@@ -75,6 +81,14 @@ class QuickChatDrawer extends Component
             return;
         }
 
+        if ($requestedType === 'ai') {
+            $this->selectedType = 'ai';
+            $this->selectedId = 1;
+            $this->isOpen = true;
+
+            return;
+        }
+
         $this->isOpen = false;
     }
 
@@ -94,6 +108,12 @@ class QuickChatDrawer extends Component
     public function openDrawer(?string $type = null, ?int $id = null): void
     {
         $this->isOpen = true;
+
+        if ($type === 'ai') {
+            $this->selectChat('ai', 1);
+
+            return;
+        }
 
         if ($type && $id) {
             $this->selectChat($type, $id);
@@ -121,7 +141,11 @@ class QuickChatDrawer extends Component
 
     public function selectChat(string $type, int $id): void
     {
-        $type = $type === 'staff' ? 'staff' : 'ticket';
+        $type = in_array($type, ['ai', 'staff', 'ticket'], true) ? $type : 'ticket';
+        if ($type === 'ai') {
+            $id = 1;
+        }
+
         $id = max(0, $id);
 
         if ($id <= 0) {
@@ -133,7 +157,9 @@ class QuickChatDrawer extends Component
             return;
         }
 
-        if ($type === 'staff') {
+        if ($type === 'ai') {
+            // Virtual read-only consultant chat. Access is controlled by the current Filament session.
+        } elseif ($type === 'staff') {
             if (! $this->staffTablesAvailable()) {
                 return;
             }
@@ -163,7 +189,7 @@ class QuickChatDrawer extends Component
         $this->dispatch('quick-chat-updated');
     }
 
-    public function sendMessage(StaffConversationService $service): void
+    public function sendMessage(StaffConversationService $service, AiConsultantService $aiConsultant): void
     {
         $this->validate([
             'messageBody' => ['nullable', 'string', 'max:5000'],
@@ -188,6 +214,25 @@ class QuickChatDrawer extends Component
 
         if ($body === '' && $files === []) {
             $this->addError('messageBody', 'Введите сообщение или прикрепите файл.');
+
+            return;
+        }
+
+        if ($this->selectedType === 'ai') {
+            if ($body === '') {
+                $this->addError('messageBody', 'Введите вопрос для ИИ-консультанта.');
+
+                return;
+            }
+
+            $this->appendAiMessage($user->name ?: 'Вы', $body, true);
+
+            $answer = $aiConsultant->answer($user, $this->resolveMarketId($user), $body);
+            $this->appendAiMessage('ИИ-консультант', $answer['answer'], false);
+
+            $this->messageBody = '';
+            $this->messageAttachments = [];
+            $this->dispatch('quick-chat-updated');
 
             return;
         }
@@ -275,6 +320,7 @@ class QuickChatDrawer extends Component
 
         return $this->recentTickets($user)
             ->merge($staffConversations)
+            ->prepend($this->aiConsultantChat())
             ->merge($this->staffSearchCandidates(
                 $user,
                 $staffConversations->pluck('id')->map(fn (mixed $id): int => (int) $id)->all(),
@@ -282,6 +328,24 @@ class QuickChatDrawer extends Component
             ->sortByDesc('sort_at')
             ->values()
             ->take(30);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function aiConsultantChat(): array
+    {
+        return [
+            'type' => 'ai',
+            'id' => 1,
+            'title' => 'ИИ-консультант',
+            'subtitle' => 'База данных рынка',
+            'preview' => 'Спросите про арендаторов, места, договоры, задолженность или 1С.',
+            'meta' => 'read-only',
+            'count' => count($this->aiMessages),
+            'unread_count' => 0,
+            'sort_at' => now()->subYears(10),
+        ];
     }
 
     /**
@@ -467,7 +531,27 @@ class QuickChatDrawer extends Component
             return $this->selectedStaffChat($user);
         }
 
+        if ($this->selectedType === 'ai') {
+            return $this->selectedAiChat();
+        }
+
         return $this->selectedTicketChat($user);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function selectedAiChat(): array
+    {
+        return [
+            'type' => 'ai',
+            'id' => 1,
+            'title' => 'ИИ-консультант',
+            'subtitle' => 'Read-only доступ к данным текущего рынка',
+            'description' => 'Можно спросить про места, арендаторов, договоры, задолженность, обращения и 1С-сверку. Ответ не меняет данные.',
+            'meta' => config('gigachat.auth_key') ? 'GigaChat подключён' : 'ИИ отключён',
+            'count' => count($this->aiMessages),
+        ];
     }
 
     /**
@@ -580,6 +664,10 @@ class QuickChatDrawer extends Component
      */
     private function selectedMessages(): Collection
     {
+        if ($this->selectedType === 'ai') {
+            return collect($this->aiMessages);
+        }
+
         if ($this->selectedType === 'staff') {
             return $this->selectedStaffMessages();
         }
@@ -646,6 +734,22 @@ class QuickChatDrawer extends Component
             ]);
 
         return $initial->merge($comments)->values();
+    }
+
+    private function appendAiMessage(string $userName, string $body, bool $isOwn): void
+    {
+        $now = now()->timezone(config('app.timezone'));
+
+        $this->aiMessages[] = [
+            'id' => 'ai-message-' . count($this->aiMessages) . '-' . $now->format('Hisv'),
+            'user_name' => $userName,
+            'body' => $body,
+            'is_own' => $isOwn,
+            'created_at' => $now->format('d.m.Y H:i'),
+            'date_key' => $now->toDateString(),
+            'date_label' => $this->formatDateLabel($now),
+            'attachments' => [],
+        ];
     }
 
     /**

@@ -69,14 +69,26 @@
         }
 
         .staff-presence__stack--offline {
-            bottom: 1.25rem;
+            bottom: 5.25rem;
             opacity: 0.72;
+        }
+
+        .staff-presence__stack--ai {
+            bottom: 1.25rem;
+            border-color: rgba(124, 58, 237, 0.26);
+            background: rgba(245, 243, 255, 0.90);
+            opacity: 1;
         }
 
         html.dark .staff-presence__stack {
             border-color: rgba(148, 163, 184, 0.18);
             background: rgba(15, 23, 42, 0.82);
             box-shadow: 0 18px 36px rgba(2, 6, 23, 0.28);
+        }
+
+        html.dark .staff-presence__stack--ai {
+            border-color: rgba(167, 139, 250, 0.30);
+            background: rgba(30, 27, 75, 0.82);
         }
 
         .staff-presence__label {
@@ -155,6 +167,22 @@
             color: #64748b;
             opacity: 0.72;
             filter: saturate(0.65);
+        }
+
+        .staff-presence__avatar--ai {
+            --staff-avatar-color: #7c3aed;
+            border-color: rgba(124, 58, 237, 0.28);
+            background: linear-gradient(180deg, #f5f3ff 0%, #ddd6fe 100%);
+            color: #6d28d9;
+        }
+
+        .staff-presence__avatar--ai::after {
+            background: #8b5cf6;
+        }
+
+        html.dark .staff-presence__avatar--ai {
+            background: linear-gradient(180deg, rgba(124, 58, 237, 0.55) 0%, #1e1b4b 100%);
+            color: #ffffff;
         }
 
         .staff-presence__unread-badge {
@@ -548,6 +576,17 @@
         @empty
             <div class="staff-presence__empty">нет офлайн</div>
         @endforelse
+    </div>
+
+    <div class="staff-presence__stack staff-presence__stack--ai" aria-label="ИИ-консультант">
+        <button
+            type="button"
+            class="staff-presence__avatar staff-presence__avatar--ai"
+            title="ИИ-консультант · открыть диалог"
+            x-on:click="window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'ai', id: 1 } }))"
+        >
+            <x-filament::icon icon="heroicon-o-sparkles" class="h-5 w-5" />
+        </button>
     </div>
 
     @if ($selectedStaff)

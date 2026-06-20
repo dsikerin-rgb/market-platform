@@ -89,6 +89,22 @@ class StaffPresenceRailTest extends TestCase
             ->assertSeeHtml("type: 'staff', id: " . (int) $sender->id);
     }
 
+    public function test_staff_presence_rail_has_separate_ai_consultant_launcher(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        Livewire::test(OnlineStaffRail::class)
+            ->assertSeeHtml('staff-presence__stack--ai')
+            ->assertSeeHtml("type: 'ai', id: 1")
+            ->assertSee('ИИ-консультант');
+    }
+
     public function test_presence_rail_poll_refreshes_current_user_presence(): void
     {
         $market = Market::query()->create([
