@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\TenantContractResource;
 use App\Models\Market;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
@@ -108,6 +109,70 @@ class TenantContractResourceTest extends TestCase
             ->assertOk()
             ->assertSee('Движение 1С')
             ->assertSee('Есть свежее движение');
+    }
+
+    public function test_operational_scope_excludes_old_active_contract_without_recent_accrual(): void
+    {
+        $market = Market::create([
+            'name' => 'Operational Contracts Scope Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant',
+            'is_active' => true,
+        ]);
+
+        $oldContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'external_id' => 'old-contract',
+            'number' => 'Old contract',
+            'status' => 'active',
+            'starts_at' => '2024-01-01',
+            'signed_at' => '2024-01-01',
+            'is_active' => true,
+        ]);
+
+        $freshContract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'external_id' => 'fresh-contract',
+            'number' => 'Fresh contract',
+            'status' => 'active',
+            'starts_at' => '2024-01-01',
+            'signed_at' => '2024-01-01',
+            'is_active' => true,
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'period' => '2026-06-01',
+            'source_row_hash' => sha1('latest-unrelated-accrual'),
+        ]);
+
+        TenantAccrual::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $freshContract->id,
+            'contract_external_id' => 'fresh-contract',
+            'period' => '2026-05-01',
+            'source_row_hash' => sha1('fresh-contract-accrual'),
+        ]);
+
+        $ids = TenantContractResource::applyOperationalContractsScope(
+            TenantContract::query()->where('market_id', $market->id),
+            true
+        )
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->all();
+
+        $this->assertNotContains((int) $oldContract->id, $ids);
+        $this->assertContains((int) $freshContract->id, $ids);
     }
 
     private function actingAsSuperAdmin(): User

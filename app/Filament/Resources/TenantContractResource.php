@@ -13,6 +13,7 @@ use App\Services\TenantContracts\ContractDocumentClassifier;
 use App\Support\AdminCapabilities;
 use App\Support\MarketSpaces\MarketSpaceGroupEpisodeResolver;
 use App\Support\Search\LooseSearch;
+use App\Support\TenantContracts\TenantContractOperationalActivity;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Components\Placeholder;
@@ -2341,12 +2342,28 @@ class TenantContractResource extends BaseResource
             return $query;
         }
 
-        return $query->where(function (Builder $query): void {
-            static::applyDebtHistoryFilter($query, true)
-                ->orWhere(function (Builder $query): void {
-                    static::applyAccrualHistoryFilter($query, true);
-                });
-        });
+        $marketId = static::currentWorkbenchMarketId();
+        if ($marketId !== null) {
+            TenantContractOperationalActivity::scopeOperationalForCurrentMap($query, 'tenant_contracts', $marketId);
+
+            return $query;
+        }
+
+        $marketIds = TenantContract::query()
+            ->whereNotNull('market_id')
+            ->distinct()
+            ->pluck('market_id')
+            ->map(static fn (mixed $value): int => (int) $value)
+            ->filter(static fn (int $value): bool => $value > 0)
+            ->values()
+            ->all();
+
+        $idSet = static::operationalContractIdSetForMarketIds($marketIds);
+        if ($idSet === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereIn('tenant_contracts.id', array_keys($idSet));
     }
 
     /**
@@ -2442,7 +2459,9 @@ class TenantContractResource extends BaseResource
         $recordColumns = [
             'id',
             'market_id',
+            'tenant_id',
             'market_space_id',
+            'external_id',
             'number',
             'starts_at',
             'ends_at',
@@ -2473,6 +2492,8 @@ class TenantContractResource extends BaseResource
             static::warmAccrualHistoryContractIdsForMarket($currentMarketId);
         }
 
+        $operationalIdSet = static::operationalContractIdSetForMarketIds($marketIds);
+
         foreach ($records as $record) {
             $recordId = (int) $record->getKey();
             $classified = static::classificationForRecord($record);
@@ -2483,7 +2504,7 @@ class TenantContractResource extends BaseResource
             $excluded = $record->excludesFromSpaceMapping();
             $hasSpace = filled($record->market_space_id);
             $stats = static::chainStatsFor($record);
-            $isOperational = static::isInDebtHistory($record) || static::isInAccrualHistory($record);
+            $isOperational = isset($operationalIdSet[$recordId]);
 
             if ($isOperational) {
                 $buckets['operational'][] = $recordId;
@@ -2521,6 +2542,30 @@ class TenantContractResource extends BaseResource
         static::$workbenchIdsCache[$cacheKey] = $buckets;
 
         return static::$workbenchIdsCache[$cacheKey];
+    }
+
+    /**
+     * @param  list<int>  $marketIds
+     * @return array<int, true>
+     */
+    private static function operationalContractIdSetForMarketIds(array $marketIds): array
+    {
+        $idSet = [];
+
+        foreach (array_values(array_unique($marketIds)) as $marketId) {
+            if ($marketId <= 0) {
+                continue;
+            }
+
+            $query = TenantContract::query()->where('market_id', $marketId);
+            TenantContractOperationalActivity::scopeOperationalForCurrentMap($query, 'tenant_contracts', $marketId);
+
+            foreach ($query->pluck('tenant_contracts.id') as $id) {
+                $idSet[(int) $id] = true;
+            }
+        }
+
+        return $idSet;
     }
 
     private static function warmChainStatsForMarket(int $marketId): void
