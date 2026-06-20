@@ -90,6 +90,9 @@ class AiAgentAnswerPresenter
             return null;
         }
 
+        $url = $this->normalizeInternalUrl($url);
+        $path = (string) parse_url($url, PHP_URL_PATH);
+
         return [
             'label' => $this->humanLabel($path, $label),
             'url' => $url,
@@ -166,10 +169,45 @@ class AiAgentAnswerPresenter
         return preg_replace('/\s+([,.!?])/u', '$1', $answer) ?? $answer;
     }
 
+    private function normalizeInternalUrl(string $url): string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+        if (! is_string($path) || $path === '') {
+            return $url;
+        }
+
+        $normalizedPath = $this->normalizeInternalPath($path);
+        if ($normalizedPath === $path) {
+            return $url;
+        }
+
+        if (str_starts_with($url, '/')) {
+            $query = parse_url($url, PHP_URL_QUERY);
+
+            return $normalizedPath.($query ? '?'.$query : '');
+        }
+
+        return preg_replace('#'.preg_quote($path, '#').'#', $normalizedPath, $url, 1) ?? $url;
+    }
+
+    private function normalizeInternalPath(string $path): string
+    {
+        if (preg_match('#^/admin/tenants/view/(\d+)$#', $path, $match) === 1) {
+            return '/admin/tenants/'.$match[1].'/edit';
+        }
+
+        if (preg_match('#^/admin/tenants/(\d+)/view$#', $path, $match) === 1) {
+            return '/admin/tenants/'.$match[1].'/edit';
+        }
+
+        return $path;
+    }
+
     private function cleanWhitespace(string $answer): string
     {
         $answer = preg_replace('/[ \t]+/u', ' ', $answer) ?? $answer;
         $answer = preg_replace('/\n{3,}/u', "\n\n", $answer) ?? $answer;
+        $answer = preg_replace('/^\s*[*_`~]{1,6}\s*$/m', '', $answer) ?? $answer;
         $answer = preg_replace('/^\s*(?:Откройте?|Открой)\s+(?:эту\s+)?ссылку\s+(?:в\s+браузере)?[:.]?\s*$/imu', '', $answer) ?? $answer;
         $answer = preg_replace('/^\s*(?:Даю|Вот)\s+ссылку[:.]?\s*$/imu', '', $answer) ?? $answer;
 
@@ -187,7 +225,7 @@ class AiAgentAnswerPresenter
 
         foreach ($chips as $chip) {
             $label = Str::limit(trim((string) ($chip['label'] ?? '')), 120, '');
-            $url = trim((string) ($chip['url'] ?? ''));
+            $url = $this->normalizeInternalUrl(trim((string) ($chip['url'] ?? '')));
             $key = $label.'|'.$url;
 
             if ($label === '' || $url === '' || isset($seen[$key])) {

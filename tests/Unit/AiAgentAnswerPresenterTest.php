@@ -18,7 +18,18 @@ class AiAgentAnswerPresenterTest extends TestCase
         self::assertStringNotContainsString('https://', $presented['answer']);
         self::assertStringNotContainsString('идентификатор', mb_strtolower($presented['answer']));
         self::assertSame('Открыть арендатора', $presented['chips'][0]['label'] ?? null);
-        self::assertSame('https://market.176.108.244.218.nip.io/admin/tenants/view/52', $presented['chips'][0]['url'] ?? null);
+        self::assertSame('https://market.176.108.244.218.nip.io/admin/tenants/52/edit', $presented['chips'][0]['url'] ?? null);
+    }
+
+    public function test_normalizes_existing_tenant_view_chip_to_edit_url(): void
+    {
+        $presented = (new AiAgentAnswerPresenter)->present('Done', [
+            ['label' => 'Tenant', 'url' => '/admin/tenants/view/118'],
+            ['label' => 'Tenant', 'url' => '/admin/tenants/118/edit'],
+        ]);
+
+        self::assertCount(1, $presented['chips']);
+        self::assertSame('/admin/tenants/118/edit', $presented['chips'][0]['url']);
     }
 
     public function test_preserves_existing_chips_and_deduplicates_extracted_links(): void
