@@ -3391,6 +3391,18 @@ $this->assertSame('matched', $space->map_review_status);
             ->assertSee('Есть непройденные места без фигур на карте', false);
     }
 
+    public function test_market_map_review_keeps_without_shapes_entry_visible_for_zero_count(): void
+    {
+        $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));
+
+        $this->assertStringContainsString('function syncReviewNoShapesEntry(withoutShapesCount = null)', $blade);
+        $this->assertStringContainsString('const showNoShapesEntry = isReviewMode();', $blade);
+        $this->assertStringContainsString('Открыть список мест без фигур', $blade);
+        $this->assertStringContainsString('Места без фигур: <span id="noShapesCount">N</span>', $blade);
+        $this->assertStringNotContainsString('const showNoShapesEntry = isReviewMode() && withoutShapesCount > 0;', $blade);
+        $this->assertStringNotContainsString('const showNoShapesGroup = isReviewMode() && withoutShapesCount > 0;', $blade);
+    }
+
     public function test_market_map_review_navigation_sorts_items_by_visible_label_order(): void
     {
         $blade = file_get_contents(resource_path('views/admin/market-map.blade.php'));

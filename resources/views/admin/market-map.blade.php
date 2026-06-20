@@ -2863,7 +2863,7 @@
                       aria-label="Показать список мест без фигур"
                       hidden
                     >
-                      Мест без фигур: <span id="noShapesCount">N</span>
+                      Места без фигур: <span id="noShapesCount">N</span>
                     </button>
                   </div>
                 @endif
@@ -5484,10 +5484,36 @@
             .join('');
         }
 
+        function syncReviewNoShapesEntry(withoutShapesCount = null) {
+          const noShapesEntry = document.getElementById('noShapesEntry');
+          const noShapesCount = document.getElementById('noShapesCount');
+          const reviewNoShapesGroup = document.getElementById('reviewNoShapesGroup');
+          const count = Math.max(0, Number(withoutShapesCount ?? reviewProgressState?.without_shapes_total ?? 0) || 0);
+          const showNoShapesEntry = isReviewMode();
+
+          if (noShapesCount) {
+            noShapesCount.textContent = String(count);
+          }
+
+          if (noShapesEntry) {
+            noShapesEntry.style.display = showNoShapesEntry ? 'inline-flex' : 'none';
+            noShapesEntry.hidden = !showNoShapesEntry;
+            noShapesEntry.disabled = !showNoShapesEntry;
+            noShapesEntry.title = count > 0 ? ('Показать ' + String(count) + ' мест без фигур') : 'Открыть список мест без фигур';
+          }
+
+          if (reviewNoShapesGroup) {
+            if (showNoShapesEntry) {
+              reviewNoShapesGroup.style.setProperty('display', 'flex', 'important');
+            } else {
+              reviewNoShapesGroup.style.setProperty('display', 'none', 'important');
+            }
+            reviewNoShapesGroup.hidden = !showNoShapesEntry;
+          }
+        }
+
         function updateScenarioUi() {
           const reviewMode = isReviewMode();
-          const noShapesEntry = document.getElementById('noShapesEntry');
-          const reviewNoShapesGroup = document.getElementById('reviewNoShapesGroup');
 
           scenarioMapBtn?.classList.toggle('is-active', !reviewMode);
           scenarioReviewBtn?.classList.toggle('is-active', reviewMode);
@@ -5506,20 +5532,7 @@
             }
           }
 
-          if (reviewNoShapesGroup) {
-            if (reviewMode) {
-              reviewNoShapesGroup.style.setProperty('display', 'flex', 'important');
-            } else {
-              reviewNoShapesGroup.style.setProperty('display', 'none', 'important');
-            }
-            reviewNoShapesGroup.hidden = !reviewMode;
-          }
-
-          if (noShapesEntry) {
-            noShapesEntry.style.display = reviewMode ? 'inline-flex' : 'none';
-            noShapesEntry.hidden = !reviewMode;
-            noShapesEntry.disabled = !reviewMode;
-          }
+          syncReviewNoShapesEntry();
 
           if (editToolbarRow) {
             editToolbarRow.style.display = 'flex';
@@ -6101,30 +6114,7 @@
             );
 
           if (reviewNavStatus) {
-              const noShapesEntry = document.getElementById('noShapesEntry');
-              const noShapesCount = document.getElementById('noShapesCount');
-              const reviewNoShapesGroup = document.getElementById('reviewNoShapesGroup');
-              if (noShapesCount) {
-                noShapesCount.textContent = String(withoutShapesCount);
-              }
-              const showNoShapesEntry = isReviewMode() && withoutShapesCount > 0;
-              if (noShapesEntry) {
-                noShapesEntry.style.display = showNoShapesEntry ? 'inline-flex' : 'none';
-                noShapesEntry.hidden = !showNoShapesEntry;
-                noShapesEntry.disabled = !showNoShapesEntry;
-              }
-              if (noShapesEntry) {
-                noShapesEntry.title = withoutShapesCount > 0 ? ('Показать ' + String(withoutShapesCount) + ' мест без фигур') : 'Нет мест без фигур';
-              }
-              if (reviewNoShapesGroup) {
-                const showNoShapesGroup = isReviewMode() && withoutShapesCount > 0;
-                if (showNoShapesGroup) {
-                  reviewNoShapesGroup.style.setProperty('display', 'flex', 'important');
-                } else {
-                  reviewNoShapesGroup.style.setProperty('display', 'none', 'important');
-                }
-                reviewNoShapesGroup.hidden = !showNoShapesGroup;
-              }
+              syncReviewNoShapesEntry(withoutShapesCount);
 
               if (!total) {
                 reviewNavStatus.textContent = 'Места не загружены';
