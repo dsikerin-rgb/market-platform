@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 class AiReadOnlySqlTool
 {
     /**
-     * @param array<string, mixed> $settings
+     * @param  array<string, mixed>  $settings
      * @return array{ok:bool,sql:string|null,error:string|null,rows:list<array<string,mixed>>,row_count:int,truncated:bool}
      */
     public function run(int $marketId, string $sql, array $settings): array
@@ -33,7 +33,7 @@ class AiReadOnlySqlTool
                     DB::statement('SET TRANSACTION READ ONLY');
                 }
 
-                DB::statement('SET LOCAL statement_timeout = ' . $timeoutMs);
+                DB::statement('SET LOCAL statement_timeout = '.$timeoutMs);
 
                 return DB::select($wrappedSql);
             };
@@ -74,12 +74,14 @@ class AiReadOnlySqlTool
 Запросы на изменение данных, служебные функции, несколько SQL-команд и таблицы вне списка будут отклонены.
 Основные поля:
 - tenants: id, market_id, name, short_name, inn, is_active, debt_status
-- market_spaces: id, market_id, number, display_name, status, tenant_id, area_sqm, map_review_status
+- market_spaces: id, market_id, number, display_name, status, tenant_id, area_sqm, rent_rate_value, rent_rate_unit, map_review_status
+- market_space_tenant_bindings: id, market_id, market_space_id, tenant_id, tenant_contract_id, ended_at, area_sqm, rent_rate, binding_type
 - tenant_contracts: id, market_id, tenant_id, market_space_id, number, external_id, status, is_active, starts_at, ends_at
 - contract_debts: id, market_id, tenant_id, tenant_external_id, contract_external_id, period, debt_amount, accrued_amount, paid_amount, account, calculated_at
 - tenant_settlement_balances: id, market_id, tenant_id, tenant_contract_id, period_from, period_to, account, closing_debit, closing_credit, contract_name
-- tenant_accruals: id, market_id, tenant_id, market_space_id, tenant_contract_id, period, total_amount, document_number
+- tenant_accruals: id, market_id, tenant_id, market_space_id, tenant_contract_id, period, area_sqm, rent_rate, rent_amount, total_no_vat, total_with_vat, source_place_code, source_place_name
 - tickets: id, market_id, tenant_id, subject, status, priority, created_at, updated_at
+Для вопросов о самой низкой или высокой арендной ставке сначала проверяй tenant_accruals.rent_rate за последний доступный period; если начислений нет, проверяй активные market_space_tenant_bindings.rent_rate и market_spaces.rent_rate_value. Для перехода к арендатору используй resource_link/make_link, а не текстовый ID или URL.
 TEXT;
     }
 
@@ -89,7 +91,7 @@ TEXT;
     }
 
     /**
-     * @param array<string, mixed> $settings
+     * @param  array<string, mixed>  $settings
      */
     private function validate(int $marketId, string $sql, array $settings): ?string
     {
@@ -117,7 +119,7 @@ TEXT;
             return 'Запрос содержит служебную функцию, которая запрещена для ИИ-агента.';
         }
 
-        if (preg_match('/\bmarket_id\s*=\s*[\'"]?' . preg_quote((string) $marketId, '/') . '[\'"]?\b/i', $sql) !== 1) {
+        if (preg_match('/\bmarket_id\s*=\s*[\'"]?'.preg_quote((string) $marketId, '/').'[\'"]?\b/i', $sql) !== 1) {
             return 'Запрос должен быть явно ограничен текущим рынком.';
         }
 

@@ -44,6 +44,7 @@ class AiConsultantContextBuilder
                 'market_id' => $marketId,
                 'user_id' => (int) $user->id,
                 'role' => $this->userRole($user),
+                'user_name' => $this->friendlyUserName($user),
             ],
             'question_terms' => $terms,
             'overview' => $this->overview($marketId),
@@ -56,6 +57,7 @@ class AiConsultantContextBuilder
             'attention' => [
                 'debt_tenants' => $this->debtTenants($marketId),
                 'top_debt_tenants' => $this->topDebtTenants($marketId),
+                'rent_rate_extremes' => $this->rentRateExtremes($marketId),
                 'map_review_spaces' => $this->mapReviewSpaces($marketId),
                 'open_tickets' => $this->openTickets($marketId),
             ],
@@ -95,6 +97,19 @@ class AiConsultantContextBuilder
         return 'staff';
     }
 
+    private function friendlyUserName(User $user): string
+    {
+        $name = trim((string) ($user->name ?? ''));
+
+        if ($name === '') {
+            return '';
+        }
+
+        $parts = preg_split('/\s+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return trim((string) ($parts[0] ?? ''));
+    }
+
     /**
      * @return array<string, int>
      */
@@ -118,7 +133,7 @@ class AiConsultantContextBuilder
     }
 
     /**
-     * @param list<string> $terms
+     * @param  list<string>  $terms
      * @return list<array<string, mixed>>
      */
     private function matchingTenants(int $marketId, array $terms): array
@@ -152,7 +167,7 @@ class AiConsultantContextBuilder
     }
 
     /**
-     * @param list<string> $terms
+     * @param  list<string>  $terms
      * @return list<array<string, mixed>>
      */
     private function matchingSpaces(int $marketId, array $terms): array
@@ -187,7 +202,7 @@ class AiConsultantContextBuilder
     }
 
     /**
-     * @param list<string> $terms
+     * @param  list<string>  $terms
      * @return list<array<string, mixed>>
      */
     private function matchingContracts(int $marketId, array $terms): array
@@ -214,7 +229,7 @@ class AiConsultantContextBuilder
                 'tenant' => $contract->tenant?->display_name,
                 'tenant_id' => $contract->tenant_id ? (int) $contract->tenant_id : null,
                 'space' => $contract->marketSpace
-                    ? trim((string) ($contract->marketSpace->number . ' ' . $contract->marketSpace->display_name))
+                    ? trim((string) ($contract->marketSpace->number.' '.$contract->marketSpace->display_name))
                     : null,
                 'market_space_id' => $contract->market_space_id ? (int) $contract->market_space_id : null,
                 'space_mapping_mode' => $contract->effectiveSpaceMappingMode(),
@@ -223,7 +238,7 @@ class AiConsultantContextBuilder
     }
 
     /**
-     * @param list<string> $terms
+     * @param  list<string>  $terms
      * @return list<array<string, mixed>>
      */
     private function matchingTickets(int $marketId, array $terms): array
@@ -312,6 +327,139 @@ class AiConsultantContextBuilder
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function rentRateExtremes(int $marketId): array
+    {
+        $result = [];
+
+        if (
+            Schema::hasTable('tenant_accruals')
+            && Schema::hasColumn('tenant_accruals', 'market_id')
+            && Schema::hasColumn('tenant_accruals', 'period')
+            && Schema::hasColumn('tenant_accruals', 'rent_rate')
+        ) {
+            $latestPeriod = DB::table('tenant_accruals')
+                ->where('market_id', $marketId)
+                ->whereNotNull('rent_rate')
+                ->where('rent_rate', '>', 0)
+                ->max('period');
+
+            if ($latestPeriod !== null) {
+                $latestBase = DB::table('tenant_accruals as ta')
+                    ->leftJoin('tenants as t', 't.id', '=', 'ta.tenant_id')
+                    ->leftJoin('market_spaces as ms', 'ms.id', '=', 'ta.market_space_id')
+                    ->where('ta.market_id', $marketId)
+                    ->where('ta.period', $latestPeriod)
+                    ->whereNotNull('ta.rent_rate')
+                    ->where('ta.rent_rate', '>', 0)
+                    ->selectRaw('ta.tenant_id')
+                    ->selectRaw("COALESCE(NULLIF(MAX(t.short_name), ''), NULLIF(MAX(t.name), ''), 'Арендатор') as tenant_name")
+                    ->selectRaw('ta.market_space_id')
+                    ->selectRaw('MAX(COALESCE(ms.number, ta.source_place_code)) as space_number')
+                    ->selectRaw('MAX(COALESCE(ms.display_name, ta.source_place_name)) as space_name')
+                    ->selectRaw('MIN(ta.rent_rate) as rent_rate')
+                    ->selectRaw('MAX(ta.area_sqm) as area_sqm')
+                    ->selectRaw('MAX(ta.rent_amount) as rent_amount')
+                    ->selectRaw('MAX(ta.period) as period')
+                    ->groupBy('ta.tenant_id', 'ta.market_space_id');
+
+                $result['latest_accrual_period'] = (string) $latestPeriod;
+                $result['lowest_latest_accrual_rates'] = $this->rentRateRows((clone $latestBase)->orderBy('rent_rate')->limit(5)->get(), 'latest_accruals');
+                $result['highest_latest_accrual_rates'] = $this->rentRateRows((clone $latestBase)->orderByDesc('rent_rate')->limit(5)->get(), 'latest_accruals');
+            }
+        }
+
+        if (
+            Schema::hasTable('market_space_tenant_bindings')
+            && Schema::hasColumn('market_space_tenant_bindings', 'market_id')
+            && Schema::hasColumn('market_space_tenant_bindings', 'ended_at')
+            && Schema::hasColumn('market_space_tenant_bindings', 'rent_rate')
+        ) {
+            $bindingBase = DB::table('market_space_tenant_bindings as b')
+                ->leftJoin('tenants as t', 't.id', '=', 'b.tenant_id')
+                ->leftJoin('market_spaces as ms', 'ms.id', '=', 'b.market_space_id')
+                ->where('b.market_id', $marketId)
+                ->whereNull('b.ended_at')
+                ->whereNotNull('b.rent_rate')
+                ->where('b.rent_rate', '>', 0)
+                ->selectRaw('b.tenant_id')
+                ->selectRaw("COALESCE(NULLIF(t.short_name, ''), NULLIF(t.name, ''), 'Арендатор') as tenant_name")
+                ->selectRaw('b.market_space_id')
+                ->selectRaw('ms.number as space_number')
+                ->selectRaw('ms.display_name as space_name')
+                ->selectRaw('b.rent_rate')
+                ->selectRaw('b.area_sqm')
+                ->selectRaw('NULL as rent_amount')
+                ->selectRaw('NULL as period');
+
+            $result['lowest_active_binding_rates'] = $this->rentRateRows((clone $bindingBase)->orderBy('b.rent_rate')->limit(5)->get(), 'active_bindings');
+            $result['highest_active_binding_rates'] = $this->rentRateRows((clone $bindingBase)->orderByDesc('b.rent_rate')->limit(5)->get(), 'active_bindings');
+        }
+
+        if (
+            Schema::hasTable('market_spaces')
+            && Schema::hasColumn('market_spaces', 'market_id')
+            && Schema::hasColumn('market_spaces', 'rent_rate_value')
+        ) {
+            $spaceBase = DB::table('market_spaces as ms')
+                ->leftJoin('tenants as t', 't.id', '=', 'ms.tenant_id')
+                ->where('ms.market_id', $marketId)
+                ->whereNotNull('ms.tenant_id')
+                ->whereNotNull('ms.rent_rate_value')
+                ->where('ms.rent_rate_value', '>', 0)
+                ->selectRaw('ms.tenant_id')
+                ->selectRaw("COALESCE(NULLIF(t.short_name, ''), NULLIF(t.name, ''), 'Арендатор') as tenant_name")
+                ->selectRaw('ms.id as market_space_id')
+                ->selectRaw('ms.number as space_number')
+                ->selectRaw('ms.display_name as space_name')
+                ->selectRaw('ms.rent_rate_value as rent_rate')
+                ->selectRaw('ms.rent_rate_unit')
+                ->selectRaw('ms.area_sqm')
+                ->selectRaw('NULL as rent_amount')
+                ->selectRaw('NULL as period');
+
+            if (Schema::hasColumn('market_spaces', 'is_active')) {
+                $spaceBase->where('ms.is_active', true);
+            }
+
+            $result['lowest_space_card_rates'] = $this->rentRateRows((clone $spaceBase)->orderBy('ms.rent_rate_value')->limit(5)->get(), 'space_cards');
+            $result['highest_space_card_rates'] = $this->rentRateRows((clone $spaceBase)->orderByDesc('ms.rent_rate_value')->limit(5)->get(), 'space_cards');
+        }
+
+        return collect($result)
+            ->reject(static fn (mixed $value): bool => $value === [] || $value === null)
+            ->all();
+    }
+
+    /**
+     * @param  iterable<object>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function rentRateRows(iterable $rows, string $source): array
+    {
+        return collect($rows)
+            ->map(static function (object $row) use ($source): array {
+                $space = trim((string) ($row->space_number ?? '').' '.(string) ($row->space_name ?? ''));
+
+                return [
+                    'tenant_id' => $row->tenant_id !== null ? (int) $row->tenant_id : null,
+                    'tenant_name' => (string) ($row->tenant_name ?? ''),
+                    'market_space_id' => $row->market_space_id !== null ? (int) $row->market_space_id : null,
+                    'space' => $space !== '' ? $space : null,
+                    'rent_rate_rub' => round((float) $row->rent_rate, 2),
+                    'rent_rate_unit' => (string) ($row->rent_rate_unit ?? ''),
+                    'period' => $row->period !== null ? (string) $row->period : null,
+                    'area_sqm' => $row->area_sqm !== null ? round((float) $row->area_sqm, 2) : null,
+                    'rent_amount_rub' => $row->rent_amount !== null ? round((float) $row->rent_amount, 2) : null,
+                    'source' => $source,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private function mapReviewSpaces(int $marketId): array
@@ -359,8 +507,8 @@ class AiConsultantContextBuilder
     }
 
     /**
-     * @param list<string> $columns
-     * @param list<string> $terms
+     * @param  list<string>  $columns
+     * @param  list<string>  $terms
      */
     private function applyTerms(Builder $query, array $columns, array $terms): Builder
     {
@@ -375,10 +523,10 @@ class AiConsultantContextBuilder
         }
 
         foreach ($terms as $term) {
-            $pattern = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $term) . '%';
+            $pattern = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $term).'%';
 
             foreach ($availableColumns as $column) {
-                $query->orWhereRaw('LOWER(' . $column . ') LIKE ?', [$pattern]);
+                $query->orWhereRaw('LOWER('.$column.') LIKE ?', [$pattern]);
             }
         }
 
