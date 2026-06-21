@@ -44,6 +44,20 @@
         aiNudgeStorageKey: 'market.aiAgentNudge.dismissedAt',
         aiNudgeDelayMs: 30000,
         aiNudgeCooldownMs: 24 * 60 * 60 * 1000,
+        readAiNudgeDismissedAt() {
+            try {
+                return Number(window.localStorage.getItem(this.aiNudgeStorageKey) || 0);
+            } catch (error) {
+                return 0;
+            }
+        },
+        rememberAiNudgeDismissed() {
+            try {
+                window.localStorage.setItem(this.aiNudgeStorageKey, String(Date.now()));
+            } catch (error) {
+                // Подсказка необязательная: если хранилище недоступно, не мешаем открыть ИИ-чат.
+            }
+        },
         initAiNudge() {
             if (! window.marketAiAgentNudge) {
                 window.marketAiAgentNudge = { initialized: false, timer: null };
@@ -69,7 +83,7 @@
                 return false;
             }
 
-            const dismissedAt = Number(window.localStorage.getItem(this.aiNudgeStorageKey) || 0);
+            const dismissedAt = this.readAiNudgeDismissedAt();
 
             return ! dismissedAt || Date.now() - dismissedAt > this.aiNudgeCooldownMs;
         },
@@ -86,7 +100,7 @@
             document.documentElement.classList.remove('ai-help-nudge-visible');
 
             if (remember) {
-                window.localStorage.setItem(this.aiNudgeStorageKey, String(Date.now()));
+                this.rememberAiNudgeDismissed();
             }
         },
         openAiChatFromNudge() {
