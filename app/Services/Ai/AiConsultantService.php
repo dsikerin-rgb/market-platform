@@ -13,7 +13,7 @@ class AiConsultantService
     /**
      * @param  list<array{role:string,content:string}>  $history
      * @param  array<string,mixed>  $pageContext
-     * @return array{answer:string,error_type:'provider'|'auth'|'connectivity'|null,chips:list<array{label:string,url:string}>,pending_action?:array<string,mixed>|null}
+     * @return array{answer:string,error_type:'provider'|'auth'|'connectivity'|null,chips:list<array{label:string,url:string}>,pending_action?:array<string,mixed>|null,suggestions?:list<string>}
      */
     public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
     {
@@ -51,15 +51,32 @@ class AiConsultantService
             ];
         }
 
-        if ($this->isOnboardingStartRequest($question)) {
-            $userProfile = app(AiUserProfileService::class)->compactForUser($user);
+        $profileService = app(AiUserProfileService::class);
 
-            return [
-                'answer' => $this->onboardingIntroAnswer($userProfile),
-                'error_type' => null,
-                'chips' => [],
-                'pending_action' => null,
-            ];
+        if ($profileService->hasActiveOnboardingWizard($user)) {
+            $wizardResponse = $profileService->handleOnboardingWizardMessage($user, $marketId, $question);
+            if (is_array($wizardResponse)) {
+                return [
+                    'answer' => $wizardResponse['answer'],
+                    'error_type' => null,
+                    'chips' => [],
+                    'pending_action' => $wizardResponse['pending_action'] ?? null,
+                    'suggestions' => $wizardResponse['suggestions'],
+                ];
+            }
+        }
+
+        if ($profileService->isOnboardingStartRequest($question)) {
+            $wizardResponse = $profileService->startOnboardingWizard($user, $marketId);
+            if (is_array($wizardResponse)) {
+                return [
+                    'answer' => $wizardResponse['answer'],
+                    'error_type' => null,
+                    'chips' => [],
+                    'pending_action' => $wizardResponse['pending_action'] ?? null,
+                    'suggestions' => $wizardResponse['suggestions'],
+                ];
+            }
         }
 
         $preferredName = $this->preferredNameFromText($question);
@@ -98,7 +115,7 @@ class AiConsultantService
             $context['current_page'] = $this->pageContext($pageContext);
         }
 
-        $userProfile = app(AiUserProfileService::class)->compactForUser($user);
+        $userProfile = $profileService->compactForUser($user);
         if ($userProfile !== []) {
             $context['user_profile'] = $userProfile;
         }
@@ -337,57 +354,6 @@ class AiConsultantService
         return trim((string) ($parts[0] ?? ''));
     }
 
-    private function isOnboardingStartRequest(string $question): bool
-    {
-        $text = mb_strtolower(trim($question));
-
-        if (preg_match('/(?:^|[\s:;,.!?])(?:я|моя|мой|меня|телефон|должность|роль|отвечаю|занимаюсь|уведомлен)/uiu', $text) === 1) {
-            return false;
-        }
-
-        foreach ([
-            'давай познакомимся',
-            'давай коротко познакомимся',
-            'познакомимся',
-            'что ты хочешь про меня узнать',
-            'что хочешь про меня узнать',
-            'заполни мой профиль',
-            'настроить мой профиль',
-            'настрой мой профиль',
-        ] as $needle) {
-            if (str_contains($text, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param array<string,mixed> $userProfile
-     */
-    private function onboardingIntroAnswer(array $userProfile): string
-    {
-        $questions = array_values(array_filter((array) ($userProfile['onboarding_questions'] ?? []), 'is_string'));
-        if ($questions === []) {
-            $questions = [
-                'Какая у вас роль на рынке?',
-                'За какие вопросы вы отвечаете?',
-                'Куда вам удобнее получать уведомления: в сервисе, на почту или в Telegram?',
-            ];
-        }
-
-        $questions = array_slice($questions, 0, 3);
-        $lines = [];
-        foreach ($questions as $index => $question) {
-            $lines[] = ($index + 1).'. '.$question;
-        }
-
-        return "Давай познакомимся коротко. Ответьте одним сообщением на три вопроса:\n\n"
-            .implode("\n", $lines)
-            ."\n\nЯ подготовлю обновление профиля и покажу его перед сохранением.";
-    }
-
     private function preferredNameFromText(string $question): ?string
     {
         foreach ([
@@ -584,6 +550,7 @@ class AiConsultantService
             $add('Дата рождения', $payload['birth_date'] ?? '');
             $add('Телефон', $payload['phone'] ?? '');
             $add('Регулярные задачи', $this->humanList($payload['regular_tasks'] ?? []));
+            $add('Не предлагать без просьбы', $this->humanTopicList($payload['rejected_topics'] ?? []));
             $add('Удобные каналы связи', $this->humanList($payload['preferred_contact_channels'] ?? []));
             $add('Каналы уведомлений', $this->humanList($payload['notification_channels'] ?? []));
             $add('Темы уведомлений', $this->humanList($payload['notification_topics'] ?? []));
@@ -636,6 +603,7 @@ class AiConsultantService
             'birth_date',
             'phone',
             'regular_tasks',
+            'rejected_topics',
             'preferred_contact_channels',
             'notification_channels',
             'notification_topics',
@@ -672,6 +640,41 @@ class AiConsultantService
             }
 
             if (is_array($value)) {
+                if ($key === 'rejected_topics') {
+                    $result[$key] = collect($value)
+                        ->map(function (mixed $item): ?array {
+                            if (is_array($item)) {
+                                $label = Str::limit(trim((string) ($item['label'] ?? $item['key'] ?? '')), 120, '');
+                                if ($label === '') {
+                                    return null;
+                                }
+
+                                return [
+                                    'key' => Str::limit(trim((string) ($item['key'] ?? Str::slug($label, '_', 'ru'))), 140, ''),
+                                    'label' => $label,
+                                    'rejected_at' => trim((string) ($item['rejected_at'] ?? now()->toDateTimeString())),
+                                ];
+                            }
+
+                            $label = Str::limit(trim((string) $item), 120, '');
+                            if ($label === '') {
+                                return null;
+                            }
+
+                            return [
+                                'key' => Str::limit(Str::slug($label, '_', 'ru'), 140, ''),
+                                'label' => $label,
+                                'rejected_at' => now()->toDateTimeString(),
+                            ];
+                        })
+                        ->filter()
+                        ->values()
+                        ->take(20)
+                        ->all();
+
+                    continue;
+                }
+
                 $result[$key] = collect($value)
                     ->map(static fn (mixed $item): string => Str::limit(trim((string) $item), 240, ''))
                     ->filter()
@@ -695,6 +698,21 @@ class AiConsultantService
 
         return collect($value)
             ->map(static fn (mixed $item): string => trim((string) $item))
+            ->filter()
+            ->implode(', ');
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function humanTopicList(mixed $value): string
+    {
+        if (! is_array($value)) {
+            return trim((string) $value);
+        }
+
+        return collect($value)
+            ->map(static fn (mixed $item): string => is_array($item) ? trim((string) ($item['label'] ?? '')) : trim((string) $item))
             ->filter()
             ->implode(', ');
     }

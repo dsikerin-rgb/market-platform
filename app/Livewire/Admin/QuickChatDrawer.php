@@ -392,12 +392,19 @@ class QuickChatDrawer extends Component
         $conversation = $this->aiConversation($user, create: false);
         $marketId = $this->resolveMarketId($user);
         $profileService = app(AiUserProfileService::class);
-        $profileService->syncFromConversation($user, $conversation, $marketId);
+        $hasActiveOnboardingWizard = $profileService->hasActiveOnboardingWizard($user);
+        if (! $hasActiveOnboardingWizard) {
+            $profileService->syncFromConversation($user, $conversation, $marketId);
+        }
 
         if ($profileService->isLightOnboardingDeferral($body)) {
+            $wizardResponse = $hasActiveOnboardingWizard
+                ? $profileService->handleOnboardingWizardMessage($user, $marketId, $body)
+                : null;
+
             $this->appendAiMessage(
                 'ИИ-консультант',
-                'Хорошо, не буду отвлекать. Когда будет удобно, напишите «давай познакомимся».',
+                trim((string) ($wizardResponse['answer'] ?? '')) ?: 'Хорошо, не буду отвлекать. Когда будет удобно, напишите «давай познакомимся».',
                 false,
                 [],
                 ['kind' => 'light_onboarding_snoozed'],
@@ -444,6 +451,9 @@ class QuickChatDrawer extends Component
         $metadata = [];
         if (! empty($answer['pending_action']) && is_array($answer['pending_action'])) {
             $metadata['pending_action'] = $answer['pending_action'];
+        }
+        if (! empty($answer['suggestions']) && is_array($answer['suggestions'])) {
+            $metadata['suggestions'] = $answer['suggestions'];
         }
 
         $this->appendAiMessage('ИИ-консультант', $answer['answer'], false, $answer['chips'] ?? [], $metadata);

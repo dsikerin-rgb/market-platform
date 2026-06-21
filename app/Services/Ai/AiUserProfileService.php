@@ -19,6 +19,8 @@ class AiUserProfileService
 {
     private const LIGHT_ONBOARDING_OFFER_TEXT = 'Если хотите, могу за минуту познакомиться: как к вам обращаться, чем вы занимаетесь и какие темы вам не предлагать. Это необязательно.';
 
+    private const ONBOARDING_WIZARD_KEY = 'light_onboarding_wizard';
+
     /**
      * @return array<string, mixed>
      */
@@ -139,6 +141,164 @@ class AiUserProfileService
         $facts['light_onboarding_offer_count'] = ((int) ($facts['light_onboarding_offer_count'] ?? 0)) + 1;
         $profile->facts = $facts;
         $profile->save();
+    }
+
+    public function isOnboardingStartRequest(string $body): bool
+    {
+        $text = mb_strtolower(trim($body));
+
+        if (preg_match('/(?:^|[\s:;,.!?])(?:я|моя|мой|меня|телефон|должность|роль|отвечаю|занимаюсь|уведомлен)/uiu', $text) === 1) {
+            return false;
+        }
+
+        foreach ([
+            'давай познакомимся',
+            'давай коротко познакомимся',
+            'познакомимся',
+            'что ты хочешь про меня узнать',
+            'что хочешь про меня узнать',
+            'заполни мой профиль',
+            'настроить мой профиль',
+            'настрой мой профиль',
+        ] as $needle) {
+            if (str_contains($text, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{answer:string,suggestions:list<string>,pending_action?:array<string,mixed>|null}|null
+     */
+    public function startOnboardingWizard(User $user, int $marketId): ?array
+    {
+        if (! $this->profilesAvailable()) {
+            return null;
+        }
+
+        $profile = AiUserProfile::query()->firstOrNew(['user_id' => (int) $user->id]);
+        $profile->market_id = $marketId > 0 ? $marketId : ((int) ($user->market_id ?? 0) ?: null);
+        $facts = (array) ($profile->facts ?? []);
+        $facts[self::ONBOARDING_WIZARD_KEY] = [
+            'status' => 'active',
+            'step' => 'preferred_name',
+            'draft' => [],
+            'started_at' => now()->toDateTimeString(),
+            'updated_at' => now()->toDateTimeString(),
+        ];
+        unset($facts['light_onboarding_snoozed_until'], $facts['light_onboarding_dismissed_at']);
+
+        $profile->facts = $facts;
+        $profile->save();
+
+        return [
+            'answer' => 'Давайте познакомимся коротко. Я задам 3 вопроса по одному, любой можно пропустить. Перед сохранением покажу, что именно попадёт в профиль.'."\n\n"
+                .'1/3 Как к вам обращаться в чате?',
+            'suggestions' => ['Оставить как есть', 'Потом'],
+            'pending_action' => null,
+        ];
+    }
+
+    public function hasActiveOnboardingWizard(User $user): bool
+    {
+        if (! $this->profilesAvailable()) {
+            return false;
+        }
+
+        $profile = AiUserProfile::query()
+            ->where('user_id', (int) $user->id)
+            ->first();
+
+        if (! $profile instanceof AiUserProfile) {
+            return false;
+        }
+
+        $facts = (array) ($profile->facts ?? []);
+        $wizard = (array) ($facts[self::ONBOARDING_WIZARD_KEY] ?? []);
+
+        return (string) ($wizard['status'] ?? '') === 'active';
+    }
+
+    /**
+     * @return array{answer:string,suggestions:list<string>,pending_action?:array<string,mixed>|null}|null
+     */
+    public function handleOnboardingWizardMessage(User $user, int $marketId, string $body): ?array
+    {
+        if (! $this->profilesAvailable()) {
+            return null;
+        }
+
+        $profile = AiUserProfile::query()->firstOrNew(['user_id' => (int) $user->id]);
+        $profile->market_id = $marketId > 0 ? $marketId : ((int) ($user->market_id ?? 0) ?: null);
+        $facts = (array) ($profile->facts ?? []);
+        $wizard = (array) ($facts[self::ONBOARDING_WIZARD_KEY] ?? []);
+
+        if ((string) ($wizard['status'] ?? '') !== 'active') {
+            return null;
+        }
+
+        if ($this->isLightOnboardingDeferral($body) || $this->isWizardCancel($body)) {
+            $facts = $this->finishOnboardingWizard($facts, snooze: true);
+            $profile->facts = $facts;
+            $profile->save();
+
+            return [
+                'answer' => 'Хорошо, не буду отвлекать. Когда будет удобно, напишите «давай познакомимся».',
+                'suggestions' => [],
+                'pending_action' => null,
+            ];
+        }
+
+        $step = (string) ($wizard['step'] ?? 'preferred_name');
+        $draft = (array) ($wizard['draft'] ?? []);
+        $skipped = $this->isWizardSkip($body);
+
+        if (! $skipped) {
+            $draft = $this->applyWizardAnswer($step, $body, $draft);
+        }
+
+        $nextStep = match ($step) {
+            'preferred_name' => 'role_scope',
+            'role_scope' => 'rejected_topics',
+            default => 'confirm',
+        };
+
+        if ($nextStep !== 'confirm') {
+            $wizard['step'] = $nextStep;
+            $wizard['draft'] = $draft;
+            $wizard['updated_at'] = now()->toDateTimeString();
+            $facts[self::ONBOARDING_WIZARD_KEY] = $wizard;
+            $profile->facts = $facts;
+            $profile->save();
+
+            return [
+                'answer' => $this->wizardQuestion($nextStep),
+                'suggestions' => ['Пропустить', 'Потом'],
+                'pending_action' => null,
+            ];
+        }
+
+        $facts = $this->finishOnboardingWizard($facts, snooze: false);
+        $profile->facts = $facts;
+        $profile->save();
+
+        if ($draft === []) {
+            return [
+                'answer' => 'Ничего не меняю в профиле. Если захотите настроить подсказки позже, напишите «давай познакомимся».',
+                'suggestions' => [],
+                'pending_action' => null,
+            ];
+        }
+
+        $pendingAction = $this->profileUpdatePendingAction($draft);
+
+        return [
+            'answer' => 'Подготовила обновление профиля. Проверьте, всё ли верно, и подтвердите сохранение.',
+            'suggestions' => [],
+            'pending_action' => $pendingAction,
+        ];
     }
 
     public function isLightOnboardingDeferral(string $body): bool
@@ -346,6 +506,13 @@ class AiUserProfileService
             $changed[] = 'регулярные задачи';
         }
 
+        if (array_key_exists('rejected_topics', $payload)) {
+            $existing = $this->normalizeRejectedTopics((array) ($profile->rejected_topics ?? []));
+            $incoming = $this->normalizeRejectedTopics((array) $payload['rejected_topics']);
+            $profile->rejected_topics = array_values([...$existing, ...$incoming]);
+            $changed[] = 'темы, которые не нужно предлагать';
+        }
+
         if (array_key_exists('preferred_contact_channels', $payload)) {
             $channels = app(UserNotificationPreferences::class)->normalizeChannels($payload['preferred_contact_channels']);
             $profile->preferred_contact_channels = $channels;
@@ -435,6 +602,177 @@ class AiUserProfileService
                 return;
             }
         }
+    }
+
+    /**
+     * @param array<string, mixed> $draft
+     * @return array<string, mixed>
+     */
+    private function applyWizardAnswer(string $step, string $body, array $draft): array
+    {
+        $body = trim($body);
+        if ($body === '') {
+            return $draft;
+        }
+
+        if ($step === 'preferred_name') {
+            $preferredName = $this->cleanPreferredName($body);
+            if ($preferredName !== '') {
+                $draft['preferred_name'] = $preferredName;
+            }
+
+            return $draft;
+        }
+
+        if ($step === 'role_scope') {
+            $role = $this->roleFromWizardAnswer($body);
+            if ($role !== '') {
+                $draft['job_title'] = $role;
+            }
+
+            $scope = $this->responsibilityFromWizardAnswer($body);
+            if ($scope !== '') {
+                $draft['responsibility_scope'] = $scope;
+            }
+
+            return $draft;
+        }
+
+        if ($step === 'rejected_topics') {
+            $topics = $this->topicsForRejection($body, null);
+            if ($topics === []) {
+                $label = $this->cleanExtract($body, 120);
+                if ($label !== '') {
+                    $topics[] = [
+                        'key' => 'custom:'.Str::slug($label, '_', 'ru'),
+                        'label' => $label,
+                        'rejected_at' => now()->toDateTimeString(),
+                    ];
+                }
+            }
+
+            if ($topics !== []) {
+                $draft['rejected_topics'] = array_values($topics);
+            }
+        }
+
+        return $draft;
+    }
+
+    private function wizardQuestion(string $step): string
+    {
+        return match ($step) {
+            'role_scope' => '2/3 Какая у вас роль на рынке и за какие вопросы вы отвечаете?',
+            'rejected_topics' => '3/3 Какие темы лучше не предлагать вам без прямой просьбы? Можно написать «нет таких» или «пропустить».',
+            default => 'Как к вам обращаться в чате?',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $facts
+     * @return array<string, mixed>
+     */
+    private function finishOnboardingWizard(array $facts, bool $snooze): array
+    {
+        unset($facts[self::ONBOARDING_WIZARD_KEY]);
+        $facts['light_onboarding_completed_at'] = now()->toDateTimeString();
+
+        if ($snooze) {
+            $facts['light_onboarding_snoozed_until'] = now()->addDays(14)->toDateTimeString();
+            $facts['light_onboarding_dismissed_at'] = now()->toDateTimeString();
+            unset($facts['light_onboarding_completed_at']);
+        }
+
+        return $facts;
+    }
+
+    /**
+     * @param array<string, mixed> $draft
+     * @return array<string, mixed>
+     */
+    private function profileUpdatePendingAction(array $draft): array
+    {
+        $payload = [
+            'tool' => 'update_my_profile',
+            ...$draft,
+        ];
+
+        return [
+            'status' => 'pending',
+            'tool' => 'update_my_profile',
+            'payload' => $payload,
+            'title' => 'Обновление профиля',
+            'summary' => $this->profileUpdateSummary($payload),
+            'confirm_label' => 'Сохранить в профиль',
+            'cancel_label' => 'Отменить',
+            'created_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return list<array{label:string,value:string}>
+     */
+    private function profileUpdateSummary(array $payload): array
+    {
+        $rows = [];
+        $add = static function (string $label, mixed $value) use (&$rows): void {
+            $value = Str::limit(trim((string) $value), 260, '');
+            if ($value !== '') {
+                $rows[] = ['label' => $label, 'value' => $value];
+            }
+        };
+
+        $add('Как обращаться', $payload['preferred_name'] ?? '');
+        $add('Должность', $payload['job_title'] ?? '');
+        $add('Зона ответственности', $payload['responsibility_scope'] ?? '');
+        $add('Не предлагать без просьбы', collect((array) ($payload['rejected_topics'] ?? []))
+            ->map(static fn (mixed $topic): string => is_array($topic) ? (string) ($topic['label'] ?? '') : '')
+            ->filter()
+            ->implode(', '));
+
+        return $rows;
+    }
+
+    private function isWizardSkip(string $body): bool
+    {
+        $text = mb_strtolower(trim($body));
+
+        return in_array($text, ['пропустить', 'оставить как есть', 'нет', 'нет таких', 'ничего', 'не знаю'], true);
+    }
+
+    private function isWizardCancel(string $body): bool
+    {
+        $text = mb_strtolower(trim($body));
+
+        return in_array($text, ['отмена', 'отменить', 'стоп', 'закончить'], true);
+    }
+
+    private function roleFromWizardAnswer(string $body): string
+    {
+        $body = $this->cleanExtract($body, 180);
+        if ($body === '') {
+            return '';
+        }
+
+        if (preg_match('/(?:я\s+)?(?:работаю\s+)?(?:как|должность|роль)\s*[:\-—]?\s*([^,.]{3,80})/uiu', $body, $matches)) {
+            return $this->cleanExtract($matches[1], 80);
+        }
+
+        if (preg_match('/^([^,.]{3,60})(?:,|\s+и\s+отвечаю|\s+отвечаю|\s+занимаюсь)/uiu', $body, $matches)) {
+            return $this->cleanExtract($matches[1], 80);
+        }
+
+        return '';
+    }
+
+    private function responsibilityFromWizardAnswer(string $body): string
+    {
+        if (preg_match('/(?:отвечаю\s+за|занимаюсь|в\s+моей\s+зоне|мой\s+периметр)\s*[:\-—]?\s*(.{3,180})/uiu', $body, $matches)) {
+            return $this->cleanExtract($matches[1], 180);
+        }
+
+        return $this->cleanExtract($body, 180);
     }
 
     private function learnCrossUserResponsibilities(AiUserProfile $sourceProfile, string $body, User $sourceUser): void
