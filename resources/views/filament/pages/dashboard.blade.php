@@ -58,13 +58,13 @@
 
             .dashboard-workspace__hero {
                 border: 1px solid var(--dashboard-border);
-                border-radius: 1.5rem;
+                border-radius: 1.1rem;
                 background:
                     radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 28%),
                     radial-gradient(circle at top right, rgba(16, 185, 129, 0.14), transparent 24%),
                     linear-gradient(180deg, #eff6ff, #dbeafe);
-                padding: 1.5rem;
-                box-shadow: 0 24px 60px var(--dashboard-shadow);
+                padding: 1rem 1.15rem;
+                box-shadow: 0 16px 36px var(--dashboard-shadow);
             }
 
             .dark .dashboard-workspace__hero {
@@ -76,9 +76,9 @@
 
             .dashboard-workspace__hero-row {
                 display: flex;
-                gap: 1.25rem;
+                gap: 0.85rem;
                 justify-content: space-between;
-                align-items: flex-end;
+                align-items: center;
                 flex-wrap: wrap;
             }
 
@@ -99,9 +99,9 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                width: 3rem;
-                height: 3rem;
-                border-radius: 1rem;
+                width: 2.35rem;
+                height: 2.35rem;
+                border-radius: 0.75rem;
                 background: rgba(37, 99, 235, 0.12);
                 color: #1d4ed8;
                 flex-shrink: 0;
@@ -114,7 +114,7 @@
 
             .dashboard-workspace__hero-copy h2 {
                 margin: 0;
-                font-size: 2rem;
+                font-size: 1.55rem;
                 line-height: 1.1;
                 font-weight: 700;
                 color: var(--dashboard-heading);
@@ -155,14 +155,14 @@
             .dashboard-workspace__stats {
                 display: grid;
                 grid-template-columns: repeat(4, minmax(0, 1fr));
-                gap: 0.85rem;
-                min-width: min(100%, 28rem);
+                gap: 0.55rem;
+                min-width: min(100%, 34rem);
             }
 
             .dashboard-workspace__stat {
                 display: block;
-                border-radius: 1rem;
-                padding: 0.95rem 1rem;
+                border-radius: 0.8rem;
+                padding: 0.65rem 0.75rem;
                 border: 1px solid var(--dashboard-border);
                 background: rgba(255, 255, 255, 0.55);
                 color: inherit;
@@ -186,15 +186,15 @@
             }
 
             .dashboard-workspace__stat-label {
-                font-size: 0.7rem;
-                letter-spacing: 0.08em;
+                font-size: 0.66rem;
+                letter-spacing: 0.05em;
                 text-transform: uppercase;
                 color: var(--dashboard-muted);
             }
 
             .dashboard-workspace__stat-value {
-                margin-top: 0.3rem;
-                font-size: 1.75rem;
+                margin-top: 0.2rem;
+                font-size: 1.35rem;
                 line-height: 1;
                 font-weight: 700;
                 color: var(--dashboard-heading);
@@ -215,15 +215,15 @@
             .dashboard-workspace__links {
                 display: grid;
                 grid-template-columns: repeat(4, minmax(0, 1fr));
-                gap: 0.9rem;
+                gap: 0.55rem;
             }
 
             .dashboard-workspace__link {
                 display: flex;
-                gap: 0.85rem;
-                align-items: flex-start;
-                padding: 1rem;
-                border-radius: 1rem;
+                gap: 0.6rem;
+                align-items: center;
+                padding: 0.65rem 0.75rem;
+                border-radius: 0.8rem;
                 border: 1px solid var(--dashboard-border);
                 background: rgba(255, 255, 255, 0.65);
                 color: inherit;
@@ -245,9 +245,9 @@
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                width: 2.75rem;
-                height: 2.75rem;
-                border-radius: 0.9rem;
+                width: 2rem;
+                height: 2rem;
+                border-radius: 0.65rem;
                 background: rgba(37, 99, 235, 0.12);
                 color: #1d4ed8;
                 flex-shrink: 0;
@@ -260,22 +260,19 @@
 
             .dashboard-workspace__link-title {
                 margin: 0;
-                font-size: 0.95rem;
+                font-size: 0.9rem;
                 font-weight: 700;
                 color: var(--dashboard-heading);
             }
 
             .dashboard-workspace__link-copy {
-                margin: 0.3rem 0 0;
-                font-size: 0.87rem;
-                line-height: 1.55;
-                color: var(--dashboard-muted);
+                display: none;
             }
 
             .dashboard-workspace__link-meta {
-                margin-top: 0.55rem;
+                margin-top: 0.1rem;
                 color: #1d4ed8;
-                font-size: 0.82rem;
+                font-size: 0.75rem;
                 font-weight: 600;
             }
 
@@ -645,11 +642,41 @@
             }
 
             .dashboard-workspace__widgets .fi-wi-stats-overview .fi-section-content {
-                padding: 1.25rem 1.25rem 1.5rem !important;
+                padding: 0.85rem !important;
             }
 
-            .dashboard-workspace__widgets .fi-wi-stats-overview .fi-wi {
-                gap: 1.125rem !important;
+            .dashboard-workspace__widgets .fi-wi-stats-overview .fi-sc {
+                display: grid !important;
+                grid-template-columns: repeat(auto-fit, minmax(min(12.5rem, 100%), 1fr)) !important;
+                gap: 0.75rem !important;
+            }
+
+            .dashboard-workspace__widgets .fi-wi-stats-overview-stat {
+                min-height: auto !important;
+                padding: 0.85rem !important;
+                border-radius: 0.9rem !important;
+            }
+
+            .dashboard-workspace__widgets .fi-wi-stats-overview-stat-label-ctn {
+                align-items: center;
+                gap: 0.4rem;
+            }
+
+            .dashboard-workspace__widgets .fi-wi-stats-overview-stat-label {
+                font-size: 0.82rem;
+                line-height: 1.25;
+            }
+
+            .dashboard-workspace__widgets .fi-wi-stats-overview-stat-value {
+                margin-top: 0.35rem;
+                font-size: 1.65rem;
+                line-height: 1.08;
+            }
+
+            .dashboard-workspace__widgets .fi-wi-stats-overview-stat-description {
+                margin-top: 0.35rem;
+                font-size: 0.82rem;
+                line-height: 1.35;
             }
 
             .dashboard-workspace__panel .dashboard-workspace__widgets {
@@ -816,7 +843,7 @@
                     </div>
                 </div>
 
-                <div class="dashboard-workspace__links" style="margin-top: 1.25rem;">
+                <div class="dashboard-workspace__links" style="margin-top: 0.75rem;">
                     @foreach ($hero['links'] as $link)
                         @if(isset($link['url']) && !empty($link['url']))
                         <a href="{{ $link['url'] }}" class="dashboard-workspace__link">
