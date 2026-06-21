@@ -17,6 +17,8 @@ use App\Notifications\TicketChatNotification;
 use App\Services\Ai\AiAgentActionTool;
 use App\Services\Ai\AiAgentSettings;
 use App\Services\Ai\AiConsultantService;
+use App\Services\Ai\AiPageNudgeContextService;
+use App\Services\Ai\AiUserProfileService;
 use App\Support\MessageAttachmentStorage;
 use App\Support\Search\LooseSearch;
 use App\Support\StaffConversationService;
@@ -364,6 +366,9 @@ class QuickChatDrawer extends Component
 
         $history = $this->aiConversationHistory();
         $this->appendAiMessage($user->name ?: 'Вы', $body, true);
+
+        $conversation = $this->aiConversation($user, create: false);
+        app(AiUserProfileService::class)->syncFromConversation($user, $conversation, $this->resolveMarketId($user));
 
         $answer = $aiConsultant->answer($user, $this->resolveMarketId($user), $body, $history, $this->pageContext);
         $metadata = [];
@@ -1183,6 +1188,9 @@ class QuickChatDrawer extends Component
         }
 
         $this->touchAiConversationPageContext($user, $conversation);
+        $marketId = $this->resolveMarketId($user);
+        $profile = app(AiUserProfileService::class)->syncFromConversation($user, $conversation, $marketId);
+        $priorityContext = app(AiPageNudgeContextService::class)->build($user, $marketId, $this->pageContext, $profile);
 
         $fingerprint = $this->aiPageContextFingerprint();
         $recentDuplicate = $conversation->messages()
@@ -1201,11 +1209,12 @@ class QuickChatDrawer extends Component
         AiMessage::query()->create([
             'ai_conversation_id' => (int) $conversation->id,
             'role' => AiMessage::ROLE_ASSISTANT,
-            'body' => $this->aiPageNudgeMessageBody($user),
+            'body' => $this->aiPageNudgeMessageBody($user, $priorityContext),
             'metadata' => [
                 'user_name' => 'ИИ-консультант',
                 'chips' => [],
-                'suggestions' => $this->aiPageNudgeSuggestions(),
+                'suggestions' => $this->aiPageNudgeSuggestions($priorityContext),
+                'priority_context' => $priorityContext,
                 'kind' => 'page_nudge_greeting',
                 'page_fingerprint' => $fingerprint,
             ],
@@ -1215,10 +1224,18 @@ class QuickChatDrawer extends Component
         $this->loadAiMessages(false);
     }
 
-    private function aiPageNudgeMessageBody(User $user): string
+    /**
+     * @param array<string, mixed> $priorityContext
+     */
+    private function aiPageNudgeMessageBody(User $user, array $priorityContext = []): string
     {
         $name = $this->userFriendlyName($user);
         $page = $this->aiPageContextPhrase();
+        $priorityMessage = trim((string) ($priorityContext['message'] ?? ''));
+
+        if ($priorityMessage !== '') {
+            return "{$name}, вижу, вы сейчас {$page}. {$priorityMessage} Что сделать в первую очередь?";
+        }
 
         return "{$name}, вижу, вы сейчас {$page}. Могу проверить данные, найти важное, подготовить ссылку, сообщение, задачу или напоминание. Что нужно сделать?";
     }
@@ -1243,13 +1260,14 @@ class QuickChatDrawer extends Component
     }
 
     /**
+     * @param array<string, mixed> $priorityContext
      * @return list<string>
      */
-    private function aiPageNudgeSuggestions(): array
+    private function aiPageNudgeSuggestions(array $priorityContext = []): array
     {
         $path = trim((string) ($this->pageContext['path'] ?? ''));
 
-        return match (true) {
+        $pageSuggestions = match (true) {
             str_contains($path, '/admin/tenants/') => [
                 'Проверь долги этого арендатора',
                 'Покажи действующие договоры',
@@ -1281,6 +1299,18 @@ class QuickChatDrawer extends Component
                 'Создай задачу по этой странице',
             ],
         };
+
+        $prioritySuggestions = array_values(array_filter(array_map(
+            static fn (mixed $suggestion): string => trim((string) $suggestion),
+            (array) ($priorityContext['suggestions'] ?? []),
+        )));
+
+        return collect([...$prioritySuggestions, ...$pageSuggestions])
+            ->filter()
+            ->unique()
+            ->take(3)
+            ->values()
+            ->all();
     }
 
     private function aiPageContextFingerprint(): string

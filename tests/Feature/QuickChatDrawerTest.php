@@ -198,6 +198,140 @@ class QuickChatDrawerTest extends TestCase
             ->assertDontSee('Super, вижу');
     }
 
+    public function test_page_nudge_prioritizes_overdue_tasks_for_user(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = $this->actingAsMarketAdmin($market);
+
+        Task::query()->create([
+            'market_id' => (int) $market->id,
+            'title' => 'Просроченная проверка',
+            'status' => Task::STATUS_IN_PROGRESS,
+            'priority' => Task::PRIORITY_HIGH,
+            'due_at' => now()->subDay(),
+            'assignee_id' => (int) $user->id,
+        ]);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1, 'page_nudge', [
+                'url' => 'https://market.example.test/admin/tasks',
+                'path' => '/admin/tasks',
+                'title' => 'Задачи',
+                'heading' => 'Задачи',
+            ])
+            ->assertSee('просроченных задач')
+            ->assertSee('Покажи просроченные задачи');
+    }
+
+    public function test_page_nudge_does_not_repeat_rejected_topic(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = $this->actingAsMarketAdmin($market);
+
+        $conversation = AiConversation::query()->create([
+            'market_id' => (int) $market->id,
+            'user_id' => (int) $user->id,
+            'title' => 'ИИ-консультант',
+        ]);
+
+        AiMessage::query()->create([
+            'ai_conversation_id' => (int) $conversation->id,
+            'role' => AiMessage::ROLE_ASSISTANT,
+            'body' => 'Могу помочь с долгами арендаторов.',
+            'metadata' => [
+                'kind' => 'page_nudge_greeting',
+                'priority_context' => ['topic' => 'debts'],
+                'suggestions' => ['Покажи крупнейшие долги'],
+            ],
+        ]);
+
+        AiMessage::query()->create([
+            'ai_conversation_id' => (int) $conversation->id,
+            'role' => AiMessage::ROLE_USER,
+            'body' => 'Долги не моя компетенция, больше не предлагай.',
+            'metadata' => [],
+        ]);
+
+        Task::query()->create([
+            'market_id' => (int) $market->id,
+            'title' => 'Просроченная проверка',
+            'status' => Task::STATUS_IN_PROGRESS,
+            'priority' => Task::PRIORITY_HIGH,
+            'due_at' => now()->subDay(),
+            'assignee_id' => (int) $user->id,
+        ]);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1, 'page_nudge', [
+                'url' => 'https://market.example.test/admin/tenants',
+                'path' => '/admin/tenants',
+                'title' => 'Арендаторы',
+                'heading' => 'Арендаторы',
+            ])
+            ->assertDontSee('Покажи крупнейшие долги')
+            ->assertSee('Покажи просроченные задачи');
+
+        $this->assertDatabaseHas('ai_user_profiles', [
+            'user_id' => (int) $user->id,
+        ]);
+    }
+
+    public function test_ai_profile_learns_responsibility_for_mentioned_staff_member(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = $this->actingAsMarketAdmin($market);
+
+        User::factory()->create([
+            'name' => 'Марина Николаевна',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'marina-ai-profile@example.test',
+        ]);
+
+        app()->instance(AiConsultantService::class, new class extends AiConsultantService
+        {
+            public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
+            {
+                return [
+                    'answer' => 'Запомнила.',
+                    'error_type' => null,
+                    'chips' => [],
+                ];
+            }
+        });
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->set('messageBody', 'Долгами занимается Марина Николаевна.')
+            ->call('sendMessage')
+            ->assertSee('Запомнила.');
+
+        $this->assertDatabaseHas('ai_user_profiles', [
+            'responsibility_scope' => 'долги и оплаты арендаторов',
+        ]);
+
+        $this->assertDatabaseHas('ai_knowledge_entries', [
+            'market_id' => (int) $market->id,
+            'dictionary' => 'responsibilities',
+            'source_user_id' => (int) $user->id,
+        ]);
+    }
+
     public function test_ai_consultant_dialog_accepts_question_and_renders_answer(): void
     {
         $market = Market::query()->create([
