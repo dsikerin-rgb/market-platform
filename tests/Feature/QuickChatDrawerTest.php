@@ -332,6 +332,28 @@ class QuickChatDrawerTest extends TestCase
         ]);
     }
 
+    public function test_ai_profile_remembers_preferred_user_name(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = $this->actingAsMarketAdmin($market);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->set('messageBody', 'Зови меня Саша')
+            ->call('sendMessage')
+            ->assertSee('Хорошо, буду обращаться: Саша.');
+
+        $this->assertDatabaseHas('ai_user_profiles', [
+            'user_id' => (int) $user->id,
+            'preferred_name' => 'Саша',
+        ]);
+    }
+
     public function test_ai_consultant_dialog_accepts_question_and_renders_answer(): void
     {
         $market = Market::query()->create([

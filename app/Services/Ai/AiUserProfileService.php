@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\UserNotificationPreferences;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -142,6 +143,11 @@ class AiUserProfileService
     {
         $normalized = mb_strtolower($body);
 
+        $preferredName = $this->preferredNameFromText($body);
+        if ($preferredName !== null) {
+            $profile->preferred_name = $preferredName;
+        }
+
         if (preg_match('/(?:моя должность|я работаю как|я работаю|должность)\s*[:\-—]?\s*(.{3,80})/uiu', $body, $matches)) {
             $profile->job_title = $this->cleanExtract($matches[1]);
         }
@@ -194,6 +200,12 @@ class AiUserProfileService
         $profile->market_id = $marketId > 0 ? $marketId : ((int) ($user->market_id ?? 0) ?: null);
         $this->clearExpiredCommunicationPause($profile);
         $changed = [];
+
+        if (array_key_exists('preferred_name', $payload)) {
+            $value = $this->cleanPreferredName((string) $payload['preferred_name']);
+            $profile->preferred_name = $value !== '' ? $value : null;
+            $changed[] = 'обращение';
+        }
 
         foreach ([
             'job_title' => 'должность',
@@ -389,7 +401,9 @@ class AiUserProfileService
             return null;
         }
 
-        return User::query()
+        $operator = DB::connection()->getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
+
+        $user = User::query()
             ->where('market_id', $marketId)
             ->where(function (Builder $query) use ($tokens): void {
                 foreach ($tokens as $token) {
@@ -398,6 +412,40 @@ class AiUserProfileService
             })
             ->orderBy('id')
             ->first();
+
+        if ($user instanceof User) {
+            return $user;
+        }
+
+        $user = User::query()
+            ->where('market_id', $marketId)
+            ->where(function (Builder $query) use ($tokens, $operator): void {
+                foreach ($tokens as $token) {
+                    $query->where('name', $operator, '%'.$token.'%');
+                }
+            })
+            ->orderBy('id')
+            ->first();
+
+        if ($user instanceof User) {
+            return $user;
+        }
+
+        return User::query()
+            ->where('market_id', $marketId)
+            ->orderBy('id')
+            ->get()
+            ->first(function (User $candidate) use ($tokens): bool {
+                $name = mb_strtolower((string) $candidate->name);
+
+                foreach ($tokens as $token) {
+                    if (! str_contains($name, mb_strtolower($token))) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
     }
 
     private function mergeResponsibility(string $current, string $scope): string
@@ -561,6 +609,10 @@ class AiUserProfileService
             $parts[] = 'Системные роли: '.$systemRoles;
         }
 
+        if (filled($profile->preferred_name)) {
+            $parts[] = 'Предпочитает обращение: '.trim((string) $profile->preferred_name);
+        }
+
         if (filled($user->job_title ?? null)) {
             $parts[] = 'Должность: '.trim((string) $user->job_title);
         } elseif (filled($profile->job_title)) {
@@ -636,6 +688,7 @@ class AiUserProfileService
         $user = $profile->user;
 
         return [
+            'preferred_name' => $profile->preferred_name,
             'job_title' => $user instanceof User ? ($user->job_title ?: $profile->job_title) : $profile->job_title,
             'department' => $user instanceof User ? ($user->department ?: $profile->department) : $profile->department,
             'birth_date' => ($user instanceof User ? $user->birth_date?->toDateString() : null) ?: $profile->birth_date?->toDateString(),
@@ -730,6 +783,40 @@ class AiUserProfileService
         $value = preg_replace('/[.?!].*$/u', '', $value) ?: $value;
 
         return trim(Str::limit($value, $limit, ''));
+    }
+
+    private function preferredNameFromText(string $body): ?string
+    {
+        foreach ([
+            '/(?:зови|называй)\s+меня\s+(.{2,40})/uiu',
+            '/(?:обращайся\s+ко\s+мне|можешь\s+обращаться\s+ко\s+мне)\s+(.{2,40})/uiu',
+            '/(?:для\s+тебя\s+я|можно\s+просто)\s+(.{2,40})/uiu',
+        ] as $pattern) {
+            if (! preg_match($pattern, $body, $matches)) {
+                continue;
+            }
+
+            $name = $this->cleanPreferredName((string) $matches[1]);
+            if ($name !== '') {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private function cleanPreferredName(string $value): string
+    {
+        $value = $this->cleanExtract($value, 40);
+        $value = preg_replace('/^(пожалуйста|пж|плиз|просто)\s+/uiu', '', $value) ?: $value;
+        $value = preg_replace('/\s+(пожалуйста|пж|плиз)$/uiu', '', $value) ?: $value;
+        $value = trim($value, " \t\n\r\0\x0B\"'«».,;:!?");
+
+        if (! preg_match('/^[\pL][\pL\pN\s.\-]{1,39}$/u', $value)) {
+            return '';
+        }
+
+        return $value;
     }
 
     private function parseBirthDate(string $value): ?Carbon
