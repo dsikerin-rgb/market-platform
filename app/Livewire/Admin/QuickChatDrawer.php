@@ -15,6 +15,7 @@ use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\TicketChatNotification;
 use App\Services\Ai\AiAgentActionTool;
+use App\Services\Ai\AiAgentAuditService;
 use App\Services\Ai\AiAgentSettings;
 use App\Services\Ai\AiConsultantService;
 use App\Services\Ai\AiPageNudgeContextService;
@@ -456,7 +457,16 @@ class QuickChatDrawer extends Component
             $metadata['suggestions'] = $answer['suggestions'];
         }
 
-        $this->appendAiMessage('ИИ-консультант', $answer['answer'], false, $answer['chips'] ?? [], $metadata);
+        $assistantMessage = $this->appendAiMessage('ИИ-консультант', $answer['answer'], false, $answer['chips'] ?? [], $metadata);
+        if ($assistantMessage instanceof AiMessage && is_array($metadata['pending_action'] ?? null)) {
+            app(AiAgentAuditService::class)->recordPreparedAction(
+                actor: $user,
+                marketId: $this->resolveMarketId($user),
+                pendingAction: (array) $metadata['pending_action'],
+                aiConversationId: (int) $assistantMessage->ai_conversation_id,
+                aiMessageId: (int) $assistantMessage->id,
+            );
+        }
 
         $this->clearPendingAiReply();
         $this->dispatch('quick-chat-updated');
@@ -504,8 +514,10 @@ class QuickChatDrawer extends Component
 
                 return [
                     'message_id' => (int) $message->id,
+                    'conversation_id' => (int) $message->ai_conversation_id,
                     'denied' => true,
                     'message' => $pendingAction['result_message'],
+                    'pending_action' => $pendingAction,
                 ];
             }
 
@@ -526,6 +538,16 @@ class QuickChatDrawer extends Component
         }
 
         if ((bool) ($claimedAction['denied'] ?? false)) {
+            app(AiAgentAuditService::class)->recordActionStatus(
+                actor: $user,
+                marketId: $this->resolveMarketId($user),
+                pendingAction: (array) ($claimedAction['pending_action'] ?? []),
+                status: 'failed',
+                message: trim((string) ($claimedAction['message'] ?? 'Не выполнено: для вашей роли это действие недоступно.')),
+                aiConversationId: (int) ($claimedAction['conversation_id'] ?? 0) ?: null,
+                aiMessageId: (int) ($claimedAction['message_id'] ?? 0) ?: null,
+            );
+
             $this->appendAiMessage(
                 'ИИ-консультант',
                 trim((string) ($claimedAction['message'] ?? 'Не выполнено: для вашей роли это действие недоступно.')),
@@ -544,12 +566,19 @@ class QuickChatDrawer extends Component
             return;
         }
 
-        $result = app(AiAgentActionTool::class)->run($user, $this->resolveMarketId($user), (array) ($claimedAction['payload'] ?? []));
+        $messageId = (int) ($claimedAction['message_id'] ?? 0);
+        $message = $messageId > 0
+            ? AiMessage::query()->whereKey($messageId)->first()
+            : null;
+        $result = app(AiAgentActionTool::class)->run(
+            $user,
+            $this->resolveMarketId($user),
+            (array) ($claimedAction['payload'] ?? []),
+            $message instanceof AiMessage ? (int) $message->ai_conversation_id : null,
+            $message instanceof AiMessage ? (int) $message->id : null,
+        );
         $ok = (bool) ($result['ok'] ?? false);
 
-        $message = AiMessage::query()
-            ->whereKey((int) $claimedAction['message_id'])
-            ->first();
         if (! $message instanceof AiMessage) {
             return;
         }
@@ -590,16 +619,16 @@ class QuickChatDrawer extends Component
         }
 
         $conversation = $this->aiConversation($user, create: false);
-        $cancelled = DB::transaction(function () use ($conversation, $messageId, $user): bool {
+        $cancelled = DB::transaction(function () use ($conversation, $messageId, $user): ?array {
             $message = $this->aiMessageForAction($conversation, $messageId, lockForUpdate: true);
             if (! $message instanceof AiMessage) {
-                return false;
+                return null;
             }
 
             $metadata = (array) ($message->metadata ?? []);
             $pendingAction = (array) ($metadata['pending_action'] ?? []);
             if (($pendingAction['status'] ?? null) !== 'pending') {
-                return false;
+                return null;
             }
 
             $pendingAction['status'] = 'cancelled';
@@ -610,12 +639,26 @@ class QuickChatDrawer extends Component
             $metadata['pending_action'] = $pendingAction;
             $message->forceFill(['metadata' => $metadata])->save();
 
-            return true;
+            return [
+                'message_id' => (int) $message->id,
+                'conversation_id' => (int) $message->ai_conversation_id,
+                'pending_action' => $pendingAction,
+            ];
         });
 
-        if (! $cancelled) {
+        if (! is_array($cancelled)) {
             return;
         }
+
+        app(AiAgentAuditService::class)->recordActionStatus(
+            actor: $user,
+            marketId: $this->resolveMarketId($user),
+            pendingAction: (array) ($cancelled['pending_action'] ?? []),
+            status: 'cancelled',
+            message: 'Отменено. Ничего не сделал.',
+            aiConversationId: (int) ($cancelled['conversation_id'] ?? 0) ?: null,
+            aiMessageId: (int) ($cancelled['message_id'] ?? 0) ?: null,
+        );
 
         $this->appendAiMessage(
             'ИИ-консультант',
@@ -624,7 +667,7 @@ class QuickChatDrawer extends Component
             [],
             [
                 'kind' => 'action_result',
-                'action_message_id' => (int) $message->id,
+                'action_message_id' => (int) ($cancelled['message_id'] ?? 0),
                 'action_status' => 'cancelled',
             ],
         );
@@ -1073,7 +1116,7 @@ class QuickChatDrawer extends Component
     /**
      * @param  list<array{label:string,url:string}>  $chips
      */
-    private function appendAiMessage(string $userName, string $body, bool $isOwn, array $chips = [], array $metadata = []): void
+    private function appendAiMessage(string $userName, string $body, bool $isOwn, array $chips = [], array $metadata = []): ?AiMessage
     {
         $user = $this->currentUser();
         $conversation = $user ? $this->aiConversation($user, create: true) : null;
@@ -1095,7 +1138,7 @@ class QuickChatDrawer extends Component
             $conversation->touch();
             $this->aiMessages[] = $this->formatAiMessage($message);
 
-            return;
+            return $message;
         }
 
         $now = now()->timezone(config('app.timezone'));
@@ -1112,6 +1155,8 @@ class QuickChatDrawer extends Component
             'suggestions' => $this->normalizeAiSuggestions((array) ($metadata['suggestions'] ?? [])),
             'pending_action' => $this->normalizeAiPendingAction($metadata['pending_action'] ?? null),
         ];
+
+        return null;
     }
 
     private function aiMessageForAction(?AiConversation $conversation, string $messageId, bool $lockForUpdate = false): ?AiMessage
