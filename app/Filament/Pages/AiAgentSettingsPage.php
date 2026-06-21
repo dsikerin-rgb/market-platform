@@ -7,6 +7,7 @@ namespace App\Filament\Pages;
 use App\Models\AiMessage;
 use App\Models\AiKnowledgeEntry;
 use App\Services\Ai\AiAgentSettings;
+use App\Services\Ai\AiKnowledgeService;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -43,6 +44,13 @@ class AiAgentSettingsPage extends Page
      * @var list<array<string, mixed>>
      */
     public array $knowledgeEntries = [];
+
+    public ?int $editingKnowledgeId = null;
+
+    /**
+     * @var array{label?:string,fact?:string,confidence?:int}
+     */
+    public array $knowledgeEditData = [];
 
     public static function canAccess(): bool
     {
@@ -262,7 +270,10 @@ class AiAgentSettingsPage extends Page
                         ->visible(fn (): bool => $this->canViewAiResources())
                         ->schema([
                             View::make('filament.pages.partials.ai-agent-knowledge')
-                                ->viewData(fn (): array => ['knowledgeEntries' => $this->knowledgeEntries])
+                                ->viewData(fn (): array => [
+                                    'knowledgeEntries' => $this->knowledgeEntries,
+                                    'editingKnowledgeId' => $this->editingKnowledgeId,
+                                ])
                                 ->columnSpanFull(),
                         ]),
                 ]),
@@ -280,6 +291,117 @@ class AiAgentSettingsPage extends Page
 
         Notification::make()
             ->title('Настройки ИИ-агента сохранены')
+            ->success()
+            ->send();
+    }
+
+    public function approveKnowledge(int $entryId): void
+    {
+        $this->reviewKnowledge($entryId, AiKnowledgeService::STATUS_APPROVED, 'Знание подтверждено');
+    }
+
+    public function rejectKnowledge(int $entryId): void
+    {
+        $this->reviewKnowledge($entryId, AiKnowledgeService::STATUS_REJECTED, 'Знание отклонено');
+    }
+
+    public function markKnowledgeStale(int $entryId): void
+    {
+        $this->reviewKnowledge($entryId, AiKnowledgeService::STATUS_STALE, 'Знание помечено устаревшим');
+    }
+
+    public function returnKnowledgeToDraft(int $entryId): void
+    {
+        $this->reviewKnowledge($entryId, AiKnowledgeService::STATUS_DRAFT, 'Знание возвращено в черновики');
+    }
+
+    public function deleteKnowledge(int $entryId): void
+    {
+        abort_unless(static::canAccess(), 403);
+
+        $entry = AiKnowledgeEntry::query()->find($entryId);
+        if (! $entry instanceof AiKnowledgeEntry) {
+            return;
+        }
+
+        $entry->delete();
+        $this->knowledgeEntries = $this->loadKnowledgeEntries();
+
+        Notification::make()
+            ->title('Знание удалено')
+            ->success()
+            ->send();
+    }
+
+    public function editKnowledge(int $entryId): void
+    {
+        abort_unless(static::canAccess(), 403);
+
+        $entry = AiKnowledgeEntry::query()->find($entryId);
+        if (! $entry instanceof AiKnowledgeEntry) {
+            return;
+        }
+
+        $value = (array) ($entry->value ?? []);
+        $this->editingKnowledgeId = (int) $entry->id;
+        $this->knowledgeEditData = [
+            'label' => (string) $entry->label,
+            'fact' => (string) ($value['fact'] ?? $value['topic'] ?? ''),
+            'confidence' => (int) ($entry->confidence ?? 70),
+        ];
+    }
+
+    public function cancelKnowledgeEdit(): void
+    {
+        $this->editingKnowledgeId = null;
+        $this->knowledgeEditData = [];
+    }
+
+    public function saveKnowledgeEdit(): void
+    {
+        abort_unless(static::canAccess(), 403);
+
+        $entryId = (int) $this->editingKnowledgeId;
+        $entry = AiKnowledgeEntry::query()->find($entryId);
+        if (! $entry instanceof AiKnowledgeEntry) {
+            $this->cancelKnowledgeEdit();
+
+            return;
+        }
+
+        $label = Str::limit(trim((string) ($this->knowledgeEditData['label'] ?? '')), 180, '');
+        $fact = Str::limit(trim((string) ($this->knowledgeEditData['fact'] ?? '')), 1200, '');
+        $confidence = max(1, min((int) ($this->knowledgeEditData['confidence'] ?? 70), 100));
+
+        if ($label === '') {
+            Notification::make()
+                ->title('Укажите понятное название знания')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $value = (array) ($entry->value ?? []);
+        if ($fact !== '') {
+            $value['fact'] = $fact;
+        }
+
+        $entry->forceFill([
+            'label' => $label,
+            'value' => $value,
+            'confidence' => $confidence,
+            'status' => AiKnowledgeService::STATUS_APPROVED,
+            'reviewed_by_user_id' => Filament::auth()->user()?->id,
+            'reviewed_at' => now(),
+            'review_note' => 'Отредактировано super-admin',
+        ])->save();
+
+        $this->cancelKnowledgeEdit();
+        $this->knowledgeEntries = $this->loadKnowledgeEntries();
+
+        Notification::make()
+            ->title('Знание обновлено и подтверждено')
             ->success()
             ->send();
     }
@@ -351,22 +473,28 @@ class AiAgentSettingsPage extends Page
         }
 
         return AiKnowledgeEntry::query()
-            ->with(['market:id,name', 'sourceUser:id,name,email'])
+            ->with(['market:id,name', 'sourceUser:id,name,email', 'reviewedBy:id,name,email'])
             ->latest('updated_at')
             ->limit(100)
             ->get()
             ->map(function (AiKnowledgeEntry $entry): array {
                 $value = (array) ($entry->value ?? []);
+                $status = AiKnowledgeService::normalizeStatus((string) ($entry->status ?? AiKnowledgeService::STATUS_DRAFT));
 
                 return [
+                    'id' => (int) $entry->id,
                     'updated_at' => $this->formatActionLogDate($entry->updated_at),
                     'dictionary' => Str::limit((string) $entry->dictionary, 80, ''),
                     'dictionary_label' => $this->knowledgeDictionaryLabel((string) $entry->dictionary),
                     'label' => Str::limit((string) $entry->label, 160, ''),
                     'market' => Str::limit((string) ($entry->market?->name ?? 'Рынок'), 80, ''),
                     'source' => Str::limit((string) ($entry->sourceUser?->name ?? 'Не указан'), 80, ''),
+                    'reviewed_by' => Str::limit((string) ($entry->reviewedBy?->name ?? ''), 80, ''),
+                    'reviewed_at' => $this->formatActionLogDate($entry->reviewed_at),
+                    'status' => $status,
+                    'status_label' => AiKnowledgeService::statusLabel($status),
                     'confidence' => (int) ($entry->confidence ?? 0),
-                    'confidence_label' => \App\Services\Ai\AiKnowledgeService::confidenceLabel((int) ($entry->confidence ?? 0)),
+                    'confidence_label' => AiKnowledgeService::confidenceLabel((int) ($entry->confidence ?? 0)),
                     'topic' => Str::limit((string) ($value['topic'] ?? ''), 120, ''),
                     'subject' => Str::limit((string) ($value['subject'] ?? ''), 120, ''),
                     'fact' => Str::limit((string) ($value['fact'] ?? ''), 320, ''),
@@ -375,6 +503,32 @@ class AiAgentSettingsPage extends Page
                 ];
             })
             ->all();
+    }
+
+    private function reviewKnowledge(int $entryId, string $status, string $message): void
+    {
+        abort_unless(static::canAccess(), 403);
+
+        $entry = AiKnowledgeEntry::query()->find($entryId);
+        if (! $entry instanceof AiKnowledgeEntry) {
+            return;
+        }
+
+        $user = Filament::auth()->user();
+        $status = AiKnowledgeService::normalizeStatus($status);
+
+        $entry->forceFill([
+            'status' => $status,
+            'reviewed_by_user_id' => $status === AiKnowledgeService::STATUS_DRAFT ? null : $user?->id,
+            'reviewed_at' => $status === AiKnowledgeService::STATUS_DRAFT ? null : now(),
+        ])->save();
+
+        $this->knowledgeEntries = $this->loadKnowledgeEntries();
+
+        Notification::make()
+            ->title($message)
+            ->success()
+            ->send();
     }
 
     private function knowledgeDictionaryLabel(string $dictionary): string

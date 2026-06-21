@@ -11,6 +11,22 @@ use Illuminate\Support\Str;
 
 class AiKnowledgeService
 {
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_APPROVED = 'approved';
+
+    public const STATUS_REJECTED = 'rejected';
+
+    public const STATUS_STALE = 'stale';
+
+    /**
+     * @return list<string>
+     */
+    public static function visibleStatuses(): array
+    {
+        return [self::STATUS_DRAFT, self::STATUS_APPROVED];
+    }
+
     /**
      * @param array<string, mixed> $value
      * @return array{ok:bool,message:string,entry?:AiKnowledgeEntry}
@@ -46,22 +62,34 @@ class AiKnowledgeService
         $confidence = min($confidence, (int) $authority['score']);
         $key = $this->normalizeKey($key ?: $dictionary.':'.$label.':'.$subject);
 
-        $entry = AiKnowledgeEntry::query()->updateOrCreate([
+        $nextValue = [
+            ...$value,
+            'subject' => $subject !== '' ? $subject : null,
+            'fact' => $fact,
+            'source_authority' => $authority,
+        ];
+
+        $entry = AiKnowledgeEntry::query()->firstOrNew([
             'market_id' => $marketId,
             'dictionary' => $dictionary,
             'key' => $key,
-        ], [
+        ]);
+
+        $status = $this->nextStatusForWrite($entry, [
             'label' => $label,
-            'value' => [
-                ...$value,
-                'subject' => $subject !== '' ? $subject : null,
-                'fact' => $fact,
-                'source_authority' => $authority,
-            ],
+            'value' => $nextValue,
+            'confidence' => $confidence,
+        ]);
+
+        $entry->fill([
+            'label' => $label,
+            'value' => $nextValue,
             'confidence' => $confidence,
             'source_user_id' => $sourceUser?->id,
             'last_seen_at' => now(),
         ]);
+        $this->applyWriteStatus($entry, $status);
+        $entry->save();
 
         return [
             'ok' => true,
@@ -91,22 +119,35 @@ class AiKnowledgeService
         $confidence = min(max(1, min($confidence, 100)), (int) $authority['score']);
         $key = 'responsibility:'.$this->normalizeKey($topic).':user:'.(int) $responsible->id;
 
-        AiKnowledgeEntry::query()->updateOrCreate([
+        $nextValue = [
+            'topic' => $topic,
+            'responsible_user_id' => (int) $responsible->id,
+            'responsible_name' => (string) $responsible->name,
+            'source_authority' => $authority,
+        ];
+
+        $entry = AiKnowledgeEntry::query()->firstOrNew([
             'market_id' => $marketId,
             'dictionary' => 'responsibilities',
             'key' => $key,
-        ], [
-            'label' => "{$topic}: ".($responsible->name ?: 'сотрудник'),
-            'value' => [
-                'topic' => $topic,
-                'responsible_user_id' => (int) $responsible->id,
-                'responsible_name' => (string) $responsible->name,
-                'source_authority' => $authority,
-            ],
+        ]);
+
+        $label = "{$topic}: ".($responsible->name ?: 'сотрудник');
+        $status = $this->nextStatusForWrite($entry, [
+            'label' => $label,
+            'value' => $nextValue,
+            'confidence' => $confidence,
+        ]);
+
+        $entry->fill([
+            'label' => $label,
+            'value' => $nextValue,
             'confidence' => $confidence,
             'source_user_id' => $sourceUser?->id,
             'last_seen_at' => now(),
         ]);
+        $this->applyWriteStatus($entry, $status);
+        $entry->save();
     }
 
     /**
@@ -121,6 +162,7 @@ class AiKnowledgeService
         return AiKnowledgeEntry::query()
             ->where('market_id', $marketId)
             ->where('dictionary', 'responsibilities')
+            ->when($this->hasStatusColumn(), fn ($query) => $query->whereIn('status', self::visibleStatuses()))
             ->latest('updated_at')
             ->limit($limit)
             ->get()
@@ -129,6 +171,8 @@ class AiKnowledgeService
                 'value' => (array) ($entry->value ?? []),
                 'confidence' => (int) $entry->confidence,
                 'confidence_label' => self::confidenceLabel((int) $entry->confidence),
+                'status' => (string) ($entry->status ?? self::STATUS_DRAFT),
+                'status_label' => self::statusLabel((string) ($entry->status ?? self::STATUS_DRAFT)),
             ])
             ->all();
     }
@@ -158,6 +202,7 @@ class AiKnowledgeService
             ->where('market_id', $marketId)
             ->when($dictionary !== null, fn ($query) => $query->where('dictionary', $this->normalizeDictionary($dictionary)))
             ->when($excludeDictionaries !== [], fn ($query) => $query->whereNotIn('dictionary', $excludeDictionaries))
+            ->when($this->hasStatusColumn(), fn ($query) => $query->whereIn('status', self::visibleStatuses()))
             ->latest('updated_at')
             ->limit($limit)
             ->get()
@@ -173,6 +218,8 @@ class AiKnowledgeService
                     'value' => $value,
                     'confidence' => (int) $entry->confidence,
                     'confidence_label' => self::confidenceLabel((int) $entry->confidence),
+                    'status' => (string) ($entry->status ?? self::STATUS_DRAFT),
+                    'status_label' => self::statusLabel((string) ($entry->status ?? self::STATUS_DRAFT)),
                     'source' => $entry->sourceUser?->name ?: 'Источник не указан',
                     'source_authority' => (array) ($value['source_authority'] ?? []),
                     'last_seen_at' => $entry->last_seen_at?->toDateTimeString(),
@@ -258,12 +305,85 @@ class AiKnowledgeService
         return 'нужно подтверждение';
     }
 
+    public static function normalizeStatus(string $status): string
+    {
+        $status = Str::of($status)->lower()->trim()->toString();
+
+        return in_array($status, [
+            self::STATUS_DRAFT,
+            self::STATUS_APPROVED,
+            self::STATUS_REJECTED,
+            self::STATUS_STALE,
+        ], true) ? $status : self::STATUS_DRAFT;
+    }
+
+    public static function statusLabel(string $status): string
+    {
+        return match (self::normalizeStatus($status)) {
+            self::STATUS_APPROVED => 'подтверждено',
+            self::STATUS_REJECTED => 'отклонено',
+            self::STATUS_STALE => 'устарело',
+            default => 'черновик',
+        };
+    }
+
     private function available(): bool
     {
         try {
             return Schema::hasTable('ai_knowledge_entries');
         } catch (\Throwable) {
             return false;
+        }
+    }
+
+    private function hasStatusColumn(): bool
+    {
+        try {
+            return Schema::hasColumn('ai_knowledge_entries', 'status');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param array{label:string,value:array<string,mixed>,confidence:int} $next
+     */
+    private function nextStatusForWrite(AiKnowledgeEntry $entry, array $next): string
+    {
+        if (! $this->hasStatusColumn()) {
+            return self::STATUS_DRAFT;
+        }
+
+        if (! $entry->exists) {
+            return self::STATUS_DRAFT;
+        }
+
+        $currentStatus = self::normalizeStatus((string) ($entry->status ?? self::STATUS_DRAFT));
+        if ($currentStatus !== self::STATUS_APPROVED) {
+            return $currentStatus;
+        }
+
+        $currentValue = [
+            'label' => (string) $entry->label,
+            'value' => (array) ($entry->value ?? []),
+            'confidence' => (int) $entry->confidence,
+        ];
+
+        return $currentValue === $next ? self::STATUS_APPROVED : self::STATUS_DRAFT;
+    }
+
+    private function applyWriteStatus(AiKnowledgeEntry $entry, string $status): void
+    {
+        if (! $this->hasStatusColumn()) {
+            return;
+        }
+
+        $status = self::normalizeStatus($status);
+        $entry->status = $status;
+
+        if ($status !== self::STATUS_APPROVED) {
+            $entry->reviewed_by_user_id = null;
+            $entry->reviewed_at = null;
         }
     }
 

@@ -54,6 +54,26 @@ class AiKnowledgeServiceTest extends TestCase
         $this->assertStringContainsString('remember_knowledge', $mutatingHint);
     }
 
+    public function test_only_draft_and_approved_knowledge_is_visible_to_agent(): void
+    {
+        $this->assertSame([
+            AiKnowledgeService::STATUS_DRAFT,
+            AiKnowledgeService::STATUS_APPROVED,
+        ], AiKnowledgeService::visibleStatuses());
+
+        $this->assertNotContains(AiKnowledgeService::STATUS_REJECTED, AiKnowledgeService::visibleStatuses());
+        $this->assertNotContains(AiKnowledgeService::STATUS_STALE, AiKnowledgeService::visibleStatuses());
+    }
+
+    public function test_knowledge_statuses_have_human_labels(): void
+    {
+        $this->assertSame('черновик', AiKnowledgeService::statusLabel(AiKnowledgeService::STATUS_DRAFT));
+        $this->assertSame('подтверждено', AiKnowledgeService::statusLabel(AiKnowledgeService::STATUS_APPROVED));
+        $this->assertSame('отклонено', AiKnowledgeService::statusLabel(AiKnowledgeService::STATUS_REJECTED));
+        $this->assertSame('устарело', AiKnowledgeService::statusLabel(AiKnowledgeService::STATUS_STALE));
+        $this->assertSame('черновик', AiKnowledgeService::statusLabel('unknown'));
+    }
+
     /**
      * @param list<string> $roles
      */
