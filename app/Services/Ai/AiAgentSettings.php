@@ -167,6 +167,10 @@ PROMPT;
             $actions[] = 'готовить сообщения арендаторам';
         }
 
+        if ($this->canPrepareAction($user, 'update_my_profile', $settings)) {
+            $actions[] = 'обновлять свой рабочий профиль';
+        }
+
         return $actions;
     }
 
