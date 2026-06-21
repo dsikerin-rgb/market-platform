@@ -102,6 +102,8 @@ class StaffPresenceRailTest extends TestCase
         Livewire::test(OnlineStaffRail::class)
             ->assertSeeHtml('staff-presence__stack--ai')
             ->assertSeeHtml("type: 'ai', id: 1")
+            ->assertSeeHtml("aiNudgeStorageKeyPrefix: 'market.aiAgentNudge.dismissedAt.'")
+            ->assertSeeHtml('aiNudgeStorageKey()')
             ->assertSee('ИИ-консультант');
     }
 
