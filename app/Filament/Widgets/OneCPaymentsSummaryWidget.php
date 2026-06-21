@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\Schema;
 
 class OneCPaymentsSummaryWidget extends StatsOverviewWidget
 {
-    protected int|string|array $columnSpan = 'full';
+    protected int|string|array $columnSpan = [
+        'md' => 2,
+        'xl' => 1,
+    ];
 
     protected ?string $pollingInterval = null;
 

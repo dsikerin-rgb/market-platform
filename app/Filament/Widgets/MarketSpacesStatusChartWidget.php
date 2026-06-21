@@ -23,6 +23,8 @@ class MarketSpacesStatusChartWidget extends ChartWidget
 
     protected ?string $heading = 'Площадь по статусам';
 
+    protected ?string $maxHeight = '260px';
+
     protected function getType(): string
     {
         return 'pie';

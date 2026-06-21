@@ -7,7 +7,6 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\MarketResource;
 use App\Filament\Resources\MarketSpaceResource;
-use App\Filament\Resources\TenantResource;
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\ContractDebt;
 use App\Models\Market;
@@ -70,21 +69,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $maintenanceArea = (float) $spaceMetrics['maintenance_area_sqm'];
         $rentableArea = (float) $spaceMetrics['rentable_area_sqm'];
 
-        $tenantsNow = MarketSpaceDashboardMetrics::countCurrentTenants($marketId);
-
-        // Финансовая/отчётная часть зависит от выбранного месяца.
-        [$monthYm, $monthStart, $monthEnd] = $this->resolveFinancialMonthRange($marketId, $tz);
-        $monthLabel = $this->formatMonthLabel($monthYm, $tz);
-
-        $financialSummary = $this->resolveFinancialSummaryForMonth($marketId, $monthYm, $monthStart, $monthEnd);
-        $reportRows = $financialSummary['rows'];
-        $hasReportData = is_int($reportRows) && $reportRows > 0;
-
-        $accrued = $financialSummary['accrued'];
-        $paid = $financialSummary['paid'];
-        $debt = $financialSummary['debt'];
-
-        $tenantsUrl = TenantResource::getUrl('index');
         $spacesUrl = MarketSpaceResource::getUrl('index');
         $occupiedSpacesUrl = $this->appendQueryString($spacesUrl, [
             'tab' => 'occupied',
@@ -105,11 +89,12 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             ],
         ]);
         $stats = [];
+        $marketsCount = $isSuperAdmin ? Market::query()->count() : 1;
 
-        if ($isSuperAdmin) {
+        if ($isSuperAdmin && $marketsCount > 1) {
             $stats[] = $this->makeStat(
                 label: 'Рынков в системе',
-                value: Market::query()->count(),
+                value: $marketsCount,
                 description: 'Открыть список рынков',
                 url: MarketResource::getUrl('index'),
                 color: 'primary',
@@ -117,12 +102,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             );
         }
 
-        $reportDesc = $hasReportData
-            ? ($monthLabel . ' · ' . $financialSummary['source'])
-            : ($monthLabel . ' · нет данных 1С за выбранный месяц');
-        $accruedValue = $accrued ?? 0.0;
-        $paidValue = $paid ?? 0.0;
-        $debtValue = $debt ?? ($accruedValue - $paidValue);
         $marketScopeDesc = $isSuperAdmin ? 'На выбранном рынке' : 'На вашем рынке';
         $accountingScopeDesc = $marketScopeDesc . ' · ' . number_format($totalSpaces, 0, ',', ' ') . ' учётных мест';
         $occupancyRate = $rentableArea > 0
@@ -136,14 +115,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             $occupancyDesc .= ' · служебных: ' . $this->formatArea($maintenanceArea);
         }
 
-        $stats[] = $this->makeStat(
-            label: 'Текущие арендаторы',
-            value: $tenantsNow,
-            description: $marketScopeDesc,
-            url: $tenantsUrl,
-            color: 'primary',
-            icon: 'heroicon-o-users',
-        );
         $stats[] = $this->makeStat(
             label: 'Площадь фонда',
             value: $this->formatArea($totalArea),
@@ -187,31 +158,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             color: $occupiedSpaces > 0 ? 'success' : 'gray',
             icon: 'heroicon-o-chart-bar',
         );
-        $stats[] = $this->makeStat(
-            label: 'Начислено за месяц',
-            value: $this->formatMoney($accruedValue) . ' ₽',
-            description: $reportDesc,
-            url: null,
-            color: 'primary',
-            icon: 'heroicon-o-banknotes',
-        );
-        $stats[] = $this->makeStat(
-            label: 'Оплачено за месяц',
-            value: $this->formatMoney($paidValue) . ' ₽',
-            description: $reportDesc,
-            url: null,
-            color: 'success',
-            icon: 'heroicon-o-arrow-down-circle',
-        );
-        $stats[] = $this->makeStat(
-            label: 'Долг на конец месяца',
-            value: $this->formatMoney($debtValue) . ' ₽',
-            description: $reportDesc,
-            url: null,
-            color: $debtValue > 0 ? 'danger' : 'success',
-            icon: 'heroicon-o-scale',
-        );
-
         return $stats;
     }
 
@@ -221,11 +167,12 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
     private function buildEmptyStats(bool $isSuperAdmin = false, ?string $note = null): array
     {
         $stats = [];
+        $marketsCount = $isSuperAdmin ? Market::query()->count() : 1;
 
-        if ($isSuperAdmin) {
+        if ($isSuperAdmin && $marketsCount > 1) {
             $stats[] = $this->makeStat(
                 label: 'Рынков в системе',
-                value: Market::query()->count(),
+                value: $marketsCount,
                 description: 'Открыть список рынков',
                 url: MarketResource::getUrl('index'),
                 color: 'primary',
@@ -233,15 +180,11 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             );
         }
 
-        $stats[] = $this->makeStat('Текущие арендаторы', 0, $note, null, 'primary', 'heroicon-o-users');
         $stats[] = $this->makeStat('Площадь фонда', '0 м²', $note, null, 'gray', 'heroicon-o-home-modern');
         $stats[] = $this->makeStat('Сдано, м²', '0 м²', $note, null, 'success', 'heroicon-o-check-circle');
         $stats[] = $this->makeStat('Свободные места, м²', '0 м²', $note, null, 'warning', 'heroicon-o-sparkles');
         $stats[] = $this->makeStat('Служебные места, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
-        $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
-        $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');
-        $stats[] = $this->makeStat('Долг на конец месяца', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');
 
         return $stats;
     }
