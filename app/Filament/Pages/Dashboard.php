@@ -517,7 +517,7 @@ class Dashboard extends BaseDashboard
     {
         $user = Filament::auth()->user();
 
-        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+        if ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin() && Market::query()->count() > 1) {
             return [MarketSwitcherWidget::class];
         }
 

@@ -21,7 +21,7 @@ class MarketSpacesStatusChartWidget extends ChartWidget
 
     protected ?string $pollingInterval = null;
 
-    protected ?string $heading = 'Сдано по площади';
+    protected ?string $heading = 'Площадь по статусам';
 
     protected function getType(): string
     {

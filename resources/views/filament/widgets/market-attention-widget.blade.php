@@ -629,7 +629,7 @@
                             type="button"
                             class="market-attention-widget__empty-close"
                             x-on:click.stop="dismiss()"
-                            aria-label="?????? ?????????"
+                            aria-label="Закрыть уведомление"
                         >
                             <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
                         </button>
