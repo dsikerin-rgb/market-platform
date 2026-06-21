@@ -89,13 +89,13 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $occupiedSpacesUrl = $this->appendQueryString($spacesUrl, [
             'tab' => 'occupied',
             'tableFilters' => [
-                'status' => ['value' => 'occupied'],
+                'effective_occupancy' => ['value' => 'occupied'],
             ],
         ]);
         $vacantSpacesUrl = $this->appendQueryString($spacesUrl, [
             'tab' => 'vacant',
             'tableFilters' => [
-                'status' => ['value' => 'vacant'],
+                'effective_occupancy' => ['value' => 'vacant'],
             ],
         ]);
         $maintenanceSpacesUrl = $this->appendQueryString($spacesUrl, [
@@ -159,6 +159,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             url: $occupiedSpacesUrl,
             color: 'success',
             icon: 'heroicon-o-check-circle',
+            linkTitle: 'Открыть фактически занятые места',
         );
         $stats[] = $this->makeStat(
             label: 'Свободные места, м²',
@@ -167,6 +168,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             url: $vacantSpacesUrl,
             color: 'warning',
             icon: 'heroicon-o-sparkles',
+            linkTitle: 'Открыть фактически свободные места',
         );
         $stats[] = $this->makeStat(
             label: 'Служебные места, м²',
@@ -175,6 +177,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             url: $maintenanceSpacesUrl,
             color: 'gray',
             icon: 'heroicon-o-wrench-screwdriver',
+            linkTitle: 'Открыть служебные места',
         );
         $stats[] = $this->makeStat(
             label: 'Заполняемость',
@@ -250,6 +253,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         ?string $url = null,
         string|array|null $color = null,
         ?string $icon = null,
+        ?string $linkTitle = null,
     ): Stat {
         $stat = Stat::make($label, is_int($value) ? number_format($value, 0, ',', ' ') : $value);
 
@@ -270,7 +274,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
                 ->url($url)
                 ->extraAttributes([
                     'class' => 'cursor-pointer',
-                    'title' => 'Открыть раздел',
+                    'title' => $linkTitle ?? 'Открыть раздел',
                 ]);
 
             if (filled($description)) {
