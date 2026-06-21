@@ -18,6 +18,7 @@ use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\Search\LooseSearch;
 use App\Support\StaffConversationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -842,20 +843,39 @@ PROMPT;
         }
 
         $needle = mb_strtolower($search);
-        $pattern = $this->likePattern($needle);
+        $pattern = $this->likePattern($search);
+        $operator = Tenant::query()->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
 
-        return Tenant::query()
+        $tenant = Tenant::query()
             ->where('market_id', $marketId)
-            ->where(function (Builder $builder) use ($pattern): void {
+            ->where(function (Builder $builder) use ($operator, $pattern): void {
                 $builder
-                    ->whereRaw('lower(name) like ?', [$pattern])
-                    ->orWhereRaw('lower(short_name) like ?', [$pattern])
-                    ->orWhereRaw('lower(inn) like ?', [$pattern]);
+                    ->where('name', $operator, $pattern)
+                    ->orWhere('short_name', $operator, $pattern)
+                    ->orWhere('inn', $operator, $pattern);
             })
             ->orderByRaw('CASE WHEN lower(short_name) = ? OR lower(name) = ? THEN 0 ELSE 1 END', [$needle, $needle])
             ->orderBy('short_name')
             ->orderBy('name')
             ->first();
+
+        if ($tenant instanceof Tenant) {
+            return $tenant;
+        }
+
+        return Tenant::query()
+            ->where('market_id', $marketId)
+            ->orderBy('short_name')
+            ->orderBy('name')
+            ->limit(500)
+            ->get()
+            ->first(function (Tenant $candidate) use ($search): bool {
+                return LooseSearch::matchesText(implode(' ', array_filter([
+                    (string) $candidate->name,
+                    (string) $candidate->short_name,
+                    (string) $candidate->inn,
+                ])), $search);
+            });
     }
 
     private function resolveSpace(int $marketId, mixed $id, mixed $query): ?MarketSpace
@@ -1097,22 +1117,44 @@ PROMPT;
     private function searchTenants(int $marketId, string $query, int $limit): array
     {
         $needle = Str::lower($query);
-        $pattern = $this->likePattern($needle);
+        $pattern = $this->likePattern($query);
+        $operator = Tenant::query()->getConnection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
 
-        return Tenant::query()
+        $tenants = Tenant::query()
             ->where('market_id', $marketId)
-            ->where(function (Builder $builder) use ($pattern): void {
+            ->where(function (Builder $builder) use ($operator, $pattern): void {
                 $builder
-                    ->whereRaw('lower(name) like ?', [$pattern])
-                    ->orWhereRaw('lower(short_name) like ?', [$pattern])
-                    ->orWhereRaw('lower(inn) like ?', [$pattern]);
+                    ->where('name', $operator, $pattern)
+                    ->orWhere('short_name', $operator, $pattern)
+                    ->orWhere('inn', $operator, $pattern);
             })
             ->orderByRaw('CASE WHEN lower(short_name) = ? OR lower(name) = ? THEN 0 ELSE 1 END', [$needle, $needle])
             ->orderByDesc('is_active')
             ->orderBy('short_name')
             ->orderBy('name')
             ->limit($limit)
-            ->get()
+            ->get();
+
+        if ($tenants->isEmpty()) {
+            $tenants = Tenant::query()
+                ->where('market_id', $marketId)
+                ->orderByDesc('is_active')
+                ->orderBy('short_name')
+                ->orderBy('name')
+                ->limit(500)
+                ->get()
+                ->filter(function (Tenant $tenant) use ($query): bool {
+                    return LooseSearch::matchesText(implode(' ', array_filter([
+                        (string) $tenant->name,
+                        (string) $tenant->short_name,
+                        (string) $tenant->inn,
+                    ])), $query);
+                })
+                ->take($limit)
+                ->values();
+        }
+
+        return $tenants
             ->map(fn (Tenant $tenant): array => [
                 'resource_type' => 'tenant',
                 'tenant_id' => (int) $tenant->id,

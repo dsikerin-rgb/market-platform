@@ -39,6 +39,8 @@ class QuickChatDrawer extends Component
 {
     use WithFileUploads;
 
+    private const AI_REPLY_DELAY_MS = 950;
+
     private const AI_GREETING_MESSAGE = 'Здравствуйте. Чем помочь по этой странице или данным рынка? Могу проверить информацию, подготовить ссылку, создать задачу, напоминание или отправить сообщение.';
 
     public bool $isOpen = false;
@@ -48,6 +50,20 @@ class QuickChatDrawer extends Component
     public ?int $selectedId = null;
 
     public string $messageBody = '';
+
+    public bool $isAiReplyPending = false;
+
+    public ?string $pendingAiQuestion = null;
+
+    /**
+     * @var list<array{role:string,content:string}>
+     */
+    public array $pendingAiHistory = [];
+
+    /**
+     * @var array<string,mixed>
+     */
+    public array $pendingAiPageContext = [];
 
     /**
      * @var list<array{id:string,user_name:string,body:string,is_own:bool,created_at:string,date_key:string,date_label:string,attachments:list<array<string,mixed>>,chips:list<array{label:string,url:string}>,suggestions:list<string>,pending_action:?array<string,mixed>}>
@@ -163,6 +179,7 @@ class QuickChatDrawer extends Component
         $this->isOpen = false;
         $this->messageBody = '';
         $this->messageAttachments = [];
+        $this->clearPendingAiReply();
         $this->resetErrorBag();
     }
 
@@ -178,7 +195,7 @@ class QuickChatDrawer extends Component
         }
 
         $this->messageBody = $text;
-        $this->sendAiMessage(app(AiConsultantService::class), $text);
+        $this->sendAiMessage($text);
     }
 
     /**
@@ -245,6 +262,7 @@ class QuickChatDrawer extends Component
         $this->selectedId = $id;
         $this->messageBody = '';
         $this->messageAttachments = [];
+        $this->clearPendingAiReply();
         $this->resetErrorBag();
         $this->dispatch('quick-chat-updated');
     }
@@ -285,7 +303,7 @@ class QuickChatDrawer extends Component
                 return;
             }
 
-            $this->sendAiMessage($aiConsultant, $body);
+            $this->sendAiMessage($body);
 
             return;
         }
@@ -352,7 +370,7 @@ class QuickChatDrawer extends Component
             ->send();
     }
 
-    private function sendAiMessage(AiConsultantService $aiConsultant, string $body): void
+    private function sendAiMessage(string $body): void
     {
         $user = $this->currentUser();
         if (! $user || $this->selectedType !== 'ai') {
@@ -364,13 +382,48 @@ class QuickChatDrawer extends Component
             return;
         }
 
+        if ($this->isAiReplyPending) {
+            return;
+        }
+
         $history = $this->aiConversationHistory();
         $this->appendAiMessage($user->name ?: 'Вы', $body, true);
 
         $conversation = $this->aiConversation($user, create: false);
         app(AiUserProfileService::class)->syncFromConversation($user, $conversation, $this->resolveMarketId($user));
 
-        $answer = $aiConsultant->answer($user, $this->resolveMarketId($user), $body, $history, $this->pageContext);
+        $this->pendingAiQuestion = $body;
+        $this->pendingAiHistory = $history;
+        $this->pendingAiPageContext = $this->pageContext;
+        $this->isAiReplyPending = true;
+        $this->messageBody = '';
+        $this->messageAttachments = [];
+        $this->dispatch('quick-chat-updated');
+        $this->dispatch('quick-chat-ai-reply-queued', delay: self::AI_REPLY_DELAY_MS);
+    }
+
+    public function completeAiReply(AiConsultantService $aiConsultant): void
+    {
+        if (! $this->isAiReplyPending || $this->selectedType !== 'ai') {
+            return;
+        }
+
+        $user = $this->currentUser();
+        $question = trim((string) $this->pendingAiQuestion);
+
+        if (! $user || $question === '') {
+            $this->clearPendingAiReply();
+
+            return;
+        }
+
+        $answer = $aiConsultant->answer(
+            $user,
+            $this->resolveMarketId($user),
+            $question,
+            $this->pendingAiHistory,
+            $this->pendingAiPageContext,
+        );
         $metadata = [];
         if (! empty($answer['pending_action']) && is_array($answer['pending_action'])) {
             $metadata['pending_action'] = $answer['pending_action'];
@@ -378,9 +431,16 @@ class QuickChatDrawer extends Component
 
         $this->appendAiMessage('ИИ-консультант', $answer['answer'], false, $answer['chips'] ?? [], $metadata);
 
-        $this->messageBody = '';
-        $this->messageAttachments = [];
+        $this->clearPendingAiReply();
         $this->dispatch('quick-chat-updated');
+    }
+
+    private function clearPendingAiReply(): void
+    {
+        $this->isAiReplyPending = false;
+        $this->pendingAiQuestion = null;
+        $this->pendingAiHistory = [];
+        $this->pendingAiPageContext = [];
     }
 
     public function confirmAiAction(string $messageId): void
@@ -1384,6 +1444,11 @@ class QuickChatDrawer extends Component
         $metadata = (array) ($message->metadata ?? []);
         $createdAt = $message->created_at?->timezone(config('app.timezone'));
         $isOwn = $message->role === AiMessage::ROLE_USER;
+        $suggestions = $this->normalizeAiSuggestions((array) ($metadata['suggestions'] ?? []));
+
+        if (! $isOwn && $this->aiMessageTopicRejected($metadata)) {
+            $suggestions = [];
+        }
 
         return [
             'id' => 'ai-message-'.(int) $message->id,
@@ -1395,9 +1460,27 @@ class QuickChatDrawer extends Component
             'date_label' => $this->formatDateLabel($createdAt),
             'attachments' => [],
             'chips' => $this->normalizeAiChips((array) ($metadata['chips'] ?? [])),
-            'suggestions' => $this->normalizeAiSuggestions((array) ($metadata['suggestions'] ?? [])),
+            'suggestions' => $suggestions,
             'pending_action' => $this->normalizeAiPendingAction($metadata['pending_action'] ?? null),
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $metadata
+     */
+    private function aiMessageTopicRejected(array $metadata): bool
+    {
+        $topic = trim((string) data_get($metadata, 'priority_context.topic', ''));
+        if ($topic === '') {
+            return false;
+        }
+
+        $user = $this->currentUser();
+        if (! $user) {
+            return false;
+        }
+
+        return in_array($topic, app(AiUserProfileService::class)->rejectedTopicKeys($user), true);
     }
 
     /**
