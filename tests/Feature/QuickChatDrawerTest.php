@@ -10,6 +10,7 @@ use App\Livewire\Admin\QuickChatDrawer;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\Market;
+use App\Models\MarketHoliday;
 use App\Models\StaffConversation;
 use App\Models\StaffConversationMessage;
 use App\Models\Task;
@@ -719,6 +720,95 @@ class QuickChatDrawerTest extends TestCase
             'priority' => Task::PRIORITY_HIGH,
             'created_by_user_id' => (int) $admin->id,
         ]);
+    }
+
+    public function test_ai_action_tool_creates_personal_reminder_without_duplicates(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+
+        $payload = [
+            'tool' => 'create_reminder',
+            'title' => 'Позвонить арендатору',
+            'description' => 'Уточнить документы по договору.',
+            'due_at' => '2026-06-21 15:30',
+        ];
+
+        $firstResult = app(AiAgentActionTool::class)->run($admin, (int) $market->id, $payload);
+        $secondResult = app(AiAgentActionTool::class)->run($admin, (int) $market->id, $payload);
+
+        $this->assertTrue($firstResult['ok'], $firstResult['message']);
+        $this->assertSame('Напоминание создано.', $firstResult['message']);
+        $this->assertSame('Напоминание: Позвонить арендатору', $firstResult['chips'][0]['label'] ?? null);
+        $this->assertTrue((bool) ($firstResult['data']['created'] ?? false));
+
+        $this->assertTrue($secondResult['ok'], $secondResult['message']);
+        $this->assertSame('Такое напоминание уже есть.', $secondResult['message']);
+        $this->assertSame('Напоминание: Позвонить арендатору', $secondResult['chips'][0]['label'] ?? null);
+        $this->assertFalse((bool) ($secondResult['data']['created'] ?? true));
+
+        $this->assertSame(
+            1,
+            Task::query()
+                ->where('market_id', (int) $market->id)
+                ->where('title', 'Позвонить арендатору')
+                ->count(),
+        );
+
+        $task = Task::query()
+            ->where('market_id', (int) $market->id)
+            ->where('title', 'Позвонить арендатору')
+            ->firstOrFail();
+
+        $this->assertSame((int) $admin->id, (int) $task->assignee_id);
+        $this->assertStringContainsString('Уточнить документы по договору.', (string) $task->description);
+        $this->assertStringContainsString('Создано ИИ-агентом как напоминание.', (string) $task->description);
+    }
+
+    public function test_ai_action_tool_reuses_existing_event(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+
+        $payload = [
+            'tool' => 'create_event',
+            'title' => 'Санитарный день',
+            'description' => 'Рынок закрыт для посетителей.',
+            'starts_at' => '2026-06-24',
+            'ends_at' => '2026-06-24',
+            'all_day' => true,
+        ];
+
+        $firstResult = app(AiAgentActionTool::class)->run($admin, (int) $market->id, $payload);
+        $secondResult = app(AiAgentActionTool::class)->run($admin, (int) $market->id, $payload);
+
+        $this->assertTrue($firstResult['ok'], $firstResult['message']);
+        $this->assertSame('Событие создано.', $firstResult['message']);
+        $this->assertSame('Событие: Санитарный день', $firstResult['chips'][0]['label'] ?? null);
+        $this->assertTrue((bool) ($firstResult['data']['created'] ?? false));
+
+        $this->assertTrue($secondResult['ok'], $secondResult['message']);
+        $this->assertSame('Такое событие уже есть.', $secondResult['message']);
+        $this->assertSame('Событие: Санитарный день', $secondResult['chips'][0]['label'] ?? null);
+        $this->assertFalse((bool) ($secondResult['data']['created'] ?? true));
+
+        $this->assertSame(
+            1,
+            MarketHoliday::query()
+                ->where('market_id', (int) $market->id)
+                ->where('title', 'Санитарный день')
+                ->count(),
+        );
     }
 
     public function test_ai_action_tool_builds_tenant_chip_from_human_query(): void

@@ -40,4 +40,40 @@ class AiConsultantProfileActionTest extends TestCase
         $this->assertSame('database, telegram', $summary['Каналы уведомлений'] ?? null);
         $this->assertSame('можно писать', $summary['Готовность к общению'] ?? null);
     }
+
+    public function test_work_action_drafts_use_human_labels_for_reminders_and_events(): void
+    {
+        $method = new ReflectionMethod(AiConsultantService::class, 'pendingActionDraft');
+        $method->setAccessible(true);
+
+        $reminderDraft = $method->invoke(new AiConsultantService, [
+            'tool' => 'create_reminder',
+            'title' => 'Позвонить арендатору',
+            'description' => 'Уточнить документы.',
+            'due_at' => '2026-06-21 15:30',
+        ]);
+
+        $eventDraft = $method->invoke(new AiConsultantService, [
+            'tool' => 'create_event',
+            'title' => 'Санитарный день',
+            'description' => 'Рынок закрыт для посетителей.',
+            'starts_at' => '2026-06-24',
+            'all_day' => true,
+        ]);
+
+        $reminderSummary = collect($reminderDraft['summary'])->pluck('value', 'label')->all();
+        $eventSummary = collect($eventDraft['summary'])->pluck('value', 'label')->all();
+
+        $this->assertSame('Новое напоминание', $reminderDraft['title']);
+        $this->assertSame('Создать напоминание', $reminderDraft['confirm_label']);
+        $this->assertSame('Позвонить арендатору', $reminderSummary['Напомнить'] ?? null);
+        $this->assertSame('2026-06-21 15:30', $reminderSummary['Когда'] ?? null);
+        $this->assertSame('мне', $reminderSummary['Кому'] ?? null);
+
+        $this->assertSame('Новое событие', $eventDraft['title']);
+        $this->assertSame('Создать событие', $eventDraft['confirm_label']);
+        $this->assertSame('Санитарный день', $eventSummary['Событие'] ?? null);
+        $this->assertSame('2026-06-24', $eventSummary['Дата начала'] ?? null);
+        $this->assertSame('весь день', $eventSummary['Формат'] ?? null);
+    }
 }

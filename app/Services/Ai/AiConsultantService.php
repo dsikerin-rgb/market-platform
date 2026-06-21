@@ -451,8 +451,8 @@ class AiConsultantService
     private function pendingActionAnswer(array $toolRequest): string
     {
         return match (strtolower(trim((string) ($toolRequest['tool'] ?? $toolRequest['name'] ?? '')))) {
-            'create_reminder' => 'Подготовил напоминание. Проверьте детали и подтвердите, чтобы я его создал.',
-            'create_event' => 'Подготовил событие. Проверьте детали и подтвердите, чтобы я его создал.',
+            'create_reminder' => 'Подготовил напоминание. Проверьте, когда и о чём напомнить, затем подтвердите создание.',
+            'create_event' => 'Подготовил событие. Проверьте дату и описание, затем подтвердите создание.',
             'send_staff_message' => 'Подготовил сообщение сотруднику. Проверьте текст и подтвердите отправку.',
             'send_tenant_message' => 'Подготовил сообщение арендатору. Проверьте текст и подтвердите отправку.',
             'update_my_profile', 'profile_update' => 'Подготовил обновление профиля. Проверьте, что всё верно, и подтвердите сохранение.',
@@ -519,7 +519,17 @@ class AiConsultantService
             }
         };
 
-        if (in_array($tool, ['create_task', 'create_reminder'], true)) {
+        if ($tool === 'create_reminder') {
+            $add('Напомнить', $payload['title'] ?? '');
+            $add('Детали', $payload['description'] ?? $payload['message'] ?? '');
+            $add('Когда', $payload['due_at'] ?? $payload['remind_at'] ?? '');
+            $add('Кому', $payload['assignee_query'] ?? (($payload['assignee_user_id'] ?? null) ? 'выбранный сотрудник' : 'мне'));
+            $add('Важность', $payload['priority'] ?? '');
+
+            return $rows;
+        }
+
+        if ($tool === 'create_task') {
             $add('Название', $payload['title'] ?? '');
             $add('Описание', $payload['description'] ?? $payload['message'] ?? '');
             $add('Срок', $payload['due_at'] ?? $payload['remind_at'] ?? '');
@@ -530,10 +540,14 @@ class AiConsultantService
         }
 
         if ($tool === 'create_event') {
-            $add('Название', $payload['title'] ?? '');
+            $add('Событие', $payload['title'] ?? '');
             $add('Описание', $payload['description'] ?? '');
-            $add('Начало', $payload['starts_at'] ?? $payload['date'] ?? '');
-            $add('Окончание', $payload['ends_at'] ?? '');
+            $add('Дата начала', $payload['starts_at'] ?? $payload['date'] ?? '');
+            $add('Дата окончания', $payload['ends_at'] ?? '');
+
+            if (array_key_exists('all_day', $payload)) {
+                $add('Формат', ((bool) $payload['all_day']) ? 'весь день' : 'по времени');
+            }
 
             return $rows;
         }
