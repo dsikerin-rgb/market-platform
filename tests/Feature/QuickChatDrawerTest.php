@@ -155,11 +155,14 @@ class QuickChatDrawerTest extends TestCase
             ->assertSet('selectedType', 'ai')
             ->assertSet('selectedId', 1)
             ->assertSee('Алексей, вижу, вы сейчас в карточке арендатора')
-            ->assertSee('Проверь долги этого арендатора')
-            ->call('useAiSuggestion', 'Проверь долги этого арендатора')
+            ->assertSee('Давай коротко познакомимся')
+            ->call('useAiSuggestion', 'Давай коротко познакомимся')
             ->assertSet('messageBody', '')
-            ->assertSee('Проверь долги этого арендатора')
-            ->assertSee('Проверяю быстрый вопрос: Проверь долги этого арендатора');
+            ->assertSet('isAiReplyPending', true)
+            ->assertSee('Давай коротко познакомимся')
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
+            ->assertSee('Проверяю быстрый вопрос: Давай коротко познакомимся');
 
         $conversation = AiConversation::query()->firstOrFail();
         $message = AiMessage::query()
@@ -319,6 +322,9 @@ class QuickChatDrawerTest extends TestCase
             ->call('openDrawer', 'ai', 1)
             ->set('messageBody', 'Долгами занимается Марина Николаевна.')
             ->call('sendMessage')
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
             ->assertSee('Запомнила.');
 
         $this->assertDatabaseHas('ai_user_profiles', [
@@ -346,6 +352,9 @@ class QuickChatDrawerTest extends TestCase
             ->call('openDrawer', 'ai', 1)
             ->set('messageBody', 'Зови меня Саша')
             ->call('sendMessage')
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
             ->assertSee('Хорошо, буду обращаться: Саша.');
 
         $this->assertDatabaseHas('ai_user_profiles', [
@@ -384,7 +393,10 @@ class QuickChatDrawerTest extends TestCase
             ->set('messageBody', 'Что по месту ОС8 22?')
             ->call('sendMessage')
             ->assertHasNoErrors()
+            ->assertSet('isAiReplyPending', true)
             ->assertSee('Что по месту ОС8 22?')
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
             ->assertSee('Ответ по базе для рынка #'.(int) $market->id);
     }
 
@@ -435,6 +447,9 @@ class QuickChatDrawerTest extends TestCase
             ->set('messageBody', 'Что по этому арендатору?')
             ->call('sendMessage')
             ->assertHasNoErrors()
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
             ->assertSee('Ответ с сохранённой ссылкой')
             ->assertSee('Открыть арендатора');
 
@@ -517,6 +532,9 @@ class QuickChatDrawerTest extends TestCase
             ->set('messageBody', 'Создай задачу проверить витрину')
             ->call('sendMessage')
             ->assertHasNoErrors()
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
             ->assertSee('Подготовил задачу')
             ->assertSee('Новая задача')
             ->assertSee('Создать задачу')

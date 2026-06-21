@@ -34,6 +34,7 @@
     }"
     x-init="syncPageContext()"
     x-on:mp-open-quick-chat.window="openFromEvent($event)"
+    x-on:quick-chat-ai-reply-queued.window="setTimeout(() => $wire.completeAiReply(), Number($event.detail?.delay || 950))"
     x-on:keydown.escape.window="document.documentElement.classList.remove('quick-chat-open'); $wire.closeDrawer()"
 >
     <style>
@@ -482,6 +483,47 @@
             white-space: pre-wrap;
         }
 
+        .quick-chat__typing {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-top: 0.2rem;
+            color: #64748b;
+            font-size: 0.84rem;
+            font-weight: 750;
+        }
+
+        .quick-chat__typing-dot {
+            width: 0.34rem;
+            height: 0.34rem;
+            border-radius: 999px;
+            background: currentColor;
+            opacity: 0.38;
+            animation: quick-chat-typing 1.05s ease-in-out infinite;
+        }
+
+        .quick-chat__typing-dot:nth-child(2) {
+            animation-delay: 140ms;
+        }
+
+        .quick-chat__typing-dot:nth-child(3) {
+            animation-delay: 280ms;
+        }
+
+        @keyframes quick-chat-typing {
+            0%,
+            80%,
+            100% {
+                transform: translateY(0);
+                opacity: 0.35;
+            }
+
+            40% {
+                transform: translateY(-0.18rem);
+                opacity: 0.82;
+            }
+        }
+
         .quick-chat__chips {
             display: flex;
             flex-wrap: wrap;
@@ -886,6 +928,11 @@
             outline: none;
         }
 
+        .quick-chat__send:disabled {
+            cursor: default;
+            opacity: 0.58;
+        }
+
         .quick-chat__empty {
             display: grid;
             place-items: center;
@@ -1261,6 +1308,22 @@
                             @empty
                                 <div class="quick-chat__empty">В этом диалоге пока нет сообщений.</div>
                             @endforelse
+
+                            @if ($isAiChat && $isAiReplyPending)
+                                <div class="quick-chat__bubble-row" wire:key="quick-chat-ai-typing">
+                                    <div class="quick-chat__bubble">
+                                        <div class="quick-chat__bubble-meta">
+                                            <span>ИИ-консультант</span>
+                                        </div>
+                                        <div class="quick-chat__typing" aria-label="ИИ-консультант печатает">
+                                            <span class="quick-chat__typing-dot"></span>
+                                            <span class="quick-chat__typing-dot"></span>
+                                            <span class="quick-chat__typing-dot"></span>
+                                            <span>печатает</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            @endif
                         </div>
 
                         <form class="quick-chat__composer" wire:submit.prevent="sendMessage">
@@ -1315,7 +1378,14 @@
                                     <span class="quick-chat__uploading" wire:loading wire:target="messageAttachments">Загрузка...</span>
                                 </div>
 
-                                <button type="submit" class="quick-chat__send" wire:loading.attr="disabled" wire:target="sendMessage,messageAttachments" aria-label="{{ $isAiChat ? 'Спросить' : 'Отправить' }}">
+                                <button
+                                    type="submit"
+                                    class="quick-chat__send"
+                                    wire:loading.attr="disabled"
+                                    wire:target="sendMessage,completeAiReply,messageAttachments"
+                                    @disabled($isAiChat && $isAiReplyPending)
+                                    aria-label="{{ $isAiChat ? 'Спросить' : 'Отправить' }}"
+                                >
                                     <x-filament::icon icon="heroicon-o-paper-airplane" class="h-7 w-7" />
                                 </button>
                             </div>
