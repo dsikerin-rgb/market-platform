@@ -32,7 +32,8 @@ class StaffForm
                 ? session('filament.admin.selected_market_id')
                 : $user?->market_id)
             ->visible(fn () => (bool) $user && $user->isSuperAdmin())
-            ->dehydrated(true);
+            ->dehydrated(true)
+            ->columnSpan(['default' => 12, 'lg' => 4]);
 
         $marketHidden = Forms\Components\Hidden::make('market_id')
             ->default(fn () => $user?->market_id)
@@ -73,17 +74,15 @@ class StaffForm
             Section::make('Основные данные')
                 ->description('Имя, email и привязка к рынку')
                 ->schema([
-                    Grid::make(2)->schema([
-                        $marketSelect,
-                        $marketHidden,
-                    ]),
+                    $marketSelect,
+                    $marketHidden,
 
                     Forms\Components\TextInput::make('name')
                         ->label('Имя / ФИО')
                         ->required()
                         ->maxLength(255)
                         ->placeholder('Иванов Иван Иванович')
-                        ->columnSpan(['default' => 12, 'md' => 6]),
+                        ->columnSpan(['default' => 12, 'lg' => 4]),
 
                     Forms\Components\TextInput::make('email')
                         ->label('Email')
@@ -93,7 +92,7 @@ class StaffForm
                         ->unique(ignoreRecord: true)
                         ->placeholder('user@example.com')
                         ->autocomplete('new-email')
-                        ->columnSpan(['default' => 12, 'md' => 6]),
+                        ->columnSpan(['default' => 12, 'lg' => 4]),
 
                     Forms\Components\TextInput::make('phone')
                         ->label('Телефон')
@@ -103,7 +102,7 @@ class StaffForm
                         ->placeholder('+7 900 000-00-00')
                         ->helperText('Необязательный номер для связи с сотрудником.')
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
-                        ->columnSpan(['default' => 12, 'md' => 6]),
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
 
                     Forms\Components\TextInput::make('job_title')
                         ->label('Должность')
@@ -111,7 +110,7 @@ class StaffForm
                         ->nullable()
                         ->placeholder('Управляющий, маркетолог, бухгалтер')
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
-                        ->columnSpan(['default' => 12, 'md' => 6]),
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
 
                     Forms\Components\TextInput::make('department')
                         ->label('Отдел')
@@ -119,15 +118,16 @@ class StaffForm
                         ->nullable()
                         ->placeholder('Администрация, финансы, маркетинг')
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
-                        ->columnSpan(['default' => 12, 'md' => 6]),
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
 
                     Forms\Components\DatePicker::make('birth_date')
                         ->label('Дата рождения')
                         ->native(false)
                         ->displayFormat('d.m.Y')
                         ->helperText('Нужна для напоминаний о днях рождения сотрудников.')
-                        ->columnSpan(['default' => 12, 'md' => 6]),
-                ]),
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
+                ])
+                ->columns(12),
 
                         ]),
 
@@ -178,8 +178,10 @@ class StaffForm
                             }
 
                             return RoleScenarioCatalog::labelForSlug($slug, $name);
-                        }),
-                ]),
+                        })
+                        ->columnSpan(['default' => 12, 'lg' => 6]),
+                ])
+                ->columns(12),
 
                         ]),
 
@@ -236,7 +238,8 @@ class StaffForm
                     && (bool) $user
                     && ($user->isSuperAdmin() || $user->isMarketAdmin())),
 
-                        ]),
+                        ])
+                        ->visible(fn (string $operation): bool => $operation === 'create'),
 
                     Tab::make('ИИ-агент')
                         ->schema([
