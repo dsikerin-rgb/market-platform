@@ -394,9 +394,76 @@ class QuickChatDrawerTest extends TestCase
             ->assertSet('isAiReplyPending', true)
             ->call('completeAiReply')
             ->assertSet('isAiReplyPending', false)
-            ->assertSee('Давай познакомимся коротко')
-            ->assertSee('Какая у вас роль')
-            ->assertSee('покажу его перед сохранением');
+            ->assertSee('Давайте познакомимся коротко')
+            ->assertSee('1/3 Как к вам обращаться')
+            ->assertSee('Оставить как есть')
+            ->assertSee('Потом');
+    }
+
+    public function test_ai_profile_onboarding_wizard_collects_answers_before_confirmation(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+
+        $component = Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->set('messageBody', 'Давай познакомимся')
+            ->call('sendMessage')
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
+            ->assertSee('1/3 Как к вам обращаться')
+            ->set('messageBody', 'Саша')
+            ->call('sendMessage')
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
+            ->assertSee('2/3 Какая у вас роль')
+            ->set('messageBody', 'Управляющий, отвечаю за арендаторов и задачи рынка')
+            ->call('sendMessage')
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
+            ->assertSee('3/3 Какие темы лучше не предлагать')
+            ->set('messageBody', 'Не предлагай долги')
+            ->call('sendMessage')
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
+            ->assertSee('Обновление профиля')
+            ->assertSee('Как обращаться')
+            ->assertSee('Сохранить в профиль');
+
+        $this->assertDatabaseMissing('users', [
+            'id' => (int) $admin->id,
+            'job_title' => 'Управляющий',
+        ]);
+
+        $message = AiMessage::query()
+            ->where('role', AiMessage::ROLE_ASSISTANT)
+            ->where('metadata->pending_action->tool', 'update_my_profile')
+            ->firstOrFail();
+
+        $component
+            ->call('confirmAiAction', 'ai-message-'.(int) $message->id)
+            ->assertHasNoErrors()
+            ->assertSee('Обновила');
+
+        $this->assertDatabaseHas('users', [
+            'id' => (int) $admin->id,
+            'job_title' => 'Управляющий',
+        ]);
+
+        $profile = AiUserProfile::query()->where('user_id', (int) $admin->id)->firstOrFail();
+
+        $this->assertSame('Саша', $profile->preferred_name);
+        $this->assertStringContainsString('арендаторов', (string) $profile->responsibility_scope);
+        $this->assertContains('debts', collect((array) $profile->rejected_topics)->pluck('key')->all());
     }
 
     public function test_ai_light_onboarding_offer_is_snoozed_after_later_reply(): void
