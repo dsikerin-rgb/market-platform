@@ -188,6 +188,11 @@ class AiAgentSettingsPage extends Page
                                     Forms\Components\Textarea::make('roles_can_send_tenant_messages')
                                         ->label('Кто может отправлять сообщения арендаторам')
                                         ->rows(5),
+
+                                    Forms\Components\Textarea::make('roles_can_manage_knowledge')
+                                        ->label('Кто может сохранять знания агента')
+                                        ->helperText('Эти сотрудники могут подтверждать запись фактов в общий справочник агента.')
+                                        ->rows(5),
                                 ])
                                 ->columns(2),
                         ]),
@@ -293,6 +298,7 @@ class AiAgentSettingsPage extends Page
             'roles_can_prepare_events',
             'roles_can_send_staff_messages',
             'roles_can_send_tenant_messages',
+            'roles_can_manage_knowledge',
         ] as $key) {
             $data[$key] = implode("\n", (array) ($data[$key] ?? []));
         }
@@ -355,15 +361,33 @@ class AiAgentSettingsPage extends Page
                 return [
                     'updated_at' => $this->formatActionLogDate($entry->updated_at),
                     'dictionary' => Str::limit((string) $entry->dictionary, 80, ''),
+                    'dictionary_label' => $this->knowledgeDictionaryLabel((string) $entry->dictionary),
                     'label' => Str::limit((string) $entry->label, 160, ''),
                     'market' => Str::limit((string) ($entry->market?->name ?? 'Рынок'), 80, ''),
                     'source' => Str::limit((string) ($entry->sourceUser?->name ?? 'Не указан'), 80, ''),
                     'confidence' => (int) ($entry->confidence ?? 0),
+                    'confidence_label' => \App\Services\Ai\AiKnowledgeService::confidenceLabel((int) ($entry->confidence ?? 0)),
                     'topic' => Str::limit((string) ($value['topic'] ?? ''), 120, ''),
+                    'subject' => Str::limit((string) ($value['subject'] ?? ''), 120, ''),
+                    'fact' => Str::limit((string) ($value['fact'] ?? ''), 320, ''),
                     'responsible' => Str::limit((string) ($value['responsible_name'] ?? ''), 120, ''),
+                    'authority_reason' => Str::limit((string) data_get($value, 'source_authority.reason', ''), 220, ''),
                 ];
             })
             ->all();
+    }
+
+    private function knowledgeDictionaryLabel(string $dictionary): string
+    {
+        return match ($dictionary) {
+            'responsibilities' => 'Ответственность',
+            'market_rules' => 'Правила рынка',
+            'people' => 'Люди',
+            'processes' => 'Процессы',
+            'terms' => 'Термины',
+            'general' => 'Общее',
+            default => Str::headline(str_replace(['_', '-'], ' ', $dictionary)),
+        };
     }
 
     private function canViewAiResources(): bool

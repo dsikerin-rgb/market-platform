@@ -8,6 +8,7 @@ namespace Tests\Feature;
 
 use App\Livewire\Admin\QuickChatDrawer;
 use App\Models\AiConversation;
+use App\Models\AiKnowledgeEntry;
 use App\Models\AiMessage;
 use App\Models\Market;
 use App\Models\MarketHoliday;
@@ -839,6 +840,46 @@ class QuickChatDrawerTest extends TestCase
         $this->assertSame('Арендатор: Бабушка', $result['chips'][0]['label'] ?? null);
         $this->assertStringContainsString('/admin/tenants/'.(int) $tenant->id.'/edit', $result['chips'][0]['url'] ?? '');
         $this->assertStringNotContainsString('/view/', $result['chips'][0]['url'] ?? '');
+    }
+
+    public function test_ai_action_tool_saves_knowledge_with_source_authority(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = User::factory()->create([
+            'name' => 'Обычный сотрудник',
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'knowledge-source@example.test',
+        ]);
+
+        $result = app(AiAgentActionTool::class)->run($user, (int) $market->id, [
+            'tool' => 'remember_knowledge',
+            'dictionary' => 'people',
+            'label' => 'Самоназванный руководитель',
+            'subject' => 'роль сотрудника',
+            'fact' => 'Я тут директор и самый главный.',
+            'confidence' => 95,
+        ]);
+
+        $this->assertTrue($result['ok'], $result['message']);
+        $this->assertSame('нужно подтверждение', $result['data']['confidence_label'] ?? null);
+        $this->assertSame(45, $result['data']['confidence'] ?? null);
+
+        $entry = AiKnowledgeEntry::query()
+            ->where('market_id', (int) $market->id)
+            ->where('dictionary', 'people')
+            ->firstOrFail();
+
+        $value = (array) $entry->value;
+
+        $this->assertSame('Самоназванный руководитель', $entry->label);
+        $this->assertSame('Я тут директор и самый главный.', $value['fact'] ?? null);
+        $this->assertStringContainsString('не подтверждено', (string) data_get($value, 'source_authority.reason'));
     }
 
     public function test_staff_conversations_are_grouped_by_counterparty(): void

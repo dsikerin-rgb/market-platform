@@ -477,19 +477,14 @@ class AiUserProfileService
 
     private function sourceConfidence(User $sourceUser, User $responsible): int
     {
-        if ((int) $sourceUser->id === (int) $responsible->id) {
-            return 60;
-        }
+        $authority = app(AiKnowledgeService::class)->sourceAuthority(
+            $sourceUser,
+            $responsible,
+            'responsibilities',
+            (string) $responsible->name,
+        );
 
-        if (method_exists($sourceUser, 'isSuperAdmin') && $sourceUser->isSuperAdmin()) {
-            return 90;
-        }
-
-        if (method_exists($sourceUser, 'isMarketAdmin') && $sourceUser->isMarketAdmin()) {
-            return 80;
-        }
-
-        return 55;
+        return (int) ($authority['score'] ?? 55);
     }
 
     private function isTopicRejected(string $body): bool

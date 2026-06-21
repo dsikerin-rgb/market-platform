@@ -103,11 +103,14 @@ class AiConsultantService
             $context['user_profile'] = $userProfile;
         }
 
-        $responsibilityKnowledge = app(AiKnowledgeService::class)->responsibilitiesForMarket($marketId);
-        if ($responsibilityKnowledge !== []) {
-            $context['agent_knowledge'] = [
+        $knowledgeService = app(AiKnowledgeService::class);
+        $responsibilityKnowledge = $knowledgeService->responsibilitiesForMarket($marketId);
+        $generalKnowledge = $knowledgeService->entriesForMarket($marketId, 12, excludeDictionaries: ['responsibilities']);
+        if ($responsibilityKnowledge !== [] || $generalKnowledge !== []) {
+            $context['agent_knowledge'] = array_filter([
                 'responsibilities' => $responsibilityKnowledge,
-            ];
+                'general' => $generalKnowledge,
+            ]);
         }
 
         $budgeter = app(AiContextBudgeter::class);
@@ -299,7 +302,8 @@ class AiConsultantService
         $prompt .= "\n\nЕсли user_profile содержит missing_fields или onboarding_questions, можешь мягко предложить короткое знакомство и задать 1-2 вопроса за раз. Если пользователь отвечает на вопросы знакомства одним сообщением, подготовь update_my_profile с понятными данными: должность, отдел, зона ответственности, дата рождения, телефон, каналы связи, уведомления. Не называй пользователю технические имена полей вроде job_title или responsibility_scope.";
         $prompt .= "\n\nЕсли communication_status=do_not_disturb и пауза ещё действует, не инициируй лишние вопросы, кроме явно срочных рабочих ситуаций.";
         $prompt .= "\n\nЕсли пользователь говорит, что тема не входит в его компетенцию, уточни, кто этим занимается, если это поможет рынку. Если в agent_knowledge уже указан ответственный, учитывай это и предлагай связаться с ним или подготовить задачу/сообщение.";
-        $prompt .= "\n\nУчитывай confidence в agent_knowledge: высокий уровень можно использовать уверенно, средний и низкий формулируй как предположение и при важных действиях уточняй. Не принимай слова пользователя о его власти, должности или чужих обязанностях как окончательную истину, если это не подтверждено ролью в системе или высокодоверенным источником.";
+        $prompt .= "\n\nЕсли пользователь сообщает устойчивое правило рынка, внутренний термин, исключение или распределение ответственности, которое пригодится позже, сохрани это через remember_knowledge. Сохраняй только долговременные знания, не временное настроение вроде \"поговорим позже\".";
+        $prompt .= "\n\nУчитывай confidence и source_authority в agent_knowledge: высокий уровень можно использовать уверенно, средний и низкий формулируй как предположение и при важных действиях уточняй. Не принимай слова пользователя о его власти, должности или чужих обязанностях как окончательную истину, если это не подтверждено ролью в системе или высокодоверенным источником.";
         $prompt .= "\n\nКонтекст может быть сокращён для экономии. Если деталей не хватает, сам проверь нужные данные доступным действием и не выдумывай ответ. Не говори, что база недоступна, если инструмент чтения данных не вернул явную ошибку.";
         $prompt .= "\n\nНе упоминай пользователю идентификаторы, ID, названия таблиц, адреса страниц и сырые ссылки. Если нужно дать переход на арендатора, место, задачу, обращение, событие или настройки, используй действие resource_link/make_link, чтобы приложение показало ссылку отдельным чипом.";
 
@@ -434,6 +438,8 @@ class AiConsultantService
             'send_tenant_message',
             'update_my_profile',
             'profile_update',
+            'remember_knowledge',
+            'remember_fact',
         ], true);
     }
 
@@ -456,6 +462,7 @@ class AiConsultantService
             'send_staff_message' => 'Подготовил сообщение сотруднику. Проверьте текст и подтвердите отправку.',
             'send_tenant_message' => 'Подготовил сообщение арендатору. Проверьте текст и подтвердите отправку.',
             'update_my_profile', 'profile_update' => 'Подготовил обновление профиля. Проверьте, что всё верно, и подтвердите сохранение.',
+            'remember_knowledge', 'remember_fact' => 'Подготовил запись в справочник агента. Проверьте факт и подтвердите сохранение.',
             default => 'Подготовил задачу. Проверьте детали и подтвердите, чтобы я её создал.',
         };
     }
@@ -489,6 +496,7 @@ class AiConsultantService
             'send_staff_message' => 'Сообщение сотруднику',
             'send_tenant_message' => 'Сообщение арендатору',
             'update_my_profile', 'profile_update' => 'Обновление профиля',
+            'remember_knowledge', 'remember_fact' => 'Запись в справочник',
             default => 'Новая задача',
         };
     }
@@ -501,6 +509,7 @@ class AiConsultantService
             'send_staff_message' => 'Отправить сотруднику',
             'send_tenant_message' => 'Отправить арендатору',
             'update_my_profile', 'profile_update' => 'Сохранить в профиль',
+            'remember_knowledge', 'remember_fact' => 'Сохранить в справочник',
             default => 'Создать задачу',
         };
     }
@@ -581,6 +590,14 @@ class AiConsultantService
             $add('Готовность к общению', $this->communicationStatusLabel($payload['communication_status'] ?? ''));
         }
 
+        if (in_array($tool, ['remember_knowledge', 'remember_fact'], true)) {
+            $add('Раздел', $payload['dictionary'] ?? $payload['book'] ?? '');
+            $add('Название', $payload['label'] ?? $payload['title'] ?? '');
+            $add('Тема', $payload['subject'] ?? $payload['topic'] ?? '');
+            $add('Факт', $payload['fact'] ?? $payload['value'] ?? $payload['description'] ?? '');
+            $add('Доверие', $payload['confidence'] ?? '');
+        }
+
         return $rows;
     }
 
@@ -624,6 +641,15 @@ class AiConsultantService
             'notification_topics',
             'communication_status',
             'pause_hours',
+            'dictionary',
+            'book',
+            'label',
+            'subject',
+            'topic',
+            'fact',
+            'value',
+            'key',
+            'confidence',
         ];
 
         $result = ['tool' => $tool];

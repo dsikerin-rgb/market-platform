@@ -10,6 +10,7 @@ use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\TaskResource;
 use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
+use App\Models\AiKnowledgeEntry;
 use App\Models\ContractDebt;
 use App\Models\MarketHoliday;
 use App\Models\MarketSpace;
@@ -57,6 +58,7 @@ class AiAgentActionTool
                 'tenant_profile', 'tenant_summary' => $this->tenantProfile($marketId, $payload),
                 'open_tickets_summary', 'ticket_summary' => $this->openTicketsSummary($marketId, $payload),
                 'expiring_contracts', 'contract_expirations' => $this->expiringContracts($marketId, $payload),
+                'remember_knowledge', 'remember_fact' => $this->rememberKnowledge($actor, $marketId, $payload),
                 'resource_link', 'make_link' => $this->resourceLink($actor, $marketId, $payload),
                 default => $this->failure('Неизвестное действие агента.'),
             };
@@ -80,6 +82,7 @@ class AiAgentActionTool
                 '{"tool":"send_staff_message","recipient_user_id":123,"recipient_query":"имя сотрудника","subject":"...","message":"..."}',
                 '{"tool":"send_tenant_message","tenant_id":123,"tenant_query":"название арендатора","subject":"...","message":"...","market_space_id":456}',
                 '{"tool":"update_my_profile","job_title":"...","department":"...","responsibility_scope":"...","birth_date":"21.06.1990","phone":"+7...","preferred_contact_channels":["database","mail","telegram"],"notification_channels":["database","telegram"],"communication_status":"available|do_not_disturb","pause_hours":4}',
+                '{"tool":"remember_knowledge","dictionary":"responsibilities|market_rules|people|processes|terms|general","label":"понятное название","subject":"о чём факт","fact":"устойчивый факт простым русским языком","key":"необязательно","confidence":70}',
             ];
         }
 
@@ -102,12 +105,16 @@ class AiAgentActionTool
         }
 
         $examplesText = implode("\n", $examples);
+        $knowledgeGuidance = $includeMutatingActions
+            ? "\nЕсли в переписке появляется устойчивое знание рынка, которое пригодится позже (правило работы, кто чем занимается, внутренний термин, исключение, договорённость), можешь сохранить его через remember_knowledge. Не сохраняй временное настроение пользователя, одноразовые просьбы и неподтверждённые заявления о власти как высокий факт. Приложение само ограничит доверие к источнику по роли сотрудника."
+            : '';
 
         return <<<'PROMPT'
 
 Если для выполнения просьбы сотрудника нужно действие в сервисе, сначала верни только JSON одного из видов:
 PROMPT
             .$examplesText.
+            $knowledgeGuidance.
             <<<'PROMPT'
 
 Для поиска записи или ссылки по человеческому названию сначала используй find_resource или resource_link с query, а не угадывай номер записи. Для вопросов "кто больше должен" используй debt_leaders. Для вопросов о самой низкой или высокой арендной ставке используй rent_rate_extremes; если результата нет, только тогда проверяй данные через read_sql.
@@ -135,6 +142,49 @@ PROMPT;
             [],
             ['changed' => (array) ($result['changed'] ?? [])],
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function rememberKnowledge(User $actor, int $marketId, array $payload): array
+    {
+        $dictionary = $this->string($payload['dictionary'] ?? $payload['book'] ?? 'general', 80);
+        $label = $this->string($payload['label'] ?? $payload['title'] ?? '', 180);
+        $fact = $this->string($payload['fact'] ?? $payload['value'] ?? $payload['description'] ?? '', 1200);
+        $subject = $this->string($payload['subject'] ?? $payload['topic'] ?? '', 180);
+        $key = $this->string($payload['key'] ?? '', 220);
+        $confidence = is_numeric($payload['confidence'] ?? null) ? (int) $payload['confidence'] : 70;
+
+        $result = app(AiKnowledgeService::class)->remember(
+            marketId: $marketId,
+            dictionary: $dictionary,
+            label: $label,
+            fact: $fact,
+            sourceUser: $actor,
+            subject: $subject !== '' ? $subject : null,
+            key: $key !== '' ? $key : null,
+            confidence: $confidence,
+        );
+
+        if (! (bool) ($result['ok'] ?? false)) {
+            return $this->failure((string) ($result['message'] ?? 'Не удалось сохранить факт в справочник агента.'));
+        }
+
+        $entry = $result['entry'] ?? null;
+        $data = ['created' => true];
+        if ($entry instanceof AiKnowledgeEntry) {
+            $data = [
+                'knowledge_entry_id' => (int) $entry->id,
+                'dictionary' => (string) $entry->dictionary,
+                'confidence' => (int) $entry->confidence,
+                'confidence_label' => AiKnowledgeService::confidenceLabel((int) $entry->confidence),
+                'created' => (bool) $entry->wasRecentlyCreated,
+            ];
+        }
+
+        return $this->success('Запомнила для справочника агента.', [], $data);
     }
 
     /**

@@ -69,6 +69,7 @@ class AiAgentSettings
             'roles_can_prepare_events' => $this->normalizeRoles($data['roles_can_prepare_events'] ?? self::defaultTaskActionRoles()),
             'roles_can_send_staff_messages' => $this->normalizeRoles($data['roles_can_send_staff_messages'] ?? self::defaultStaffMessageRoles()),
             'roles_can_send_tenant_messages' => $this->normalizeRoles($data['roles_can_send_tenant_messages'] ?? self::defaultTenantMessageRoles()),
+            'roles_can_manage_knowledge' => $this->normalizeRoles($data['roles_can_manage_knowledge'] ?? self::defaultKnowledgeManagerRoles()),
         ];
     }
 
@@ -136,6 +137,7 @@ PROMPT;
             'create_event' => 'roles_can_prepare_events',
             'send_staff_message' => 'roles_can_send_staff_messages',
             'send_tenant_message' => 'roles_can_send_tenant_messages',
+            'remember_knowledge', 'remember_fact' => 'roles_can_manage_knowledge',
             default => null,
         };
 
@@ -169,6 +171,10 @@ PROMPT;
 
         if ($this->canPrepareAction($user, 'update_my_profile', $settings)) {
             $actions[] = 'обновлять свой рабочий профиль';
+        }
+
+        if ($this->canPrepareAction($user, 'remember_knowledge', $settings)) {
+            $actions[] = 'сохранять знания в справочник агента';
         }
 
         return $actions;
@@ -245,6 +251,20 @@ PROMPT;
             'market-contract-manager',
             'market-legal-admin',
             'market-service-admin',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function defaultKnowledgeManagerRoles(): array
+    {
+        return [
+            'super-admin',
+            'market-admin',
+            'market-owner',
+            'market-owner-director',
+            'market-manager',
         ];
     }
 
