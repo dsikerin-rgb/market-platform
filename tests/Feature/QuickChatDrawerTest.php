@@ -137,6 +137,18 @@ class QuickChatDrawerTest extends TestCase
             'heading' => 'Арендатор ОС8',
         ];
 
+        app()->instance(AiConsultantService::class, new class extends AiConsultantService
+        {
+            public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
+            {
+                return [
+                    'answer' => 'Проверяю быстрый вопрос: '.$question,
+                    'error_type' => null,
+                    'chips' => [],
+                ];
+            }
+        });
+
         $component = Livewire::test(QuickChatDrawer::class)
             ->call('openDrawer', 'ai', 1, 'page_nudge', $context)
             ->assertSet('isOpen', true)
@@ -145,7 +157,9 @@ class QuickChatDrawerTest extends TestCase
             ->assertSee('Алексей, вижу, вы сейчас в карточке арендатора')
             ->assertSee('Проверь долги этого арендатора')
             ->call('useAiSuggestion', 'Проверь долги этого арендатора')
-            ->assertSet('messageBody', 'Проверь долги этого арендатора');
+            ->assertSet('messageBody', '')
+            ->assertSee('Проверь долги этого арендатора')
+            ->assertSee('Проверяю быстрый вопрос: Проверь долги этого арендатора');
 
         $conversation = AiConversation::query()->firstOrFail();
         $message = AiMessage::query()
@@ -155,11 +169,33 @@ class QuickChatDrawerTest extends TestCase
 
         $this->assertSame('page_nudge_greeting', $message->metadata['kind'] ?? null);
         $this->assertSame('Арендатор ОС8', $conversation->context_page_label);
-        $this->assertSame(1, AiMessage::query()->count());
+        $this->assertSame(3, AiMessage::query()->count());
 
         $component->call('openDrawer', 'ai', 1, 'page_nudge', $context);
 
-        $this->assertSame(1, AiMessage::query()->count());
+        $this->assertSame(3, AiMessage::query()->count());
+    }
+
+    public function test_page_nudge_uses_neutral_name_for_role_like_user_name(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = $this->actingAsMarketAdmin($market);
+        $user->forceFill(['name' => 'Super Admin'])->save();
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1, 'page_nudge', [
+                'url' => 'https://market.example.test/admin/tenants',
+                'path' => '/admin/tenants',
+                'title' => 'Арендаторы',
+                'heading' => 'Арендаторы',
+            ])
+            ->assertSee('Коллега, вижу, вы сейчас в разделе арендаторов')
+            ->assertDontSee('Super, вижу');
     }
 
     public function test_ai_consultant_dialog_accepts_question_and_renders_answer(): void

@@ -176,7 +176,7 @@ class QuickChatDrawer extends Component
         }
 
         $this->messageBody = $text;
-        $this->dispatch('quick-chat-updated');
+        $this->sendAiMessage(app(AiConsultantService::class), $text);
     }
 
     /**
@@ -283,20 +283,7 @@ class QuickChatDrawer extends Component
                 return;
             }
 
-            $history = $this->aiConversationHistory();
-            $this->appendAiMessage($user->name ?: 'Вы', $body, true);
-
-            $answer = $aiConsultant->answer($user, $this->resolveMarketId($user), $body, $history, $this->pageContext);
-            $metadata = [];
-            if (! empty($answer['pending_action']) && is_array($answer['pending_action'])) {
-                $metadata['pending_action'] = $answer['pending_action'];
-            }
-
-            $this->appendAiMessage('ИИ-консультант', $answer['answer'], false, $answer['chips'] ?? [], $metadata);
-
-            $this->messageBody = '';
-            $this->messageAttachments = [];
-            $this->dispatch('quick-chat-updated');
+            $this->sendAiMessage($aiConsultant, $body);
 
             return;
         }
@@ -361,6 +348,34 @@ class QuickChatDrawer extends Component
             ->title('Сообщение отправлено')
             ->success()
             ->send();
+    }
+
+    private function sendAiMessage(AiConsultantService $aiConsultant, string $body): void
+    {
+        $user = $this->currentUser();
+        if (! $user || $this->selectedType !== 'ai') {
+            return;
+        }
+
+        $body = trim($body);
+        if ($body === '') {
+            return;
+        }
+
+        $history = $this->aiConversationHistory();
+        $this->appendAiMessage($user->name ?: 'Вы', $body, true);
+
+        $answer = $aiConsultant->answer($user, $this->resolveMarketId($user), $body, $history, $this->pageContext);
+        $metadata = [];
+        if (! empty($answer['pending_action']) && is_array($answer['pending_action'])) {
+            $metadata['pending_action'] = $answer['pending_action'];
+        }
+
+        $this->appendAiMessage('ИИ-консультант', $answer['answer'], false, $answer['chips'] ?? [], $metadata);
+
+        $this->messageBody = '';
+        $this->messageAttachments = [];
+        $this->dispatch('quick-chat-updated');
     }
 
     public function confirmAiAction(string $messageId): void
@@ -1284,8 +1299,19 @@ class QuickChatDrawer extends Component
             return 'Коллега';
         }
 
+        $lowerName = mb_strtolower($name);
+        $roleLikeNames = ['admin', 'administrator', 'super', 'super admin', 'root'];
+        if (in_array($lowerName, $roleLikeNames, true) || str_contains($lowerName, 'admin')) {
+            return 'Коллега';
+        }
+
         $parts = preg_split('/\s+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
         if ($parts === []) {
+            return 'Коллега';
+        }
+
+        $firstPart = mb_strtolower((string) $parts[0]);
+        if (in_array($firstPart, $roleLikeNames, true)) {
             return 'Коллега';
         }
 
