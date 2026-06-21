@@ -119,6 +119,49 @@ class QuickChatDrawerTest extends TestCase
         ]);
     }
 
+    public function test_page_nudge_opens_ai_consultant_with_contextual_first_message(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = $this->actingAsMarketAdmin($market);
+        $user->forceFill(['name' => 'Иванов Алексей Петрович'])->save();
+
+        $context = [
+            'url' => 'https://market.example.test/admin/tenants/7/edit',
+            'path' => '/admin/tenants/7/edit',
+            'title' => 'Карточка арендатора',
+            'heading' => 'Арендатор ОС8',
+        ];
+
+        $component = Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1, 'page_nudge', $context)
+            ->assertSet('isOpen', true)
+            ->assertSet('selectedType', 'ai')
+            ->assertSet('selectedId', 1)
+            ->assertSee('Алексей, вижу, вы сейчас в карточке арендатора')
+            ->assertSee('Проверь долги этого арендатора')
+            ->call('useAiSuggestion', 'Проверь долги этого арендатора')
+            ->assertSet('messageBody', 'Проверь долги этого арендатора');
+
+        $conversation = AiConversation::query()->firstOrFail();
+        $message = AiMessage::query()
+            ->where('ai_conversation_id', (int) $conversation->id)
+            ->where('role', AiMessage::ROLE_ASSISTANT)
+            ->firstOrFail();
+
+        $this->assertSame('page_nudge_greeting', $message->metadata['kind'] ?? null);
+        $this->assertSame('Арендатор ОС8', $conversation->context_page_label);
+        $this->assertSame(1, AiMessage::query()->count());
+
+        $component->call('openDrawer', 'ai', 1, 'page_nudge', $context);
+
+        $this->assertSame(1, AiMessage::query()->count());
+    }
+
     public function test_ai_consultant_dialog_accepts_question_and_renders_answer(): void
     {
         $market = Market::query()->create([
