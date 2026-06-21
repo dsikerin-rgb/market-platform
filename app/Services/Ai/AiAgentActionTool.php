@@ -48,6 +48,7 @@ class AiAgentActionTool
                 'create_event' => $this->createEvent($actor, $marketId, $payload),
                 'send_staff_message' => $this->sendStaffMessage($actor, $marketId, $payload),
                 'send_tenant_message' => $this->sendTenantMessage($actor, $marketId, $payload),
+                'update_my_profile', 'profile_update' => $this->updateMyProfile($actor, $marketId, $payload),
                 'find_resource', 'find_record' => $this->findResource($actor, $marketId, $payload),
                 'debt_leaders', 'top_debt_tenants' => $this->debtLeaders($marketId, $payload),
                 'rent_rate_extremes', 'rent_rates' => $this->rentRateExtremes($marketId, $payload),
@@ -77,6 +78,7 @@ class AiAgentActionTool
                 '{"tool":"create_event","title":"...","description":"...","starts_at":"2026-06-21","ends_at":"2026-06-21","all_day":true}',
                 '{"tool":"send_staff_message","recipient_user_id":123,"recipient_query":"имя сотрудника","subject":"...","message":"..."}',
                 '{"tool":"send_tenant_message","tenant_id":123,"tenant_query":"название арендатора","subject":"...","message":"...","market_space_id":456}',
+                '{"tool":"update_my_profile","job_title":"...","department":"...","responsibility_scope":"...","birth_date":"21.06.1990","phone":"+7...","preferred_contact_channels":["database","mail","telegram"],"notification_channels":["database","telegram"],"communication_status":"available|do_not_disturb","pause_hours":4}',
             ];
         }
 
@@ -109,8 +111,28 @@ PROMPT
 
 Для поиска записи или ссылки по человеческому названию сначала используй find_resource или resource_link с query, а не угадывай номер записи. Для вопросов "кто больше должен" используй debt_leaders. Для вопросов о самой низкой или высокой арендной ставке используй rent_rate_extremes; если результата нет, только тогда проверяй данные через read_sql.
 Для вопросов о свободных местах используй vacant_spaces. Для краткой сводки по арендатору используй tenant_profile. Для вопросов о проблемных обращениях используй open_tickets_summary. Для договоров, которые скоро заканчиваются, используй expiring_contracts.
+Для безопасного обновления рабочего профиля текущего сотрудника используй update_my_profile. Не меняй email, пароль, роли, права доступа и другие данные авторизации через агента.
 Используй действия только когда сотрудник просит выполнить работу, отправить сообщение, создать задачу, событие, напоминание, проверить типовую аналитику или дать ссылку на запись. Если в ответе нужна карточка арендатора, места, задачи, обращения, события или настроек, всегда используй resource_link/make_link. Не показывай пользователю JSON, ID, идентификаторы и сырые адреса страниц. После результата действия отвечай простым русским языком и опирайся на приложенные чипы.
 PROMPT;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function updateMyProfile(User $actor, int $marketId, array $payload): array
+    {
+        $result = app(AiUserProfileService::class)->updateEditableProfile($actor, $marketId, $payload);
+
+        if (! (bool) ($result['ok'] ?? false)) {
+            return $this->failure((string) ($result['message'] ?? 'Не удалось обновить профиль.'));
+        }
+
+        return $this->success(
+            (string) ($result['message'] ?? 'Профиль обновлён.'),
+            [],
+            ['changed' => (array) ($result['changed'] ?? [])],
+        );
     }
 
     /**

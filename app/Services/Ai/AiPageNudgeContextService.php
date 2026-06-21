@@ -30,6 +30,7 @@ class AiPageNudgeContextService
             ->all();
 
         $candidates = array_values(array_filter([
+            $this->onboardingCandidate($profile),
             $this->tasksCandidate($user, $marketId, $pageContext),
             $this->ticketsCandidate($user, $marketId, $pageContext),
             $this->debtsCandidate($marketId, $pageContext),
@@ -53,6 +54,38 @@ class AiPageNudgeContextService
             'suggestions' => [],
             'priority' => 'neutral',
             'profile_summary' => (string) ($profile['summary'] ?? '') ?: null,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $profile
+     * @return array<string, mixed>|null
+     */
+    private function onboardingCandidate(array $profile): ?array
+    {
+        if ((string) ($profile['communication_status'] ?? 'available') === 'do_not_disturb') {
+            return null;
+        }
+
+        $questions = array_values(array_filter(array_map(
+            static fn (mixed $question): string => trim((string) $question),
+            (array) ($profile['onboarding_questions'] ?? []),
+        )));
+
+        if ($questions === []) {
+            return null;
+        }
+
+        return [
+            'topic' => 'profile_onboarding',
+            'priority' => 'info',
+            'weight' => 55,
+            'message' => 'могу коротко познакомиться и настроить подсказки под вашу работу. Задам пару вопросов и не буду трогать данные для входа.',
+            'suggestions' => [
+                'Давай коротко познакомимся',
+                $questions[0],
+                'Позже, сейчас не нужно',
+            ],
         ];
     }
 

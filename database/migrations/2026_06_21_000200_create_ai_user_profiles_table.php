@@ -14,9 +14,15 @@ return new class extends Migration
             $table->foreignId('market_id')->nullable()->constrained()->nullOnDelete();
             $table->string('job_title')->nullable();
             $table->string('department')->nullable();
+            $table->date('birth_date')->nullable();
             $table->text('responsibility_scope')->nullable();
             $table->json('regular_tasks')->nullable();
             $table->json('rejected_topics')->nullable();
+            $table->json('preferred_contact_channels')->nullable();
+            $table->string('communication_status', 40)->default('available');
+            $table->timestamp('communication_paused_until')->nullable();
+            $table->string('onboarding_status', 40)->default('new');
+            $table->timestamp('onboarding_completed_at')->nullable();
             $table->json('facts')->nullable();
             $table->text('profile_summary')->nullable();
             $table->timestamp('inferred_from_messages_at')->nullable();

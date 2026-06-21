@@ -8,7 +8,9 @@ use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\AiUserProfile;
 use App\Models\User;
+use App\Support\UserNotificationPreferences;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
@@ -25,12 +27,14 @@ class AiUserProfileService
 
         $profile = AiUserProfile::query()->firstOrNew(['user_id' => (int) $user->id]);
         $profile->market_id = $marketId > 0 ? $marketId : ((int) ($user->market_id ?? 0) ?: null);
+        $this->clearExpiredCommunicationPause($profile);
 
         if ($conversation instanceof AiConversation) {
             $this->learnFromMessages($profile, $conversation, $user);
         }
 
         $profile->profile_summary = $this->buildSummary($profile, $user);
+        $this->refreshOnboardingState($profile, $user);
         $profile->save();
 
         return $this->compact($profile);
@@ -49,7 +53,16 @@ class AiUserProfileService
             ->where('user_id', (int) $user->id)
             ->first();
 
-        return $profile instanceof AiUserProfile ? $this->compact($profile) : [];
+        if (! $profile instanceof AiUserProfile) {
+            return [];
+        }
+
+        $this->clearExpiredCommunicationPause($profile);
+        if ($profile->isDirty()) {
+            $profile->save();
+        }
+
+        return $this->compact($profile);
     }
 
     /**
@@ -104,6 +117,7 @@ class AiUserProfileService
 
             $facts = $this->learnFactsFromText($profile, $body, $facts);
             $regularTasks = $this->learnRegularTasksFromText($body, $regularTasks);
+            $this->learnCommunicationState($profile, $body);
             $this->learnCrossUserResponsibilities($profile, $body, $user);
 
             if ($this->isTopicRejected($body)) {
@@ -136,6 +150,25 @@ class AiUserProfileService
             $profile->department = $this->cleanExtract($matches[1]);
         }
 
+        if (preg_match('/(?:дата рождения|день рождения|родился|родилась)\s*[:\-—]?\s*(\d{1,2}[.\-\/]\d{1,2}(?:[.\-\/]\d{2,4})?)/uiu', $body, $matches)) {
+            $birthDate = $this->parseBirthDate($matches[1]);
+            if ($birthDate !== null) {
+                $profile->birth_date = $birthDate;
+            }
+        }
+
+        if (preg_match('/(?:мой телефон|телефон)\s*[:\-—]?\s*(\+?[\d\s().\-]{7,24})/uiu', $body, $matches)) {
+            $phone = $this->normalizePhone($matches[1]);
+            if ($phone !== '' && blank($profile->user?->phone ?? null)) {
+                $facts['phone_candidate'] = $phone;
+            }
+        }
+
+        $channels = $this->channelsFromText($body);
+        if ($channels !== []) {
+            $profile->preferred_contact_channels = $channels;
+        }
+
         if (preg_match('/(?:я отвечаю за|моя зона ответственности|мой периметр|в моей зоне)\s*[:\-—]?\s*(.{3,180})/uiu', $body, $matches)) {
             $profile->responsibility_scope = $this->cleanExtract($matches[1], 180);
         }
@@ -145,6 +178,98 @@ class AiUserProfileService
         }
 
         return $facts;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{ok:bool,message:string,changed:list<string>}
+     */
+    public function updateEditableProfile(User $user, int $marketId, array $payload): array
+    {
+        if (! $this->profilesAvailable()) {
+            return ['ok' => false, 'message' => 'Профиль ИИ-агента пока недоступен.', 'changed' => []];
+        }
+
+        $profile = AiUserProfile::query()->firstOrNew(['user_id' => (int) $user->id]);
+        $profile->market_id = $marketId > 0 ? $marketId : ((int) ($user->market_id ?? 0) ?: null);
+        $this->clearExpiredCommunicationPause($profile);
+        $changed = [];
+
+        foreach ([
+            'job_title' => 'должность',
+            'department' => 'отдел',
+            'responsibility_scope' => 'зона ответственности',
+        ] as $field => $label) {
+            if (array_key_exists($field, $payload)) {
+                $value = $this->cleanExtract((string) $payload[$field], $field === 'responsibility_scope' ? 240 : 100);
+                $profile->{$field} = $value !== '' ? $value : null;
+                $changed[] = $label;
+            }
+        }
+
+        if (array_key_exists('birth_date', $payload)) {
+            $birthDate = $this->parseBirthDate((string) $payload['birth_date']);
+            if ($birthDate !== null) {
+                $profile->birth_date = $birthDate;
+                $changed[] = 'дата рождения';
+            }
+        }
+
+        if (array_key_exists('regular_tasks', $payload)) {
+            $tasks = array_values(array_filter(array_map(
+                fn (mixed $task): string => $this->cleanExtract((string) $task, 180),
+                (array) $payload['regular_tasks'],
+            )));
+            $profile->regular_tasks = array_slice(array_unique($tasks), 0, 12);
+            $changed[] = 'регулярные задачи';
+        }
+
+        if (array_key_exists('preferred_contact_channels', $payload)) {
+            $channels = app(UserNotificationPreferences::class)->normalizeChannels($payload['preferred_contact_channels']);
+            $profile->preferred_contact_channels = $channels;
+            $changed[] = 'предпочитаемые каналы связи';
+        }
+
+        if (array_key_exists('communication_status', $payload)) {
+            $status = $this->normalizeCommunicationStatus((string) $payload['communication_status']);
+            $profile->communication_status = $status;
+            $profile->communication_paused_until = $status === 'do_not_disturb'
+                ? now()->addHours(max(1, min((int) ($payload['pause_hours'] ?? 4), 24)))
+                : null;
+            $changed[] = 'готовность к общению';
+        }
+
+        if (array_key_exists('phone', $payload)) {
+            $phone = $this->normalizePhone((string) $payload['phone']);
+            if ($phone !== '') {
+                $user->forceFill(['phone' => $phone])->save();
+                $changed[] = 'телефон';
+            }
+        }
+
+        if (array_key_exists('notification_channels', $payload) || array_key_exists('notification_topics', $payload)) {
+            $preferences = app(UserNotificationPreferences::class);
+            $existing = (array) ($user->notification_preferences ?? []);
+            $normalized = $preferences->normalizeForStorage([
+                ...$existing,
+                'channels' => $payload['notification_channels'] ?? ($existing['channels'] ?? []),
+                'topics' => $payload['notification_topics'] ?? ($existing['topics'] ?? null),
+            ], fallbackSelfManage: (bool) ($existing['self_manage'] ?? false));
+            $user->forceFill(['notification_preferences' => $normalized])->save();
+            $changed[] = 'уведомления';
+        }
+
+        $profile->profile_summary = $this->buildSummary($profile, $user);
+        $this->refreshOnboardingState($profile, $user);
+        $profile->save();
+
+        return [
+            'ok' => true,
+            'message' => $changed === []
+                ? 'Не нашла безопасных полей для обновления.'
+                : 'Обновила: '.implode(', ', array_values(array_unique($changed))).'.',
+            'changed' => array_values(array_unique($changed)),
+        ];
     }
 
     /**
@@ -163,6 +288,31 @@ class AiUserProfileService
         }
 
         return $regularTasks;
+    }
+
+    private function learnCommunicationState(AiUserProfile $profile, string $body): void
+    {
+        $text = mb_strtolower($body);
+
+        foreach (['не беспокоить', 'не хочу общаться', 'не готов общаться', 'позже', 'сейчас неудобно'] as $needle) {
+            if (str_contains($text, $needle)) {
+                $profile->communication_status = 'do_not_disturb';
+                $profile->communication_paused_until = str_contains($text, 'не беспокоить')
+                    ? now()->addDay()
+                    : now()->addHours(4);
+
+                return;
+            }
+        }
+
+        foreach (['можно писать', 'готов общаться', 'можешь спрашивать', 'на связи'] as $needle) {
+            if (str_contains($text, $needle)) {
+                $profile->communication_status = 'available';
+                $profile->communication_paused_until = null;
+
+                return;
+            }
+        }
     }
 
     private function learnCrossUserResponsibilities(AiUserProfile $sourceProfile, string $body, User $sourceUser): void
@@ -414,6 +564,10 @@ class AiUserProfileService
             $parts[] = 'Отдел из переписки: '.trim((string) $profile->department);
         }
 
+        if ($profile->birth_date) {
+            $parts[] = 'Дата рождения: '.$profile->birth_date->format('d.m.Y');
+        }
+
         if (filled($profile->responsibility_scope)) {
             $parts[] = 'Зона ответственности из переписки: '.trim((string) $profile->responsibility_scope);
         }
@@ -431,6 +585,11 @@ class AiUserProfileService
 
         if ($rejected !== '') {
             $parts[] = 'Не предлагать без явной просьбы: '.$rejected;
+        }
+
+        if ((string) ($profile->communication_status ?? 'available') !== 'available') {
+            $until = $profile->communication_paused_until?->format('d.m.Y H:i');
+            $parts[] = 'Готовность к общению: временно не беспокоить'.($until ? " до {$until}" : '');
         }
 
         if ($parts === []) {
@@ -466,11 +625,90 @@ class AiUserProfileService
         return [
             'job_title' => $profile->job_title,
             'department' => $profile->department,
+            'birth_date' => $profile->birth_date?->toDateString(),
             'responsibility_scope' => $profile->responsibility_scope,
             'regular_tasks' => array_values(array_filter((array) ($profile->regular_tasks ?? []))),
             'rejected_topics' => array_values((array) ($profile->rejected_topics ?? [])),
+            'preferred_contact_channels' => array_values(array_filter((array) ($profile->preferred_contact_channels ?? []))),
+            'communication_status' => (string) ($profile->communication_status ?? 'available'),
+            'communication_paused_until' => $profile->communication_paused_until?->toDateTimeString(),
+            'onboarding_status' => (string) ($profile->onboarding_status ?? 'new'),
+            'missing_fields' => $this->missingProfileFields($profile, $profile->user),
+            'onboarding_questions' => $this->onboardingQuestions($profile, $profile->user),
             'summary' => $profile->profile_summary,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function missingProfileFields(AiUserProfile $profile, ?User $user): array
+    {
+        $missing = [];
+
+        if (blank($profile->job_title)) {
+            $missing[] = 'job_title';
+        }
+
+        if (blank($profile->responsibility_scope)) {
+            $missing[] = 'responsibility_scope';
+        }
+
+        if (! $profile->birth_date) {
+            $missing[] = 'birth_date';
+        }
+
+        if (! $user instanceof User || blank($user->phone ?? null)) {
+            $missing[] = 'phone';
+        }
+
+        if (! $user instanceof User || blank($user->telegram_chat_id ?? null)) {
+            $missing[] = 'telegram';
+        }
+
+        if (! $user instanceof User || empty((array) ($user->notification_preferences ?? []))) {
+            $missing[] = 'notification_preferences';
+        }
+
+        if (! $user instanceof User || blank($user->staff_avatar_path ?? null)) {
+            $missing[] = 'profile_photo';
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function onboardingQuestions(AiUserProfile $profile, ?User $user): array
+    {
+        $questions = [
+            'job_title' => 'Какая у вас роль на рынке?',
+            'responsibility_scope' => 'За какие вопросы вы отвечаете?',
+            'birth_date' => 'Когда у вас день рождения?',
+            'phone' => 'Какой телефон можно указать для связи?',
+            'notification_preferences' => 'Куда вам удобнее получать уведомления: в сервисе, на почту или в Telegram?',
+        ];
+
+        return collect($this->missingProfileFields($profile, $user))
+            ->map(static fn (string $field): ?string => $questions[$field] ?? null)
+            ->filter()
+            ->take(3)
+            ->values()
+            ->all();
+    }
+
+    private function refreshOnboardingState(AiUserProfile $profile, User $user): void
+    {
+        $this->clearExpiredCommunicationPause($profile);
+
+        $missing = $this->missingProfileFields($profile, $user);
+        $coreMissing = array_intersect($missing, ['job_title', 'responsibility_scope', 'phone']);
+
+        $profile->onboarding_status = $coreMissing === [] ? 'complete' : 'incomplete';
+        if ($profile->onboarding_status === 'complete' && ! $profile->onboarding_completed_at) {
+            $profile->onboarding_completed_at = now();
+        }
     }
 
     private function cleanExtract(string $value, int $limit = 80): string
@@ -479,6 +717,77 @@ class AiUserProfileService
         $value = preg_replace('/[.?!].*$/u', '', $value) ?: $value;
 
         return trim(Str::limit($value, $limit, ''));
+    }
+
+    private function parseBirthDate(string $value): ?Carbon
+    {
+        $value = trim($value);
+
+        foreach (['d.m.Y', 'd-m-Y', 'd/m/Y', 'd.m.y', 'd-m-y', 'd/m/y', 'd.m', 'd-m', 'd/m'] as $format) {
+            try {
+                $date = Carbon::createFromFormat($format, $value);
+                if ($date instanceof Carbon) {
+                    if (in_array($format, ['d.m', 'd-m', 'd/m'], true)) {
+                        $date->year = 1900;
+                    }
+
+                    return $date->startOfDay();
+                }
+            } catch (\Throwable) {
+                // Try the next common date format.
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizePhone(string $value): string
+    {
+        $value = trim($value);
+
+        return preg_replace('/[^\d+]/', '', $value) ?: '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function channelsFromText(string $body): array
+    {
+        $text = mb_strtolower($body);
+        $channels = [];
+
+        if (str_contains($text, 'телеграм') || str_contains($text, 'telegram')) {
+            $channels[] = 'telegram';
+        }
+
+        if (str_contains($text, 'почт') || str_contains($text, 'email') || str_contains($text, 'e-mail')) {
+            $channels[] = 'mail';
+        }
+
+        if (str_contains($text, 'в сервисе') || str_contains($text, 'в кабинете') || str_contains($text, 'на странице')) {
+            $channels[] = 'database';
+        }
+
+        return array_values(array_unique($channels));
+    }
+
+    private function normalizeCommunicationStatus(string $status): string
+    {
+        $status = mb_strtolower(trim($status));
+
+        return in_array($status, ['available', 'do_not_disturb'], true) ? $status : 'available';
+    }
+
+    private function clearExpiredCommunicationPause(AiUserProfile $profile): void
+    {
+        if (
+            (string) ($profile->communication_status ?? 'available') === 'do_not_disturb'
+            && $profile->communication_paused_until
+            && $profile->communication_paused_until->isPast()
+        ) {
+            $profile->communication_status = 'available';
+            $profile->communication_paused_until = null;
+        }
     }
 
     private function topicLabel(string $topic): string
