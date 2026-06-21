@@ -12,6 +12,9 @@ use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Str;
@@ -59,161 +62,189 @@ class AiAgentSettingsPage extends Page
 
     public function form(Schema $schema): Schema
     {
+        $tabs = Tabs::make('ai_agent_settings_tabs')
+            ->columnSpanFull();
+
+        if (method_exists($tabs, 'persistTabInQueryString')) {
+            $tabs->persistTabInQueryString();
+        }
+
         return $schema
             ->statePath('data')
             ->components([
-                Section::make('Поведение агента')
-                    ->description('Эти настройки управляют тем, как ИИ-консультант отвечает сотрудникам в модалке "Диалоги".')
-                    ->schema([
-                        Forms\Components\Toggle::make('enabled')
-                            ->label('Включить ИИ-консультанта')
-                            ->default(true),
+                $tabs->tabs([
+                    Tab::make('Поведение')
+                        ->schema([
+                            Section::make('Поведение агента')
+                                ->description('Эти настройки управляют тем, как ИИ-консультант отвечает сотрудникам в модалке "Диалоги".')
+                                ->schema([
+                                    Forms\Components\Toggle::make('enabled')
+                                        ->label('Включить ИИ-консультанта')
+                                        ->default(true),
 
-                        Forms\Components\Toggle::make('context_pack_enabled')
-                            ->label('Передавать краткий контекст рынка')
-                            ->helperText('Сводка по арендаторам, местам, договорам, обращениям и заметным проблемам.')
-                            ->default(true),
+                                    Forms\Components\Toggle::make('context_pack_enabled')
+                                        ->label('Передавать краткий контекст рынка')
+                                        ->helperText('Сводка по арендаторам, местам, договорам, обращениям и заметным проблемам.')
+                                        ->default(true),
 
-                        Forms\Components\Toggle::make('page_context_enabled')
-                            ->label('Передавать текущую страницу')
-                            ->helperText('Агент будет видеть адрес и заголовок страницы, на которой сотрудник открыл диалог.')
-                            ->default(true),
+                                    Forms\Components\Toggle::make('page_context_enabled')
+                                        ->label('Передавать текущую страницу')
+                                        ->helperText('Агент будет видеть адрес и заголовок страницы, на которой сотрудник открыл диалог.')
+                                        ->default(true),
 
-                        Forms\Components\Toggle::make('action_tools_enabled')
-                            ->label('Разрешить рабочие действия')
-                            ->helperText('Создание задач, событий, напоминаний, сообщений сотрудникам и обращений арендаторам через проверки приложения.')
-                            ->default(true),
+                                    Forms\Components\Toggle::make('action_tools_enabled')
+                                        ->label('Разрешить рабочие действия')
+                                        ->helperText('Создание задач, событий, напоминаний, сообщений сотрудникам и обращений арендаторам через проверки приложения.')
+                                        ->default(true),
 
-                        Forms\Components\Toggle::make('business_tools_enabled')
-                            ->label('Разрешить типовые проверки')
-                            ->helperText('Быстрые рабочие проверки: должники, ставки, свободные места, сводка по арендатору, обращения и договоры.')
-                            ->default(true),
+                                    Forms\Components\Toggle::make('business_tools_enabled')
+                                        ->label('Разрешить типовые проверки')
+                                        ->helperText('Быстрые рабочие проверки: должники, ставки, свободные места, сводка по арендатору, обращения и договоры.')
+                                        ->default(true),
 
-                        Forms\Components\Textarea::make('system_prompt')
-                            ->label('Системный промпт')
-                            ->rows(12)
-                            ->required()
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(2),
+                                    Forms\Components\Textarea::make('system_prompt')
+                                        ->label('Системный промпт')
+                                        ->rows(12)
+                                        ->required()
+                                        ->columnSpanFull(),
+                                ])
+                                ->columns(2),
+                        ]),
 
-                Section::make('Самостоятельные проверки')
-                    ->description('Агент может сам выполнять безопасные проверки данных. Приложение пропускает только проверки без изменения записей.')
-                    ->schema([
-                        Forms\Components\Toggle::make('read_only_sql_enabled')
-                            ->label('Разрешить проверку данных без записи')
-                            ->helperText('Модель не получает пароль от базы. Приложение проверяет запрос и выполняет его в режиме без изменения данных.')
-                            ->default(true),
+                    Tab::make('Проверки')
+                        ->schema([
+                            Section::make('Самостоятельные проверки')
+                                ->description('Агент может сам выполнять безопасные проверки данных. Приложение пропускает только проверки без изменения записей.')
+                                ->schema([
+                                    Forms\Components\Toggle::make('read_only_sql_enabled')
+                                        ->label('Разрешить проверку данных без записи')
+                                        ->helperText('Модель не получает пароль от базы. Приложение проверяет запрос и выполняет его в режиме без изменения данных.')
+                                        ->default(true),
 
-                        Forms\Components\TextInput::make('max_tool_rounds')
-                            ->label('Максимум проверок за один вопрос')
-                            ->numeric()
-                            ->minValue(0)
-                            ->maxValue(6)
-                            ->step(1),
+                                    Forms\Components\TextInput::make('max_tool_rounds')
+                                        ->label('Максимум проверок за один вопрос')
+                                        ->numeric()
+                                        ->minValue(0)
+                                        ->maxValue(6)
+                                        ->step(1),
 
-                        Forms\Components\TextInput::make('sql_row_limit')
-                            ->label('Лимит строк результата')
-                            ->numeric()
-                            ->minValue(5)
-                            ->maxValue(200)
-                            ->step(5),
+                                    Forms\Components\TextInput::make('sql_row_limit')
+                                        ->label('Лимит строк результата')
+                                        ->numeric()
+                                        ->minValue(5)
+                                        ->maxValue(200)
+                                        ->step(5),
 
-                        Forms\Components\TextInput::make('sql_timeout_ms')
-                            ->label('Таймаут проверки')
-                            ->numeric()
-                            ->minValue(250)
-                            ->maxValue(10000)
-                            ->step(250)
-                            ->suffix('мс'),
+                                    Forms\Components\TextInput::make('sql_timeout_ms')
+                                        ->label('Таймаут проверки')
+                                        ->numeric()
+                                        ->minValue(250)
+                                        ->maxValue(10000)
+                                        ->step(250)
+                                        ->suffix('мс'),
 
-                        Forms\Components\Textarea::make('allowed_tables')
-                            ->label('Разделы данных для проверки')
-                            ->helperText('Одно служебное имя на строку. Все проверки также ограничиваются текущим рынком.')
-                            ->rows(8)
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(2),
+                                    Forms\Components\Textarea::make('allowed_tables')
+                                        ->label('Разделы данных для проверки')
+                                        ->helperText('Одно служебное имя на строку. Все проверки также ограничиваются текущим рынком.')
+                                        ->rows(8)
+                                        ->columnSpanFull(),
+                                ])
+                                ->columns(2),
+                        ]),
 
-                Section::make('Права по ролям')
-                    ->description('Одна роль на строку. Эти правила применяются не только к интерфейсу, но и к серверной проверке действий агента.')
-                    ->schema([
-                        Forms\Components\Textarea::make('roles_can_use_agent')
-                            ->label('Кто может открыть ИИ-консультанта')
-                            ->rows(5),
+                    Tab::make('Права')
+                        ->schema([
+                            Section::make('Права по ролям')
+                                ->description('Одна роль на строку. Эти правила применяются не только к интерфейсу, но и к серверной проверке действий агента.')
+                                ->schema([
+                                    Forms\Components\Textarea::make('roles_can_use_agent')
+                                        ->label('Кто может открыть ИИ-консультанта')
+                                        ->rows(5),
 
-                        Forms\Components\Textarea::make('roles_can_read_data')
-                            ->label('Кто может проверять данные рынка')
-                            ->rows(5),
+                                    Forms\Components\Textarea::make('roles_can_read_data')
+                                        ->label('Кто может проверять данные рынка')
+                                        ->rows(5),
 
-                        Forms\Components\Textarea::make('roles_can_prepare_tasks')
-                            ->label('Кто может создавать задачи и напоминания')
-                            ->rows(5),
+                                    Forms\Components\Textarea::make('roles_can_prepare_tasks')
+                                        ->label('Кто может создавать задачи и напоминания')
+                                        ->rows(5),
 
-                        Forms\Components\Textarea::make('roles_can_prepare_events')
-                            ->label('Кто может создавать события')
-                            ->rows(5),
+                                    Forms\Components\Textarea::make('roles_can_prepare_events')
+                                        ->label('Кто может создавать события')
+                                        ->rows(5),
 
-                        Forms\Components\Textarea::make('roles_can_send_staff_messages')
-                            ->label('Кто может отправлять сообщения сотрудникам')
-                            ->rows(5),
+                                    Forms\Components\Textarea::make('roles_can_send_staff_messages')
+                                        ->label('Кто может отправлять сообщения сотрудникам')
+                                        ->rows(5),
 
-                        Forms\Components\Textarea::make('roles_can_send_tenant_messages')
-                            ->label('Кто может отправлять сообщения арендаторам')
-                            ->rows(5),
-                    ])
-                    ->columns(2),
+                                    Forms\Components\Textarea::make('roles_can_send_tenant_messages')
+                                        ->label('Кто может отправлять сообщения арендаторам')
+                                        ->rows(5),
+                                ])
+                                ->columns(2),
+                        ]),
 
-                Section::make('Параметры ответа')
-                    ->schema([
-                        Forms\Components\TextInput::make('temperature')
-                            ->label('Свобода формулировок')
-                            ->numeric()
-                            ->minValue(0)
-                            ->maxValue(1)
-                            ->step(0.1)
-                            ->helperText('0-0.2: точнее и суше. Больше 0.4 обычно не нужно для рабочих ответов.'),
+                    Tab::make('Ответ')
+                        ->schema([
+                            Section::make('Параметры ответа')
+                                ->schema([
+                                    Forms\Components\TextInput::make('temperature')
+                                        ->label('Свобода формулировок')
+                                        ->numeric()
+                                        ->minValue(0)
+                                        ->maxValue(1)
+                                        ->step(0.1)
+                                        ->helperText('0-0.2: точнее и суше. Больше 0.4 обычно не нужно для рабочих ответов.'),
 
-                        Forms\Components\TextInput::make('max_tokens')
-                            ->label('Максимальная длина ответа')
-                            ->numeric()
-                            ->minValue(600)
-                            ->maxValue(6000)
-                            ->step(100),
+                                    Forms\Components\TextInput::make('max_tokens')
+                                        ->label('Максимальная длина ответа')
+                                        ->numeric()
+                                        ->minValue(600)
+                                        ->maxValue(6000)
+                                        ->step(100),
 
-                        Forms\Components\TextInput::make('history_messages')
-                            ->label('Сообщений истории')
-                            ->numeric()
-                            ->minValue(0)
-                            ->maxValue(20)
-                            ->step(1)
-                            ->helperText('Помогает понимать продолжения вроде "проверь сам" или "а по этому месту?".'),
+                                    Forms\Components\TextInput::make('history_messages')
+                                        ->label('Сообщений истории')
+                                        ->numeric()
+                                        ->minValue(0)
+                                        ->maxValue(20)
+                                        ->step(1)
+                                        ->helperText('Помогает понимать продолжения вроде "проверь сам" или "а по этому месту?".'),
 
-                        Forms\Components\TextInput::make('history_budget_tokens')
-                            ->label('Лимит памяти диалога')
-                            ->numeric()
-                            ->minValue(300)
-                            ->maxValue(4000)
-                            ->step(100)
-                            ->helperText('Ограничивает, сколько прошлой переписки агент берет в новый ответ.'),
+                                    Forms\Components\TextInput::make('history_budget_tokens')
+                                        ->label('Лимит памяти диалога')
+                                        ->numeric()
+                                        ->minValue(300)
+                                        ->maxValue(4000)
+                                        ->step(100)
+                                        ->helperText('Ограничивает, сколько прошлой переписки агент берет в новый ответ.'),
 
-                        Forms\Components\TextInput::make('context_budget_tokens')
-                            ->label('Лимит контекста')
-                            ->numeric()
-                            ->minValue(400)
-                            ->maxValue(8000)
-                            ->step(100)
-                            ->helperText('Ограничивает пакет данных по рынку и текущей странице, чтобы не тратить лишнее.'),
+                                    Forms\Components\TextInput::make('context_budget_tokens')
+                                        ->label('Лимит контекста')
+                                        ->numeric()
+                                        ->minValue(400)
+                                        ->maxValue(8000)
+                                        ->step(100)
+                                        ->helperText('Ограничивает пакет данных по рынку и текущей странице, чтобы не тратить лишнее.'),
 
-                        Forms\Components\TextInput::make('context_item_limit')
-                            ->label('Записей в списках контекста')
-                            ->numeric()
-                            ->minValue(1)
-                            ->maxValue(20)
-                            ->step(1)
-                            ->helperText('Сколько арендаторов, мест, договоров и других записей передавать сразу.'),
-                    ])
-                    ->columns(3),
+                                    Forms\Components\TextInput::make('context_item_limit')
+                                        ->label('Записей в списках контекста')
+                                        ->numeric()
+                                        ->minValue(1)
+                                        ->maxValue(20)
+                                        ->step(1)
+                                        ->helperText('Сколько арендаторов, мест, договоров и других записей передавать сразу.'),
+                                ])
+                                ->columns(3),
+                        ]),
+
+                    Tab::make('Журнал')
+                        ->schema([
+                            View::make('filament.pages.partials.ai-agent-action-log')
+                                ->viewData(fn (): array => ['actionLog' => $this->actionLog])
+                                ->columnSpanFull(),
+                        ]),
+                ]),
             ]);
     }
 
