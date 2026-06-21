@@ -200,6 +200,7 @@ class AiUserProfileService
         $profile->market_id = $marketId > 0 ? $marketId : ((int) ($user->market_id ?? 0) ?: null);
         $this->clearExpiredCommunicationPause($profile);
         $changed = [];
+        $skipped = [];
 
         if (array_key_exists('preferred_name', $payload)) {
             $value = $this->cleanPreferredName((string) $payload['preferred_name']);
@@ -265,27 +266,51 @@ class AiUserProfileService
         }
 
         if (array_key_exists('notification_channels', $payload) || array_key_exists('notification_topics', $payload)) {
-            $preferences = app(UserNotificationPreferences::class);
-            $existing = (array) ($user->notification_preferences ?? []);
-            $normalized = $preferences->normalizeForStorage([
-                ...$existing,
-                'channels' => $payload['notification_channels'] ?? ($existing['channels'] ?? []),
-                'topics' => $payload['notification_topics'] ?? ($existing['topics'] ?? null),
-            ], fallbackSelfManage: (bool) ($existing['self_manage'] ?? false));
-            $user->forceFill(['notification_preferences' => $normalized])->save();
-            $changed[] = 'уведомления';
+            if (! $user->canSelfManageNotificationPreferences()) {
+                $skipped[] = 'уведомления доступны только пользователю с правом личной настройки';
+            } else {
+                $preferences = app(UserNotificationPreferences::class);
+                $existing = (array) ($user->notification_preferences ?? []);
+                $requestedChannels = $payload['notification_channels'] ?? ($existing['channels'] ?? []);
+                $channels = $preferences->normalizeChannels($requestedChannels);
+
+                if (in_array('telegram', $channels, true) && blank($user->telegram_chat_id ?? null)) {
+                    $channels = array_values(array_diff($channels, ['telegram']));
+                    $skipped[] = 'Telegram нужно сначала подключить';
+                }
+
+                if ($channels === []) {
+                    $channels = ['database'];
+                }
+
+                $normalized = $preferences->normalizeForStorage([
+                    ...$existing,
+                    'channels' => $channels,
+                    'topics' => $payload['notification_topics'] ?? ($existing['topics'] ?? null),
+                ], fallbackSelfManage: (bool) ($existing['self_manage'] ?? false) || $user->isSuperAdmin() || $user->isMarketAdmin());
+                $user->forceFill(['notification_preferences' => $normalized])->save();
+                $changed[] = 'уведомления';
+            }
         }
 
         $profile->profile_summary = $this->buildSummary($profile, $user);
         $this->refreshOnboardingState($profile, $user);
         $profile->save();
 
+        $changed = array_values(array_unique($changed));
+        $skipped = array_values(array_unique($skipped));
+        $message = $changed === []
+            ? 'Не нашла безопасных полей для обновления.'
+            : 'Обновила: '.implode(', ', $changed).'.';
+
+        if ($skipped !== []) {
+            $message .= ' Не изменила: '.implode(', ', $skipped).'.';
+        }
+
         return [
-            'ok' => true,
-            'message' => $changed === []
-                ? 'Не нашла безопасных полей для обновления.'
-                : 'Обновила: '.implode(', ', array_values(array_unique($changed))).'.',
-            'changed' => array_values(array_unique($changed)),
+            'ok' => $changed !== [] || $skipped === [],
+            'message' => $message,
+            'changed' => $changed,
         ];
     }
 
@@ -686,6 +711,17 @@ class AiUserProfileService
     private function compact(AiUserProfile $profile): array
     {
         $user = $profile->user;
+        $notificationPreferences = $user instanceof User
+            ? (array) ($user->notification_preferences ?? [])
+            : [];
+        $preferences = app(UserNotificationPreferences::class);
+        $notificationChannels = $preferences->normalizeChannels($notificationPreferences['channels'] ?? []);
+        if ($notificationChannels === [] && $user instanceof User) {
+            $notificationChannels = $preferences->defaultChannelsForUser($user);
+        }
+        $notificationTopics = array_key_exists('topics', $notificationPreferences)
+            ? $preferences->normalizeTopics($notificationPreferences['topics'])
+            : ($user instanceof User ? UserNotificationPreferences::defaultTopicsForUser($user) : []);
 
         return [
             'preferred_name' => $profile->preferred_name,
@@ -696,6 +732,13 @@ class AiUserProfileService
             'regular_tasks' => array_values(array_filter((array) ($profile->regular_tasks ?? []))),
             'rejected_topics' => array_values((array) ($profile->rejected_topics ?? [])),
             'preferred_contact_channels' => array_values(array_filter((array) ($profile->preferred_contact_channels ?? []))),
+            'telegram_connected' => $user instanceof User && filled($user->telegram_chat_id ?? null),
+            'has_profile_photo' => $user instanceof User && filled($user->staff_avatar_path ?? null),
+            'notification_preferences' => [
+                'can_self_manage' => $user instanceof User && $user->canSelfManageNotificationPreferences(),
+                'channels' => $notificationChannels,
+                'topics' => $notificationTopics,
+            ],
             'communication_status' => (string) ($profile->communication_status ?? 'available'),
             'communication_paused_until' => $profile->communication_paused_until?->toDateTimeString(),
             'onboarding_status' => (string) ($profile->onboarding_status ?? 'new'),

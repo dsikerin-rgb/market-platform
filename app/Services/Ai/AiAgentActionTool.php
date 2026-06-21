@@ -20,6 +20,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Support\Search\LooseSearch;
 use App\Support\StaffConversationService;
+use App\Support\TelegramChatLinkService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +51,7 @@ class AiAgentActionTool
                 'send_staff_message' => $this->sendStaffMessage($actor, $marketId, $payload),
                 'send_tenant_message' => $this->sendTenantMessage($actor, $marketId, $payload),
                 'update_my_profile', 'profile_update' => $this->updateMyProfile($actor, $marketId, $payload),
+                'telegram_connect_link', 'connect_telegram' => $this->telegramConnectLink($actor),
                 'find_resource', 'find_record' => $this->findResource($actor, $marketId, $payload),
                 'debt_leaders', 'top_debt_tenants' => $this->debtLeaders($marketId, $payload),
                 'rent_rate_extremes', 'rent_rates' => $this->rentRateExtremes($marketId, $payload),
@@ -79,7 +81,7 @@ class AiAgentActionTool
                 '{"tool":"create_event","title":"...","description":"...","starts_at":"2026-06-21","ends_at":"2026-06-21","all_day":true}',
                 '{"tool":"send_staff_message","recipient_user_id":123,"recipient_query":"имя сотрудника","subject":"...","message":"..."}',
                 '{"tool":"send_tenant_message","tenant_id":123,"tenant_query":"название арендатора","subject":"...","message":"...","market_space_id":456}',
-                '{"tool":"update_my_profile","job_title":"...","department":"...","responsibility_scope":"...","birth_date":"21.06.1990","phone":"+7...","preferred_contact_channels":["database","mail","telegram"],"notification_channels":["database","telegram"],"communication_status":"available|do_not_disturb","pause_hours":4}',
+                '{"tool":"update_my_profile","job_title":"...","department":"...","responsibility_scope":"...","birth_date":"21.06.1990","phone":"+7...","preferred_contact_channels":["database","mail","telegram"],"notification_channels":["database","telegram"],"notification_topics":["messages","tasks","reminders"],"communication_status":"available|do_not_disturb","pause_hours":4}',
             ];
         }
 
@@ -93,7 +95,8 @@ class AiAgentActionTool
                 '{"tool":"tenant_profile","tenant_id":123,"tenant_query":"название арендатора"}',
                 '{"tool":"open_tickets_summary","limit":10}',
                 '{"tool":"expiring_contracts","days":30,"limit":10}',
-                '{"tool":"resource_link","resource_type":"tenant|space|task|ticket|event|settings|current_page","id":123,"query":"название или номер","label":"понятное название"}',
+                '{"tool":"telegram_connect_link"}',
+                '{"tool":"resource_link","resource_type":"tenant|space|task|ticket|event|settings|profile|notification_settings|current_page","id":123,"query":"название или номер","label":"понятное название"}',
             ];
         }
 
@@ -113,6 +116,7 @@ PROMPT
 Для поиска записи или ссылки по человеческому названию сначала используй find_resource или resource_link с query, а не угадывай номер записи. Для вопросов "кто больше должен" используй debt_leaders. Для вопросов о самой низкой или высокой арендной ставке используй rent_rate_extremes; если результата нет, только тогда проверяй данные через read_sql.
 Для вопросов о свободных местах используй vacant_spaces. Для краткой сводки по арендатору используй tenant_profile. Для вопросов о проблемных обращениях используй open_tickets_summary. Для договоров, которые скоро заканчиваются, используй expiring_contracts.
 Для безопасного обновления рабочего профиля текущего сотрудника используй update_my_profile. Это действие приложение покажет сотруднику перед сохранением. Не меняй email, пароль, роли, права доступа и другие данные авторизации через агента.
+Если сотрудник просит подключить Telegram, не проси chat_id и не объясняй технические идентификаторы: используй telegram_connect_link. Если ссылка бота недоступна, дай ссылку-чип на кабинет уведомлений через resource_link с resource_type=notification_settings. Если сотрудник просит поставить или заменить фото профиля, дай ссылку-чип на профиль через resource_link с resource_type=profile. Если сотрудник выбирает каналы или темы уведомлений, подготовь update_my_profile с notification_channels и notification_topics.
 Используй действия только когда сотрудник просит выполнить работу, отправить сообщение, создать задачу, событие, напоминание, проверить типовую аналитику или дать ссылку на запись. Если в ответе нужна карточка арендатора, места, задачи, обращения, события или настроек, всегда используй resource_link/make_link. Не показывай пользователю JSON, ID, идентификаторы и сырые адреса страниц. После результата действия отвечай простым русским языком и опирайся на приложенные чипы.
 PROMPT;
     }
@@ -129,10 +133,54 @@ PROMPT;
             return $this->failure((string) ($result['message'] ?? 'Не удалось обновить профиль.'));
         }
 
+        $changed = (array) ($result['changed'] ?? []);
+        $chips = [];
+        $message = (string) ($result['message'] ?? 'Профиль обновлён.');
+        if (in_array('уведомления', $changed, true) || str_contains($message, 'Telegram')) {
+            $chips[] = $this->chip('Открыть уведомления', '/admin/profile/notifications');
+        }
+
         return $this->success(
             (string) ($result['message'] ?? 'Профиль обновлён.'),
-            [],
-            ['changed' => (array) ($result['changed'] ?? [])],
+            $chips,
+            ['changed' => $changed],
+        );
+    }
+
+    /**
+     * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
+     */
+    private function telegramConnectLink(User $actor): array
+    {
+        if (! (bool) config('services.telegram.enabled', false)) {
+            return $this->success(
+                'Telegram-подключение сейчас отключено в настройках сервиса.',
+                [$this->chip('Открыть уведомления', '/admin/profile/notifications')],
+                ['telegram_enabled' => false],
+            );
+        }
+
+        $payload = app(TelegramChatLinkService::class)->issue($actor, 20);
+        $deepLink = trim((string) ($payload['deep_link'] ?? ''));
+        if ($deepLink === '') {
+            return $this->success(
+                'Telegram можно подключить в кабинете уведомлений.',
+                [$this->chip('Открыть уведомления', '/admin/profile/notifications')],
+                ['telegram_enabled' => true, 'bot_link_available' => false],
+            );
+        }
+
+        return $this->success(
+            'Ссылка подключения Telegram создана на 20 минут.',
+            [
+                $this->chip('Подключить Telegram', $deepLink),
+                $this->chip('Открыть уведомления', '/admin/profile/notifications'),
+            ],
+            [
+                'telegram_enabled' => true,
+                'bot_link_available' => true,
+                'expires_at' => (string) ($payload['expires_at'] ?? ''),
+            ],
         );
     }
 
@@ -321,6 +369,8 @@ PROMPT;
             'ticket', 'request' => $this->ticketChipForPayload($marketId, $id, $query ?? $payload['ticket_query'] ?? null, $label),
             'event', 'holiday' => $this->eventChipForPayload($marketId, $id, $query ?? $payload['event_query'] ?? null, $label),
             'settings', 'ai_settings' => $this->chip($label !== '' ? $label : 'Настройки ИИ-агента', '/admin/ai-agent-settings'),
+            'profile', 'user_profile', 'my_profile' => $this->chip($label !== '' ? $label : 'Открыть профиль', '/admin/profile'),
+            'notification_settings', 'notifications', 'telegram_settings' => $this->chip($label !== '' ? $label : 'Настроить уведомления', '/admin/profile/notifications'),
             'current_page' => $this->currentPageChip($payload, $label),
             default => null,
         };

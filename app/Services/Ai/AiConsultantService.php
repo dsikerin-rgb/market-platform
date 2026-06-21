@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Ai;
 
 use App\Models\User;
+use App\Support\UserNotificationPreferences;
 use Illuminate\Http\Client\Factory as Http;
 use Illuminate\Support\Str;
 
@@ -297,6 +298,8 @@ class AiConsultantService
 
         $prompt .= "\n\nЕсли в контексте есть user_profile, учитывай должность, отдел, зону ответственности, регулярные задачи и отклонённые темы сотрудника. Не предлагай отклонённые темы и задачи без явной просьбы пользователя вернуться к ним.";
         $prompt .= "\n\nЕсли user_profile содержит missing_fields или onboarding_questions, можешь мягко предложить короткое знакомство и задать 1-2 вопроса за раз. Если пользователь отвечает на вопросы знакомства одним сообщением, подготовь update_my_profile с понятными данными: должность, отдел, зона ответственности, дата рождения, телефон, каналы связи, уведомления. Не называй пользователю технические имена полей вроде job_title или responsibility_scope.";
+        $prompt .= "\n\nЕсли пользователь хочет подключить Telegram, не проси у него chat_id, ID, токен или команду вручную. Используй telegram_connect_link, чтобы приложение показало чип подключения. Если ссылка бота недоступна, подготовь ссылку-чип на кабинет уведомлений через resource_link с resource_type=notification_settings и коротко скажи, что там можно открыть бота или QR-код. Если пользователь хочет поставить фото профиля, подготовь ссылку-чип на профиль через resource_link с resource_type=profile; сам файл через чат не запрашивай, если в интерфейсе профиля уже есть загрузка фото.";
+        $prompt .= "\n\nЕсли пользователь просит настроить уведомления, используй понятные каналы: В кабинете, Email, Telegram. Для сохранения выбора подготовь update_my_profile с notification_channels и при необходимости notification_topics. Не включай Telegram как канал, если из контекста видно, что Telegram ещё не подключён; сначала дай ссылку на кабинет уведомлений.";
         $prompt .= "\n\nЕсли communication_status=do_not_disturb и пауза ещё действует, не инициируй лишние вопросы, кроме явно срочных рабочих ситуаций.";
         $prompt .= "\n\nЕсли пользователь говорит, что тема не входит в его компетенцию, уточни, кто этим занимается, если это поможет рынку. Если в agent_knowledge уже указан ответственный, учитывай это и предлагай связаться с ним или подготовить задачу/сообщение.";
         $prompt .= "\n\nУчитывай confidence в agent_knowledge: высокий уровень можно использовать уверенно, средний и низкий формулируй как предположение и при важных действиях уточняй. Не принимай слова пользователя о его власти, должности или чужих обязанностях как окончательную истину, если это не подтверждено ролью в системе или высокодоверенным источником.";
@@ -561,9 +564,9 @@ class AiConsultantService
             $add('Дата рождения', $payload['birth_date'] ?? '');
             $add('Телефон', $payload['phone'] ?? '');
             $add('Регулярные задачи', $this->humanList($payload['regular_tasks'] ?? []));
-            $add('Удобные каналы связи', $this->humanList($payload['preferred_contact_channels'] ?? []));
-            $add('Каналы уведомлений', $this->humanList($payload['notification_channels'] ?? []));
-            $add('Темы уведомлений', $this->humanList($payload['notification_topics'] ?? []));
+            $add('Удобные каналы связи', $this->humanList($payload['preferred_contact_channels'] ?? [], UserNotificationPreferences::channelLabels()));
+            $add('Каналы уведомлений', $this->humanList($payload['notification_channels'] ?? [], UserNotificationPreferences::channelLabels()));
+            $add('Темы уведомлений', $this->humanList($payload['notification_topics'] ?? [], UserNotificationPreferences::topicLabels()));
             $add('Готовность к общению', $this->communicationStatusLabel($payload['communication_status'] ?? ''));
         }
 
@@ -647,14 +650,20 @@ class AiConsultantService
     /**
      * @param mixed $value
      */
-    private function humanList(mixed $value): string
+    private function humanList(mixed $value, array $labels = []): string
     {
         if (! is_array($value)) {
-            return trim((string) $value);
+            $item = trim((string) $value);
+
+            return $labels[$item] ?? $item;
         }
 
         return collect($value)
-            ->map(static fn (mixed $item): string => trim((string) $item))
+            ->map(static function (mixed $item) use ($labels): string {
+                $key = trim((string) $item);
+
+                return $labels[$key] ?? $key;
+            })
             ->filter()
             ->implode(', ');
     }
