@@ -35,7 +35,95 @@
     };
 @endphp
 
-<div class="staff-presence" wire:poll.10s aria-label="Сотрудники">
+<div
+    class="staff-presence"
+    wire:poll.10s
+    aria-label="Сотрудники"
+    x-data="{
+        aiNudgeVisible: document.documentElement.classList.contains('ai-help-nudge-visible'),
+        aiNudgeStorageKey: 'market.aiAgentNudge.dismissedAt',
+        aiNudgeDelayMs: 30000,
+        aiNudgeCooldownMs: 24 * 60 * 60 * 1000,
+        initAiNudge() {
+            if (! window.marketAiAgentNudge) {
+                window.marketAiAgentNudge = { initialized: false, timer: null };
+            }
+
+            if (! window.marketAiAgentNudge.initialized) {
+                window.marketAiAgentNudge.initialized = true;
+                window.marketAiAgentNudge.timer = window.setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('mp-show-ai-help-nudge'));
+                }, this.aiNudgeDelayMs);
+            }
+        },
+        canShowAiNudge() {
+            if (window.innerWidth < 1024) {
+                return false;
+            }
+
+            if (document.hidden || document.documentElement.classList.contains('quick-chat-open')) {
+                return false;
+            }
+
+            if (document.querySelector('#database-notifications.fi-modal-open')) {
+                return false;
+            }
+
+            const dismissedAt = Number(window.localStorage.getItem(this.aiNudgeStorageKey) || 0);
+
+            return ! dismissedAt || Date.now() - dismissedAt > this.aiNudgeCooldownMs;
+        },
+        showAiNudge() {
+            if (! this.canShowAiNudge()) {
+                return;
+            }
+
+            this.aiNudgeVisible = true;
+            document.documentElement.classList.add('ai-help-nudge-visible');
+        },
+        hideAiNudge(remember = false) {
+            this.aiNudgeVisible = false;
+            document.documentElement.classList.remove('ai-help-nudge-visible');
+
+            if (remember) {
+                window.localStorage.setItem(this.aiNudgeStorageKey, String(Date.now()));
+            }
+        },
+        openAiChatFromNudge() {
+            this.hideAiNudge(true);
+            window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'ai', id: 1 } }));
+        },
+        aiNudgeText() {
+            const path = window.location.pathname;
+
+            if (path.includes('/admin/tenants')) {
+                return 'Могу подсказать по этому арендатору';
+            }
+
+            if (path.includes('/admin/market-spaces')) {
+                return 'Могу помочь с этим местом';
+            }
+
+            if (path.includes('/admin/tenant-contracts')) {
+                return 'Могу проверить договор и связанные данные';
+            }
+
+            if (path.includes('/admin/requests')) {
+                return 'Могу помочь с диалогами и обращениями';
+            }
+
+            if (path.includes('/admin/tasks')) {
+                return 'Могу помочь с задачами и напоминаниями';
+            }
+
+            return 'Могу помочь по этой странице';
+        },
+    }"
+    x-init="initAiNudge()"
+    x-on:mp-show-ai-help-nudge.window="showAiNudge()"
+    x-on:mp-open-quick-chat.window="hideAiNudge(true)"
+    x-on:keydown.escape.window="hideAiNudge(true)"
+>
     <style>
         .staff-presence {
             --staff-presence-gutter: 5.75rem;
@@ -45,6 +133,10 @@
             inset: 0 0 0 auto;
             z-index: 60;
             width: var(--staff-presence-gutter);
+        }
+
+        .staff-presence [x-cloak] {
+            display: none !important;
         }
 
         .staff-presence__stack {
@@ -89,6 +181,95 @@
         html.dark .staff-presence__stack--ai {
             border-color: rgba(34, 197, 94, 0.30);
             background: rgba(20, 83, 45, 0.72);
+        }
+
+        .staff-presence__ai-nudge {
+            position: absolute;
+            right: calc(100% + 0.75rem);
+            bottom: 0.05rem;
+            display: grid;
+            width: min(17rem, calc(100vw - 7.25rem));
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.65rem;
+            align-items: start;
+            padding: 0.8rem 0.85rem;
+            border: 1px solid rgba(14, 165, 233, 0.26);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+            color: #0f172a;
+            backdrop-filter: blur(14px);
+        }
+
+        .staff-presence__ai-nudge::after {
+            content: "";
+            position: absolute;
+            right: -0.38rem;
+            bottom: 1.25rem;
+            width: 0.75rem;
+            height: 0.75rem;
+            transform: rotate(45deg);
+            border-top: 1px solid rgba(14, 165, 233, 0.26);
+            border-right: 1px solid rgba(14, 165, 233, 0.26);
+            background: rgba(255, 255, 255, 0.96);
+        }
+
+        .staff-presence__ai-nudge-button {
+            min-width: 0;
+            text-align: left;
+            font-size: 0.88rem;
+            font-weight: 750;
+            line-height: 1.35;
+        }
+
+        .staff-presence__ai-nudge-button:hover,
+        .staff-presence__ai-nudge-button:focus-visible {
+            color: #0369a1;
+            outline: none;
+        }
+
+        .staff-presence__ai-nudge-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.55rem;
+            height: 1.55rem;
+            border-radius: 999px;
+            color: #64748b;
+        }
+
+        .staff-presence__ai-nudge-close:hover,
+        .staff-presence__ai-nudge-close:focus-visible {
+            background: rgba(148, 163, 184, 0.14);
+            color: #0f172a;
+            outline: none;
+        }
+
+        html.dark .staff-presence__ai-nudge {
+            border-color: rgba(56, 189, 248, 0.24);
+            background: rgba(15, 23, 42, 0.96);
+            color: #f8fafc;
+            box-shadow: 0 18px 42px rgba(2, 6, 23, 0.38);
+        }
+
+        html.dark .staff-presence__ai-nudge::after {
+            border-color: rgba(56, 189, 248, 0.24);
+            background: rgba(15, 23, 42, 0.96);
+        }
+
+        html.dark .staff-presence__ai-nudge-button:hover,
+        html.dark .staff-presence__ai-nudge-button:focus-visible {
+            color: #7dd3fc;
+        }
+
+        html.dark .staff-presence__ai-nudge-close {
+            color: #94a3b8;
+        }
+
+        html.dark .staff-presence__ai-nudge-close:hover,
+        html.dark .staff-presence__ai-nudge-close:focus-visible {
+            background: rgba(148, 163, 184, 0.16);
+            color: #f8fafc;
         }
 
         .staff-presence__label {
@@ -593,11 +774,28 @@
     </div>
 
     <div class="staff-presence__stack staff-presence__stack--ai" aria-label="ИИ-консультант">
+        <div
+            class="staff-presence__ai-nudge"
+            x-cloak
+            x-show="aiNudgeVisible"
+            x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+            x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+            x-transition:leave="transition ease-in duration-150"
+            x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+            x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+        >
+            <button type="button" class="staff-presence__ai-nudge-button" x-on:click="openAiChatFromNudge()" x-text="aiNudgeText()"></button>
+            <button type="button" class="staff-presence__ai-nudge-close" x-on:click="hideAiNudge(true)" aria-label="Скрыть подсказку">
+                <x-filament::icon icon="heroicon-o-x-mark" class="h-4 w-4" />
+            </button>
+        </div>
+
         <button
             type="button"
             class="staff-presence__avatar staff-presence__avatar--ai"
             title="ИИ-консультант · открыть диалог"
-            x-on:click="window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'ai', id: 1 } }))"
+            x-on:click="hideAiNudge(true); window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'ai', id: 1 } }))"
         >
             <img class="staff-presence__giga-logo" src="{{ asset('images/gigachat-logo.png') }}" alt="" aria-hidden="true" loading="lazy">
         </button>

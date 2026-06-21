@@ -63,6 +63,12 @@
             outline: none;
         }
 
+        html.ai-help-nudge-visible .quick-chat__launcher {
+            pointer-events: none;
+            transform: translateY(0.35rem) scale(0.96);
+            opacity: 0;
+        }
+
         body:has(#database-notifications.fi-modal-open) .quick-chat__launcher,
         body:has(#database-notifications.fi-modal-open) .staff-presence {
             display: none !important;
