@@ -35,16 +35,27 @@ class AiAgentActionTool
      * @param  array<string, mixed>  $payload
      * @return array{ok:bool,message:string,chips:list<array{label:string,url:string}>,data:array<string,mixed>}
      */
-    public function run(User $actor, int $marketId, array $payload): array
+    public function run(
+        User $actor,
+        int $marketId,
+        array $payload,
+        ?int $aiConversationId = null,
+        ?int $aiMessageId = null,
+    ): array
     {
+        $startedAt = microtime(true);
         $tool = strtolower(trim((string) ($payload['tool'] ?? $payload['name'] ?? '')));
 
         if (! $this->canUseMarket($actor, $marketId)) {
-            return $this->failure('Не выбран рынок или у пользователя нет доступа к этому рынку.');
+            $result = $this->failure('Не выбран рынок или у пользователя нет доступа к этому рынку.');
+
+            $this->auditToolResult($actor, $marketId, $tool, $payload, $result, $startedAt, $aiConversationId, $aiMessageId);
+
+            return $result;
         }
 
         try {
-            return match ($tool) {
+            $result = match ($tool) {
                 'create_task' => $this->createTask($actor, $marketId, $payload, false),
                 'create_reminder' => $this->createTask($actor, $marketId, $payload, true),
                 'create_event' => $this->createEvent($actor, $marketId, $payload),
@@ -65,8 +76,12 @@ class AiAgentActionTool
         } catch (Throwable $exception) {
             report($exception);
 
-            return $this->failure('Действие не выполнено из-за внутренней ошибки приложения.');
+            $result = $this->failure('Действие не выполнено из-за внутренней ошибки приложения.');
         }
+
+        $this->auditToolResult($actor, $marketId, $tool, $payload, $result, $startedAt, $aiConversationId, $aiMessageId);
+
+        return $result;
     }
 
     public function schemaHint(bool $includeReadOnlyActions = true, bool $includeMutatingActions = true): string
@@ -833,6 +848,32 @@ PROMPT;
 
         return (int) ($actor->market_id ?? 0) === $marketId
             && (int) ($actor->tenant_id ?? 0) <= 0;
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @param  array<string,mixed>  $result
+     */
+    private function auditToolResult(
+        User $actor,
+        int $marketId,
+        string $tool,
+        array $payload,
+        array $result,
+        float $startedAt,
+        ?int $aiConversationId,
+        ?int $aiMessageId,
+    ): void {
+        app(AiAgentAuditService::class)->recordToolResult(
+            actor: $actor,
+            marketId: $marketId,
+            tool: $tool,
+            payload: $payload,
+            result: $result,
+            durationMs: (int) round((microtime(true) - $startedAt) * 1000),
+            aiConversationId: $aiConversationId,
+            aiMessageId: $aiMessageId,
+        );
     }
 
     private function canManageEvents(User $actor, int $marketId): bool

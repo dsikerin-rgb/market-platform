@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
-use App\Models\AiMessage;
+use App\Models\AiAgentAuditEvent;
 use App\Models\AiKnowledgeEntry;
+use App\Services\Ai\AiAgentAuditService;
 use App\Services\Ai\AiAgentSettings;
 use App\Services\Ai\AiKnowledgeService;
 use Filament\Facades\Filament;
@@ -18,6 +19,7 @@ use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\Schema as DatabaseSchema;
 use Illuminate\Support\Str;
 
 class AiAgentSettingsPage extends Page
@@ -433,30 +435,32 @@ class AiAgentSettingsPage extends Page
      */
     private function loadActionLog(): array
     {
-        return AiMessage::query()
-            ->with(['conversation.user:id,name,email', 'conversation.market:id,name'])
-            ->where('role', AiMessage::ROLE_ASSISTANT)
+        if (! DatabaseSchema::hasTable('ai_agent_audit_events')) {
+            return [];
+        }
+
+        $audit = app(AiAgentAuditService::class);
+
+        return AiAgentAuditEvent::query()
+            ->with(['user:id,name,email', 'market:id,name'])
             ->latest()
             ->limit(200)
             ->get()
-            ->filter(static fn (AiMessage $message): bool => is_array(data_get($message->metadata, 'pending_action')))
-            ->take(50)
-            ->map(function (AiMessage $message): array {
-                $action = (array) data_get($message->metadata, 'pending_action', []);
-                $status = strtolower(trim((string) ($action['status'] ?? 'pending')));
-                if (! in_array($status, ['pending', 'running', 'confirmed', 'cancelled', 'failed'], true)) {
-                    $status = 'pending';
-                }
+            ->map(function (AiAgentAuditEvent $event) use ($audit): array {
+                $status = strtolower(trim((string) $event->status));
 
                 return [
-                    'created_at' => $this->formatActionLogDate($message->created_at),
-                    'actor' => Str::limit(trim((string) ($message->conversation?->user?->name ?? 'Сотрудник')), 80, ''),
-                    'market' => Str::limit(trim((string) ($message->conversation?->market?->name ?? 'Рынок')), 80, ''),
-                    'title' => Str::limit(trim((string) ($action['title'] ?? 'Действие агента')), 120, ''),
+                    'created_at' => $this->formatActionLogDate($event->created_at),
+                    'actor' => Str::limit(trim((string) ($event->user?->name ?? 'Сотрудник')), 80, ''),
+                    'market' => Str::limit(trim((string) ($event->market?->name ?? 'Рынок')), 80, ''),
+                    'event_label' => $audit->eventLabel((string) $event->event_type),
+                    'title' => Str::limit(trim((string) ($event->title ?: $audit->toolLabel((string) $event->tool))), 120, ''),
                     'status' => $status,
-                    'status_label' => $this->actionStatusLabel($status),
-                    'summary' => $this->actionSummary((array) ($action['summary'] ?? [])),
-                    'result_message' => Str::limit(trim((string) ($action['result_message'] ?? '')), 220, ''),
+                    'status_label' => $audit->statusLabel($status),
+                    'summary' => $this->actionSummary((array) ($event->summary ?? [])),
+                    'result_message' => Str::limit(trim((string) ($event->result_message ?? '')), 220, ''),
+                    'duration_ms' => (int) ($event->duration_ms ?? 0),
+                    'chips_count' => count((array) ($event->chips ?? [])),
                 ];
             })
             ->values()
@@ -566,17 +570,6 @@ class AiAgentSettingsPage extends Page
             ->filter(static fn (array $row): bool => $row['label'] !== '' && $row['value'] !== '')
             ->values()
             ->all();
-    }
-
-    private function actionStatusLabel(string $status): string
-    {
-        return match ($status) {
-            'running' => 'Выполняется',
-            'confirmed' => 'Выполнено',
-            'cancelled' => 'Отменено',
-            'failed' => 'Не выполнено',
-            default => 'Ожидает подтверждения',
-        };
     }
 
     private function formatActionLogDate(mixed $value): string

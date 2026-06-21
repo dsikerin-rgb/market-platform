@@ -753,44 +753,89 @@ class AiConsultantService
     private function runTool(User $user, array $toolRequest, array $settings): array
     {
         $tool = $this->toolName($toolRequest);
+        $marketId = (int) data_get($settings, '_market_id', 0);
 
         if ($tool === 'read_sql') {
+            $startedAt = microtime(true);
+
             if (! (bool) $settings['read_only_sql_enabled'] || ! (bool) ($settings['_can_read_data'] ?? false)) {
-                return [
+                $result = [
                     'ok' => false,
                     'message' => 'Проверка данных недоступна для вашей роли или отключена в настройках.',
                     'chips' => [],
                 ];
+
+                app(AiAgentAuditService::class)->recordToolResult(
+                    actor: $user,
+                    marketId: $marketId,
+                    tool: $tool,
+                    payload: $toolRequest,
+                    result: $result,
+                    durationMs: (int) round((microtime(true) - $startedAt) * 1000),
+                );
+
+                return $result;
             }
 
             $sql = trim((string) ($toolRequest['sql'] ?? ''));
 
-            return app(AiReadOnlySqlTool::class)->run(
-                marketId: (int) data_get($settings, '_market_id', 0),
+            $result = app(AiReadOnlySqlTool::class)->run(
+                marketId: $marketId,
                 sql: $sql,
                 settings: $settings,
             );
+
+            app(AiAgentAuditService::class)->recordToolResult(
+                actor: $user,
+                marketId: $marketId,
+                tool: $tool,
+                payload: $toolRequest,
+                result: $result,
+                durationMs: (int) round((microtime(true) - $startedAt) * 1000),
+            );
+
+            return $result;
         }
 
         if ($this->toolRequiresConfirmation($toolRequest)) {
             if (! (bool) $settings['action_tools_enabled'] || ! app(AiAgentSettings::class)->canPrepareAction($user, $tool, $settings)) {
-                return [
+                $result = [
                     'ok' => false,
                     'message' => 'Для вашей роли это действие недоступно.',
                     'chips' => [],
                 ];
+
+                app(AiAgentAuditService::class)->recordToolResult(
+                    actor: $user,
+                    marketId: $marketId,
+                    tool: $tool,
+                    payload: $toolRequest,
+                    result: $result,
+                );
+
+                return $result;
             }
         } elseif (! (bool) ($settings['business_tools_enabled'] ?? true) || ! (bool) ($settings['_can_read_data'] ?? false)) {
-            return [
+            $result = [
                 'ok' => false,
                 'message' => 'Типовые проверки недоступны для вашей роли или отключены в настройках.',
                 'chips' => [],
             ];
+
+            app(AiAgentAuditService::class)->recordToolResult(
+                actor: $user,
+                marketId: $marketId,
+                tool: $tool,
+                payload: $toolRequest,
+                result: $result,
+            );
+
+            return $result;
         }
 
         return app(AiAgentActionTool::class)->run(
             actor: $user,
-            marketId: (int) data_get($settings, '_market_id', 0),
+            marketId: $marketId,
             payload: $toolRequest,
         );
     }
