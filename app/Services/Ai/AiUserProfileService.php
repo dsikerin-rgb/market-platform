@@ -17,6 +17,8 @@ use Illuminate\Support\Str;
 
 class AiUserProfileService
 {
+    private const LIGHT_ONBOARDING_OFFER_TEXT = 'Если хотите, могу за минуту познакомиться: как к вам обращаться, чем вы занимаетесь и какие темы вам не предлагать. Это необязательно.';
+
     /**
      * @return array<string, mixed>
      */
@@ -82,6 +84,92 @@ class AiUserProfileService
             ->all();
     }
 
+    /**
+     * @return array{text:string,suggestions:list<string>,missing:list<string>}|null
+     */
+    public function lightOnboardingOffer(User $user, int $marketId): ?array
+    {
+        if (! $this->profilesAvailable()) {
+            return null;
+        }
+
+        $profile = AiUserProfile::query()->firstOrNew(['user_id' => (int) $user->id]);
+        $profile->setRelation('user', $user);
+        $profile->market_id = $marketId > 0 ? $marketId : ((int) ($user->market_id ?? 0) ?: null);
+        $this->clearExpiredCommunicationPause($profile);
+
+        if (
+            (string) ($profile->communication_status ?? 'available') === 'do_not_disturb'
+            && $profile->communication_paused_until instanceof Carbon
+            && $profile->communication_paused_until->isFuture()
+        ) {
+            return null;
+        }
+
+        $facts = (array) ($profile->facts ?? []);
+        if (
+            $this->factsDateIsFuture($facts, 'light_onboarding_snoozed_until')
+            || $this->factsDateIsRecent($facts, 'light_onboarding_offer_shown_at', now()->subDays(14))
+        ) {
+            return null;
+        }
+
+        $missing = $this->lightOnboardingMissingFields($profile, $user);
+        if ($missing === []) {
+            return null;
+        }
+
+        return [
+            'text' => self::LIGHT_ONBOARDING_OFFER_TEXT,
+            'suggestions' => ['Давай познакомимся', 'Потом'],
+            'missing' => $missing,
+        ];
+    }
+
+    public function markLightOnboardingOffered(User $user, int $marketId): void
+    {
+        if (! $this->profilesAvailable()) {
+            return;
+        }
+
+        $profile = AiUserProfile::query()->firstOrNew(['user_id' => (int) $user->id]);
+        $profile->market_id = $marketId > 0 ? $marketId : ((int) ($user->market_id ?? 0) ?: null);
+        $facts = (array) ($profile->facts ?? []);
+        $facts['light_onboarding_offer_shown_at'] = now()->toDateTimeString();
+        $facts['light_onboarding_offer_count'] = ((int) ($facts['light_onboarding_offer_count'] ?? 0)) + 1;
+        $profile->facts = $facts;
+        $profile->save();
+    }
+
+    public function isLightOnboardingDeferral(string $body): bool
+    {
+        $text = mb_strtolower(trim($body));
+        if ($text === '') {
+            return false;
+        }
+
+        if (in_array($text, ['потом', 'позже', 'не сейчас', 'сейчас неудобно'], true)) {
+            return true;
+        }
+
+        foreach ([
+            'потом познакомимся',
+            'позже познакомимся',
+            'не сейчас познакомимся',
+            'поговорим позже',
+            'давай позже',
+            'давай потом',
+            'не хочу знакомиться',
+            'не надо знакомиться',
+        ] as $needle) {
+            if (str_contains($text, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function learnFromMessages(AiUserProfile $profile, AiConversation $conversation, User $user): void
     {
         $messages = $conversation->messages()
@@ -117,6 +205,7 @@ class AiUserProfileService
             }
 
             $facts = $this->learnFactsFromText($profile, $body, $facts);
+            $facts = $this->learnLightOnboardingState($body, $facts);
             $regularTasks = $this->learnRegularTasksFromText($body, $regularTasks);
             $this->learnCommunicationState($profile, $body);
             $this->learnCrossUserResponsibilities($profile, $body, $user);
@@ -182,6 +271,22 @@ class AiUserProfileService
         if (str_contains($normalized, 'не моя компетенция') || str_contains($normalized, 'не относится к моей компетенции')) {
             $facts['has_competency_rejections'] = true;
         }
+
+        return $facts;
+    }
+
+    /**
+     * @param array<string, mixed> $facts
+     * @return array<string, mixed>
+     */
+    private function learnLightOnboardingState(string $body, array $facts): array
+    {
+        if (! $this->isLightOnboardingDeferral($body)) {
+            return $facts;
+        }
+
+        $facts['light_onboarding_snoozed_until'] = now()->addDays(14)->toDateTimeString();
+        $facts['light_onboarding_dismissed_at'] = now()->toDateTimeString();
 
         return $facts;
     }
@@ -757,6 +862,66 @@ class AiUserProfileService
             ->take(3)
             ->values()
             ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function lightOnboardingMissingFields(AiUserProfile $profile, User $user): array
+    {
+        $missing = [];
+
+        if (blank($profile->preferred_name)) {
+            $missing[] = 'preferred_name';
+        }
+
+        if (blank($user->job_title ?? null) && blank($profile->job_title)) {
+            $missing[] = 'job_title';
+        }
+
+        if (blank($profile->responsibility_scope)) {
+            $missing[] = 'responsibility_scope';
+        }
+
+        if (empty((array) ($profile->rejected_topics ?? []))) {
+            $missing[] = 'rejected_topics';
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @param array<string, mixed> $facts
+     */
+    private function factsDateIsFuture(array $facts, string $key): bool
+    {
+        $value = trim((string) ($facts[$key] ?? ''));
+        if ($value === '') {
+            return false;
+        }
+
+        try {
+            return Carbon::parse($value)->isFuture();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $facts
+     */
+    private function factsDateIsRecent(array $facts, string $key, Carbon $threshold): bool
+    {
+        $value = trim((string) ($facts[$key] ?? ''));
+        if ($value === '') {
+            return false;
+        }
+
+        try {
+            return Carbon::parse($value)->greaterThanOrEqualTo($threshold);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function refreshOnboardingState(AiUserProfile $profile, User $user): void
