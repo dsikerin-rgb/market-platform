@@ -390,7 +390,24 @@ class QuickChatDrawer extends Component
         $this->appendAiMessage($user->name ?: 'Вы', $body, true);
 
         $conversation = $this->aiConversation($user, create: false);
-        app(AiUserProfileService::class)->syncFromConversation($user, $conversation, $this->resolveMarketId($user));
+        $marketId = $this->resolveMarketId($user);
+        $profileService = app(AiUserProfileService::class);
+        $profileService->syncFromConversation($user, $conversation, $marketId);
+
+        if ($profileService->isLightOnboardingDeferral($body)) {
+            $this->appendAiMessage(
+                'ИИ-консультант',
+                'Хорошо, не буду отвлекать. Когда будет удобно, напишите «давай познакомимся».',
+                false,
+                [],
+                ['kind' => 'light_onboarding_snoozed'],
+            );
+            $this->messageBody = '';
+            $this->messageAttachments = [];
+            $this->dispatch('quick-chat-updated');
+
+            return;
+        }
 
         $this->pendingAiQuestion = $body;
         $this->pendingAiHistory = $history;
@@ -1221,15 +1238,35 @@ class QuickChatDrawer extends Component
             return;
         }
 
+        $body = self::AI_GREETING_MESSAGE;
+        $metadata = [
+            'user_name' => 'ИИ-консультант',
+            'chips' => [],
+            'kind' => 'greeting',
+        ];
+
+        $user = $this->currentUser();
+        if ($user instanceof User) {
+            $marketId = $this->resolveMarketId($user);
+            $profileService = app(AiUserProfileService::class);
+            $offer = $profileService->lightOnboardingOffer($user, $marketId);
+
+            if (is_array($offer)) {
+                $body .= "\n\n".trim((string) ($offer['text'] ?? ''));
+                $metadata['suggestions'] = (array) ($offer['suggestions'] ?? []);
+                $metadata['light_onboarding_offer'] = [
+                    'missing' => (array) ($offer['missing'] ?? []),
+                    'offered_at' => now()->toDateTimeString(),
+                ];
+                $profileService->markLightOnboardingOffered($user, $marketId);
+            }
+        }
+
         AiMessage::query()->create([
             'ai_conversation_id' => (int) $conversation->id,
             'role' => AiMessage::ROLE_ASSISTANT,
-            'body' => self::AI_GREETING_MESSAGE,
-            'metadata' => [
-                'user_name' => 'ИИ-консультант',
-                'chips' => [],
-                'kind' => 'greeting',
-            ],
+            'body' => $body,
+            'metadata' => $metadata,
         ]);
 
         $conversation->touch();

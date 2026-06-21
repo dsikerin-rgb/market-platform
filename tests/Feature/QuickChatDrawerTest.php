@@ -10,6 +10,7 @@ use App\Livewire\Admin\QuickChatDrawer;
 use App\Models\AiConversation;
 use App\Models\AiKnowledgeEntry;
 use App\Models\AiMessage;
+use App\Models\AiUserProfile;
 use App\Models\Market;
 use App\Models\MarketHoliday;
 use App\Models\StaffConversation;
@@ -103,7 +104,7 @@ class QuickChatDrawerTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->actingAsMarketAdmin($market);
+        $user = $this->actingAsMarketAdmin($market);
 
         Livewire::withQueryParams([
             'quick_chat' => 'ai',
@@ -113,12 +114,22 @@ class QuickChatDrawerTest extends TestCase
             ->assertSet('selectedType', 'ai')
             ->assertSet('selectedId', 1)
             ->assertSee('ИИ-консультант')
-            ->assertSee('Чем помочь по этой странице');
+            ->assertSee('Чем помочь по этой странице')
+            ->assertSee('Если хотите, могу за минуту познакомиться')
+            ->assertSee('Давай познакомимся')
+            ->assertSee('Потом');
 
-        $this->assertDatabaseHas('ai_messages', [
-            'role' => AiMessage::ROLE_ASSISTANT,
-            'body' => 'Здравствуйте. Чем помочь по этой странице или данным рынка? Могу проверить информацию, подготовить ссылку, создать задачу, напоминание или отправить сообщение.',
-        ]);
+        $message = AiMessage::query()
+            ->where('role', AiMessage::ROLE_ASSISTANT)
+            ->where('metadata->kind', 'greeting')
+            ->firstOrFail();
+
+        $this->assertStringContainsString('Чем помочь по этой странице', (string) $message->body);
+        $this->assertStringContainsString('Если хотите, могу за минуту познакомиться', (string) $message->body);
+        $this->assertSame(['Давай познакомимся', 'Потом'], $message->metadata['suggestions'] ?? null);
+
+        $profile = AiUserProfile::query()->where('user_id', (int) $user->id)->firstOrFail();
+        $this->assertNotEmpty($profile->facts['light_onboarding_offer_shown_at'] ?? null);
     }
 
     public function test_page_nudge_opens_ai_consultant_with_contextual_first_message(): void
@@ -388,6 +399,52 @@ class QuickChatDrawerTest extends TestCase
             ->assertSee('покажу его перед сохранением');
     }
 
+    public function test_ai_light_onboarding_offer_is_snoozed_after_later_reply(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = $this->actingAsMarketAdmin($market);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->call('useAiSuggestion', 'Потом')
+            ->assertSet('isAiReplyPending', false)
+            ->assertSee('Хорошо, не буду отвлекать');
+
+        $profile = AiUserProfile::query()->where('user_id', (int) $user->id)->firstOrFail();
+        $this->assertNotEmpty($profile->facts['light_onboarding_snoozed_until'] ?? null);
+        $this->assertSame(2, AiMessage::query()->count());
+    }
+
+    public function test_ai_light_onboarding_offer_is_hidden_while_snoozed(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $user = $this->actingAsMarketAdmin($market);
+
+        AiUserProfile::query()->create([
+            'user_id' => (int) $user->id,
+            'market_id' => (int) $market->id,
+            'facts' => [
+                'light_onboarding_snoozed_until' => now()->addDays(7)->toDateTimeString(),
+            ],
+        ]);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->assertSee('Чем помочь по этой странице')
+            ->assertDontSee('Если хотите, могу за минуту познакомиться')
+            ->assertDontSee('Давай познакомимся');
+    }
+
     public function test_ai_consultant_dialog_accepts_question_and_renders_answer(): void
     {
         $market = Market::query()->create([
@@ -506,7 +563,7 @@ class QuickChatDrawerTest extends TestCase
             1,
             AiMessage::query()
                 ->where('role', AiMessage::ROLE_ASSISTANT)
-                ->where('body', 'Здравствуйте. Чем помочь по этой странице или данным рынка? Могу проверить информацию, подготовить ссылку, создать задачу, напоминание или отправить сообщение.')
+                ->where('metadata->kind', 'greeting')
                 ->count(),
         );
     }
