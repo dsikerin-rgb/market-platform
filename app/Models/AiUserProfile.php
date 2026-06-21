@@ -15,6 +15,7 @@ class AiUserProfile extends Model
     protected $fillable = [
         'user_id',
         'market_id',
+        'preferred_name',
         'job_title',
         'department',
         'birth_date',

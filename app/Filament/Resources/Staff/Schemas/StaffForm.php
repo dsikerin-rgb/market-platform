@@ -66,6 +66,10 @@ class StaffForm
         ];
 
         return $schema->components([
+            Tabs::make('staff_profile_tabs')
+                ->tabs([
+                    Tab::make('Профиль')
+                        ->schema([
             Section::make('Основные данные')
                 ->description('Имя, email и привязка к рынку')
                 ->schema([
@@ -125,6 +129,10 @@ class StaffForm
                         ->columnSpan(['default' => 12, 'md' => 6]),
                 ]),
 
+                        ]),
+
+                    Tab::make('Доступ')
+                        ->schema([
             Section::make('Доступ')
                 ->description('Роли определяют права сотрудника в системе')
                 ->schema([
@@ -173,6 +181,10 @@ class StaffForm
                         }),
                 ]),
 
+                        ]),
+
+                    Tab::make('Связь и уведомления')
+                        ->schema([
             Section::make('Telegram')
                 ->description('Одноразовый chat_id заполняется только при создании сотрудника.')
                 ->schema([
@@ -224,6 +236,10 @@ class StaffForm
                     && (bool) $user
                     && ($user->isSuperAdmin() || $user->isMarketAdmin())),
 
+                        ]),
+
+                    Tab::make('ИИ-агент')
+                        ->schema([
             Section::make('ИИ-агент')
                 ->description('Персональный профиль и знания агента по сотруднику. Видно только super-admin.')
                 ->schema([
@@ -238,6 +254,12 @@ class StaffForm
                                                 ->default(fn ($record) => $record?->market_id),
 
                                             Grid::make(2)->schema([
+                                                Forms\Components\TextInput::make('preferred_name')
+                                                    ->label('Как обращаться')
+                                                    ->maxLength(255)
+                                                    ->placeholder('Саша, Марина Николаевна, Иван')
+                                                    ->helperText('Агент будет использовать это обращение вместо полного ФИО.'),
+
                                                 Forms\Components\TextInput::make('job_title')
                                                     ->label('Должность из переписки')
                                                     ->maxLength(255),
@@ -319,6 +341,12 @@ class StaffForm
                 ->visible(fn (string $operation): bool => $operation === 'edit'
                     && (bool) $user
                     && $user->isSuperAdmin()),
+                        ])
+                        ->visible(fn (string $operation): bool => $operation === 'edit'
+                            && (bool) $user
+                            && $user->isSuperAdmin()),
+                ])
+                ->columnSpanFull(),
         ]);
     }
 }

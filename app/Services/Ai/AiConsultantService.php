@@ -51,6 +51,20 @@ class AiConsultantService
             ];
         }
 
+        $preferredName = $this->preferredNameFromText($question);
+        if ($preferredName !== null) {
+            app(AiUserProfileService::class)->updateEditableProfile($user, $marketId, [
+                'preferred_name' => $preferredName,
+            ]);
+
+            return [
+                'answer' => "Хорошо, буду обращаться: {$preferredName}.",
+                'error_type' => null,
+                'chips' => [],
+                'pending_action' => null,
+            ];
+        }
+
         if (! filled(config('gigachat.auth_key'))) {
             return [
                 'answer' => 'ИИ-консультант отключён: в окружении не задан GIGACHAT_AUTH_KEY.',
@@ -97,7 +111,7 @@ class AiConsultantService
         );
 
         $messages = [
-            ['role' => 'system', 'content' => $this->systemPrompt($settings, $marketId, $user)],
+            ['role' => 'system', 'content' => $this->systemPrompt($settings, $marketId, $user, $userProfile)],
             ...$budgeter->compactHistory($history, $settings),
             ['role' => 'user', 'content' => $this->userPrompt($question, $context)],
         ];
@@ -243,11 +257,11 @@ class AiConsultantService
     /**
      * @param  array<string, mixed>  $settings
      */
-    private function systemPrompt(array $settings, int $marketId, User $user): string
+    private function systemPrompt(array $settings, int $marketId, User $user, array $userProfile = []): string
     {
         $settings['_market_id'] = $marketId;
         $prompt = trim((string) $settings['system_prompt']);
-        $friendlyName = $this->friendlyUserName($user);
+        $friendlyName = $this->friendlyUserName($user, $userProfile);
 
         if ((bool) $settings['read_only_sql_enabled'] && (bool) ($settings['_can_read_data'] ?? false)) {
             $prompt .= "\n\n".app(AiReadOnlySqlTool::class)->schemaHint($marketId, $settings);
@@ -289,8 +303,13 @@ class AiConsultantService
             .json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
     }
 
-    private function friendlyUserName(User $user): string
+    private function friendlyUserName(User $user, array $userProfile = []): string
     {
+        $preferredName = trim((string) ($userProfile['preferred_name'] ?? ''));
+        if ($preferredName !== '') {
+            return $preferredName;
+        }
+
         $name = trim((string) ($user->name ?? ''));
 
         if ($name === '') {
@@ -300,6 +319,41 @@ class AiConsultantService
         $parts = preg_split('/\s+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
         return trim((string) ($parts[0] ?? ''));
+    }
+
+    private function preferredNameFromText(string $question): ?string
+    {
+        foreach ([
+            '/(?:зови|называй)\s+меня\s+(.{2,40})/uiu',
+            '/(?:обращайся\s+ко\s+мне|можешь\s+обращаться\s+ко\s+мне)\s+(.{2,40})/uiu',
+            '/(?:для\s+тебя\s+я|можно\s+просто)\s+(.{2,40})/uiu',
+        ] as $pattern) {
+            if (! preg_match($pattern, $question, $matches)) {
+                continue;
+            }
+
+            $name = $this->cleanPreferredName((string) $matches[1]);
+            if ($name !== '') {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private function cleanPreferredName(string $value): string
+    {
+        $value = trim(preg_replace('/\s+/u', ' ', $value) ?: '');
+        $value = preg_replace('/[.?!].*$/u', '', $value) ?: $value;
+        $value = preg_replace('/^(пожалуйста|пж|плиз|просто)\s+/uiu', '', $value) ?: $value;
+        $value = preg_replace('/\s+(пожалуйста|пж|плиз)$/uiu', '', $value) ?: $value;
+        $value = trim($value, " \t\n\r\0\x0B\"'«».,;:!?");
+
+        if (! preg_match('/^[\pL][\pL\pN\s.\-]{1,39}$/u', $value)) {
+            return '';
+        }
+
+        return $value;
     }
 
     /**
