@@ -48,7 +48,7 @@ class QuickChatDrawer extends Component
     public string $messageBody = '';
 
     /**
-     * @var list<array{id:string,user_name:string,body:string,is_own:bool,created_at:string,date_key:string,date_label:string,attachments:list<array<string,mixed>>,chips:list<array{label:string,url:string}>,pending_action:?array<string,mixed>}>
+     * @var list<array{id:string,user_name:string,body:string,is_own:bool,created_at:string,date_key:string,date_label:string,attachments:list<array<string,mixed>>,chips:list<array{label:string,url:string}>,suggestions:list<string>,pending_action:?array<string,mixed>}>
      */
     public array $aiMessages = [];
 
@@ -118,12 +118,24 @@ class QuickChatDrawer extends Component
         ]);
     }
 
-    public function openDrawer(?string $type = null, ?int $id = null): void
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public function openDrawer(?string $type = null, ?int $id = null, ?string $source = null, array $context = []): void
     {
+        if ($context !== []) {
+            $this->updatePageContext($context);
+        }
+
         $this->isOpen = true;
 
         if ($type === 'ai') {
-            $this->selectChat('ai', 1);
+            $fromPageNudge = $source === 'page_nudge';
+            $this->selectChat('ai', 1, ensureGreeting: ! $fromPageNudge);
+
+            if ($fromPageNudge) {
+                $this->ensureAiPageNudgeMessage();
+            }
 
             return;
         }
@@ -152,6 +164,21 @@ class QuickChatDrawer extends Component
         $this->resetErrorBag();
     }
 
+    public function useAiSuggestion(string $text): void
+    {
+        if ($this->selectedType !== 'ai') {
+            return;
+        }
+
+        $text = Str::limit(trim($text), 500, '');
+        if ($text === '') {
+            return;
+        }
+
+        $this->messageBody = $text;
+        $this->dispatch('quick-chat-updated');
+    }
+
     /**
      * @param  array<string, mixed>  $context
      */
@@ -170,7 +197,7 @@ class QuickChatDrawer extends Component
         }
     }
 
-    public function selectChat(string $type, int $id): void
+    public function selectChat(string $type, int $id, bool $ensureGreeting = true): void
     {
         $type = in_array($type, ['ai', 'staff', 'ticket'], true) ? $type : 'ticket';
         if ($type === 'ai') {
@@ -189,7 +216,7 @@ class QuickChatDrawer extends Component
         }
 
         if ($type === 'ai') {
-            $this->loadAiMessages();
+            $this->loadAiMessages($ensureGreeting);
         } elseif ($type === 'staff') {
             if (! $this->staffTablesAvailable()) {
                 return;
@@ -975,6 +1002,7 @@ class QuickChatDrawer extends Component
             'date_label' => $this->formatDateLabel($now),
             'attachments' => [],
             'chips' => $this->normalizeAiChips($chips),
+            'suggestions' => $this->normalizeAiSuggestions((array) ($metadata['suggestions'] ?? [])),
             'pending_action' => $this->normalizeAiPendingAction($metadata['pending_action'] ?? null),
         ];
     }
@@ -1035,7 +1063,7 @@ class QuickChatDrawer extends Component
             ->all();
     }
 
-    private function loadAiMessages(): void
+    private function loadAiMessages(bool $ensureGreeting = true): void
     {
         $user = $this->currentUser();
         if (! $user) {
@@ -1050,7 +1078,9 @@ class QuickChatDrawer extends Component
         }
 
         $this->touchAiConversationPageContext($user, $conversation);
-        $this->ensureAiGreetingMessage($conversation);
+        if ($ensureGreeting) {
+            $this->ensureAiGreetingMessage($conversation);
+        }
 
         $this->aiMessages = $conversation->messages()
             ->latest('created_at')
@@ -1125,6 +1155,147 @@ class QuickChatDrawer extends Component
         $conversation->touch();
     }
 
+    private function ensureAiPageNudgeMessage(): void
+    {
+        $user = $this->currentUser();
+        if (! $user) {
+            return;
+        }
+
+        $conversation = $this->aiConversation($user, create: true);
+        if (! $conversation instanceof AiConversation) {
+            return;
+        }
+
+        $this->touchAiConversationPageContext($user, $conversation);
+
+        $fingerprint = $this->aiPageContextFingerprint();
+        $recentDuplicate = $conversation->messages()
+            ->where('role', AiMessage::ROLE_ASSISTANT)
+            ->where('metadata->kind', 'page_nudge_greeting')
+            ->where('metadata->page_fingerprint', $fingerprint)
+            ->where('created_at', '>=', now()->subHours(6))
+            ->exists();
+
+        if ($recentDuplicate) {
+            $this->loadAiMessages(false);
+
+            return;
+        }
+
+        AiMessage::query()->create([
+            'ai_conversation_id' => (int) $conversation->id,
+            'role' => AiMessage::ROLE_ASSISTANT,
+            'body' => $this->aiPageNudgeMessageBody($user),
+            'metadata' => [
+                'user_name' => 'ИИ-консультант',
+                'chips' => [],
+                'suggestions' => $this->aiPageNudgeSuggestions(),
+                'kind' => 'page_nudge_greeting',
+                'page_fingerprint' => $fingerprint,
+            ],
+        ]);
+
+        $conversation->touch();
+        $this->loadAiMessages(false);
+    }
+
+    private function aiPageNudgeMessageBody(User $user): string
+    {
+        $name = $this->userFriendlyName($user);
+        $page = $this->aiPageContextPhrase();
+
+        return "{$name}, вижу, вы сейчас {$page}. Могу проверить данные, найти важное, подготовить ссылку, сообщение, задачу или напоминание. Что нужно сделать?";
+    }
+
+    private function aiPageContextPhrase(): string
+    {
+        $path = trim((string) ($this->pageContext['path'] ?? ''));
+
+        return match (true) {
+            str_contains($path, '/admin/tenants/') => 'в карточке арендатора',
+            str_contains($path, '/admin/tenants') => 'в разделе арендаторов',
+            str_contains($path, '/admin/market-spaces/') => 'на странице места',
+            str_contains($path, '/admin/market-spaces') => 'в разделе мест',
+            str_contains($path, '/admin/tenant-contracts/') => 'на странице договора',
+            str_contains($path, '/admin/tenant-contracts') => 'в разделе договоров',
+            str_contains($path, '/admin/requests') => 'в диалогах и обращениях',
+            str_contains($path, '/admin/tasks') => 'в задачах',
+            str_contains($path, '/admin/calendar') => 'в календаре',
+            str_contains($path, '/admin/map') => 'на карте рынка',
+            default => 'на этой странице',
+        };
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function aiPageNudgeSuggestions(): array
+    {
+        $path = trim((string) ($this->pageContext['path'] ?? ''));
+
+        return match (true) {
+            str_contains($path, '/admin/tenants/') => [
+                'Проверь долги этого арендатора',
+                'Покажи действующие договоры',
+                'Подготовь сообщение арендатору',
+            ],
+            str_contains($path, '/admin/market-spaces/') => [
+                'Проверь это место',
+                'Покажи арендатора по месту',
+                'Создай задачу по этому месту',
+            ],
+            str_contains($path, '/admin/tenant-contracts') => [
+                'Проверь этот договор',
+                'Найди связанные начисления',
+                'Создай напоминание по договору',
+            ],
+            str_contains($path, '/admin/requests') => [
+                'Помоги ответить в диалоге',
+                'Создай задачу из обращения',
+                'Найди связанные данные',
+            ],
+            str_contains($path, '/admin/tasks') => [
+                'Помоги уточнить задачу',
+                'Создай напоминание',
+                'Найди связанные ресурсы',
+            ],
+            default => [
+                'Что важно на этой странице?',
+                'Найди связанные данные',
+                'Создай задачу по этой странице',
+            ],
+        };
+    }
+
+    private function aiPageContextFingerprint(): string
+    {
+        $path = trim((string) ($this->pageContext['path'] ?? ''));
+        $heading = trim((string) ($this->pageContext['heading'] ?? ''));
+        $title = trim((string) ($this->pageContext['title'] ?? ''));
+
+        return sha1($path.'|'.$heading.'|'.$title);
+    }
+
+    private function userFriendlyName(User $user): string
+    {
+        $name = trim((string) $user->name);
+        if ($name === '') {
+            return 'Коллега';
+        }
+
+        $parts = preg_split('/\s+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($parts === []) {
+            return 'Коллега';
+        }
+
+        if (count($parts) >= 3 && preg_match('/[А-Яа-яЁё]/u', $name) === 1) {
+            return $parts[1];
+        }
+
+        return $parts[0];
+    }
+
     private function touchAiConversationPageContext(User $user, ?AiConversation $conversation = null): void
     {
         if (! $this->aiTablesAvailable()) {
@@ -1168,6 +1339,7 @@ class QuickChatDrawer extends Component
             'date_label' => $this->formatDateLabel($createdAt),
             'attachments' => [],
             'chips' => $this->normalizeAiChips((array) ($metadata['chips'] ?? [])),
+            'suggestions' => $this->normalizeAiSuggestions((array) ($metadata['suggestions'] ?? [])),
             'pending_action' => $this->normalizeAiPendingAction($metadata['pending_action'] ?? null),
         ];
     }
@@ -1232,6 +1404,21 @@ class QuickChatDrawer extends Component
             ])
             ->filter(static fn (array $chip): bool => $chip['label'] !== '' && $chip['url'] !== '')
             ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, mixed>  $suggestions
+     * @return list<string>
+     */
+    private function normalizeAiSuggestions(array $suggestions): array
+    {
+        return collect($suggestions)
+            ->map(static fn (mixed $suggestion): string => Str::limit(trim((string) $suggestion), 120, ''))
+            ->filter(static fn (string $suggestion): bool => $suggestion !== '')
+            ->unique()
+            ->values()
+            ->take(4)
             ->all();
     }
 

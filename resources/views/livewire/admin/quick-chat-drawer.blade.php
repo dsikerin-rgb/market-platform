@@ -19,9 +19,21 @@
         syncPageContext() {
             $wire.updatePageContext(this.pageContext());
         },
+        openFromEvent(event) {
+            const detail = event.detail || {};
+            const context = this.pageContext();
+
+            $wire.updatePageContext(context);
+            $wire.openDrawer(
+                detail.type || null,
+                Number(detail.id || 0) || null,
+                detail.source || null,
+                context,
+            );
+        },
     }"
     x-init="syncPageContext()"
-    x-on:mp-open-quick-chat.window="syncPageContext(); $wire.openDrawer($event.detail?.type || null, Number($event.detail?.id || 0) || null)"
+    x-on:mp-open-quick-chat.window="openFromEvent($event)"
     x-on:keydown.escape.window="document.documentElement.classList.remove('quick-chat-open'); $wire.closeDrawer()"
 >
     <style>
@@ -496,6 +508,35 @@
         .quick-chat__chip:focus-visible {
             border-color: rgba(14, 116, 144, 0.42);
             background: #bae6fd;
+            outline: none;
+        }
+
+        .quick-chat__suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.55rem;
+        }
+
+        .quick-chat__suggestion {
+            display: inline-flex;
+            align-items: center;
+            max-width: 100%;
+            border: 1px solid rgba(34, 197, 94, 0.24);
+            border-radius: 999px;
+            background: rgba(240, 253, 244, 0.92);
+            padding: 0.28rem 0.62rem;
+            color: #166534;
+            font-size: 0.78rem;
+            font-weight: 850;
+            line-height: 1.2;
+            cursor: pointer;
+        }
+
+        .quick-chat__suggestion:hover,
+        .quick-chat__suggestion:focus-visible {
+            border-color: rgba(22, 101, 52, 0.36);
+            background: #dcfce7;
             outline: none;
         }
 
@@ -1125,6 +1166,20 @@
                                                     @if ($chipLabel !== '' && $chipUrl !== '')
                                                         <a class="quick-chat__chip" href="{{ $chipUrl }}">{{ $chipLabel }}</a>
                                                     @endif
+                                                @endforeach
+                                            </div>
+                                        @endif
+
+                                        @if (! empty($message['suggestions']))
+                                            <div class="quick-chat__suggestions">
+                                                @foreach ($message['suggestions'] as $suggestion)
+                                                    <button
+                                                        type="button"
+                                                        class="quick-chat__suggestion"
+                                                        wire:click="useAiSuggestion(@js($suggestion))"
+                                                    >
+                                                        {{ $suggestion }}
+                                                    </button>
                                                 @endforeach
                                             </div>
                                         @endif

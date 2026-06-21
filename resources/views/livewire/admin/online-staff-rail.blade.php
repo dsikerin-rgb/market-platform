@@ -105,7 +105,7 @@
         },
         openAiChatFromNudge() {
             this.hideAiNudge(true);
-            window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'ai', id: 1 } }));
+            window.dispatchEvent(new CustomEvent('mp-open-quick-chat', { detail: { type: 'ai', id: 1, source: 'page_nudge' } }));
         },
         aiNudgeText() {
             const path = window.location.pathname;
