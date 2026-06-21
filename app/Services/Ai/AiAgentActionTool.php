@@ -113,6 +113,7 @@ PROMPT
 Для поиска записи или ссылки по человеческому названию сначала используй find_resource или resource_link с query, а не угадывай номер записи. Для вопросов "кто больше должен" используй debt_leaders. Для вопросов о самой низкой или высокой арендной ставке используй rent_rate_extremes; если результата нет, только тогда проверяй данные через read_sql.
 Для вопросов о свободных местах используй vacant_spaces. Для краткой сводки по арендатору используй tenant_profile. Для вопросов о проблемных обращениях используй open_tickets_summary. Для договоров, которые скоро заканчиваются, используй expiring_contracts.
 Для безопасного обновления рабочего профиля текущего сотрудника используй update_my_profile. Это действие приложение покажет сотруднику перед сохранением. Не меняй email, пароль, роли, права доступа и другие данные авторизации через агента.
+Если пользователь просит "напомни", "поставь напоминание", "не дай забыть" или похожую личную просьбу, используй create_reminder. Если пользователь не указал другого сотрудника, считай, что напоминание нужно текущему пользователю. Для поручений с исполнителем используй create_task. Для событий рынка, праздников, санитарных дней, акций и календарных событий используй create_event, а не create_reminder.
 Используй действия только когда сотрудник просит выполнить работу, отправить сообщение, создать задачу, событие, напоминание, проверить типовую аналитику или дать ссылку на запись. Если в ответе нужна карточка арендатора, места, задачи, обращения, события или настроек, всегда используй resource_link/make_link. Не показывай пользователю JSON, ID, идентификаторы и сырые адреса страниц. После результата действия отвечай простым русским языком и опирайся на приложенные чипы.
 PROMPT;
     }
@@ -156,17 +157,41 @@ PROMPT;
             return $this->failure('Для напоминания нужно указать дату или время.');
         }
 
+        $hasExplicitAssignee = (bool) (($payload['assignee_user_id'] ?? null) || ($payload['assignee_query'] ?? null));
         $assignee = $this->resolveStaffUser($actor, $marketId, $payload['assignee_user_id'] ?? null, $payload['assignee_query'] ?? null);
-        if (($payload['assignee_user_id'] ?? null) || ($payload['assignee_query'] ?? null)) {
+        if ($hasExplicitAssignee) {
             if (! $assignee) {
                 return $this->failure('Не удалось найти сотрудника для назначения.');
             }
+        } elseif ($isReminder) {
+            $assignee = $actor;
         }
 
         $priority = $this->priority($payload['priority'] ?? null);
         $description = $this->string($payload['description'] ?? $payload['message'] ?? null, 4000);
         if ($isReminder) {
             $description = trim($description."\n\nСоздано ИИ-агентом как напоминание.");
+        }
+
+        if ($isReminder) {
+            $existingReminder = Task::query()
+                ->where('market_id', $marketId)
+                ->where('title', $title)
+                ->where('due_at', $dueAt)
+                ->where('created_by_user_id', (int) $actor->id)
+                ->where('assignee_id', $assignee ? (int) $assignee->id : null)
+                ->whereNotIn('status', Task::CLOSED_STATUSES)
+                ->where('description', 'like', '%Создано ИИ-агентом как напоминание.%')
+                ->latest('id')
+                ->first();
+
+            if ($existingReminder instanceof Task) {
+                return $this->success(
+                    'Такое напоминание уже есть.',
+                    [$this->chip('Напоминание: '.$existingReminder->title, $this->taskUrl($existingReminder))],
+                    ['task_id' => (int) $existingReminder->id, 'created' => false],
+                );
+            }
         }
 
         $task = Task::query()->create([
@@ -186,7 +211,7 @@ PROMPT;
         return $this->success(
             ($isReminder ? 'Напоминание создано.' : 'Задача создана.'),
             [$this->chip($label, $this->taskUrl($task))],
-            ['task_id' => (int) $task->id],
+            ['task_id' => (int) $task->id, 'created' => true],
         );
     }
 
