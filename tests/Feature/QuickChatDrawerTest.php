@@ -363,6 +363,29 @@ class QuickChatDrawerTest extends TestCase
         ]);
     }
 
+    public function test_ai_profile_onboarding_starts_as_short_scenario(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsMarketAdmin($market);
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->set('messageBody', 'Давай коротко познакомимся')
+            ->call('sendMessage')
+            ->assertHasNoErrors()
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
+            ->assertSee('Давай познакомимся коротко')
+            ->assertSee('Какая у вас роль')
+            ->assertSee('покажу его перед сохранением');
+    }
+
     public function test_ai_consultant_dialog_accepts_question_and_renders_answer(): void
     {
         $market = Market::query()->create([
@@ -580,6 +603,91 @@ class QuickChatDrawerTest extends TestCase
 
         $this->assertSame('confirmed', $metadata['pending_action']['status'] ?? null);
         $this->assertSame('Задача создана.', $metadata['pending_action']['result_message'] ?? null);
+    }
+
+    public function test_ai_profile_update_requires_confirmation_before_saving(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $admin = $this->actingAsMarketAdmin($market);
+
+        app()->instance(AiConsultantService::class, new class extends AiConsultantService
+        {
+            public function answer(User $user, int $marketId, string $question, array $history = [], array $pageContext = []): array
+            {
+                return [
+                    'answer' => 'Подготовил обновление профиля. Проверьте, что всё верно, и подтвердите сохранение.',
+                    'error_type' => null,
+                    'chips' => [],
+                    'pending_action' => [
+                        'status' => 'pending',
+                        'tool' => 'update_my_profile',
+                        'payload' => [
+                            'tool' => 'update_my_profile',
+                            'job_title' => 'Управляющий',
+                            'responsibility_scope' => 'работа с арендаторами и задачами рынка',
+                            'phone' => '+7 913 000-00-00',
+                        ],
+                        'title' => 'Обновление профиля',
+                        'summary' => [
+                            ['label' => 'Должность', 'value' => 'Управляющий'],
+                            ['label' => 'Зона ответственности', 'value' => 'работа с арендаторами и задачами рынка'],
+                            ['label' => 'Телефон', 'value' => '+7 913 000-00-00'],
+                        ],
+                        'confirm_label' => 'Сохранить в профиль',
+                        'cancel_label' => 'Отменить',
+                    ],
+                ];
+            }
+        });
+
+        $component = Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer', 'ai', 1)
+            ->set('messageBody', 'Заполни мой профиль')
+            ->call('sendMessage')
+            ->assertHasNoErrors()
+            ->assertSet('isAiReplyPending', true)
+            ->call('completeAiReply')
+            ->assertSet('isAiReplyPending', false)
+            ->assertSee('Обновление профиля')
+            ->assertSee('Сохранить в профиль')
+            ->assertSee('Должность')
+            ->assertSee('Зона ответственности');
+
+        $this->assertDatabaseMissing('users', [
+            'id' => (int) $admin->id,
+            'job_title' => 'Управляющий',
+        ]);
+
+        $message = AiMessage::query()
+            ->where('role', AiMessage::ROLE_ASSISTANT)
+            ->where('body', 'Подготовил обновление профиля. Проверьте, что всё верно, и подтвердите сохранение.')
+            ->firstOrFail();
+
+        $component
+            ->call('confirmAiAction', 'ai-message-'.(int) $message->id)
+            ->assertHasNoErrors()
+            ->assertSee('Обновила: должность, зона ответственности, телефон.');
+
+        $this->assertDatabaseHas('users', [
+            'id' => (int) $admin->id,
+            'job_title' => 'Управляющий',
+            'phone' => '+79130000000',
+        ]);
+
+        $this->assertDatabaseHas('ai_user_profiles', [
+            'user_id' => (int) $admin->id,
+            'responsibility_scope' => 'работа с арендаторами и задачами рынка',
+        ]);
+
+        $metadata = (array) $message->refresh()->metadata;
+
+        $this->assertSame('confirmed', $metadata['pending_action']['status'] ?? null);
+        $this->assertSame('Обновила: должность, зона ответственности, телефон.', $metadata['pending_action']['result_message'] ?? null);
     }
 
     public function test_ai_action_tool_creates_task_with_resource_chip(): void

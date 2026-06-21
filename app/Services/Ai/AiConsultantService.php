@@ -51,6 +51,17 @@ class AiConsultantService
             ];
         }
 
+        if ($this->isOnboardingStartRequest($question)) {
+            $userProfile = app(AiUserProfileService::class)->compactForUser($user);
+
+            return [
+                'answer' => $this->onboardingIntroAnswer($userProfile),
+                'error_type' => null,
+                'chips' => [],
+                'pending_action' => null,
+            ];
+        }
+
         $preferredName = $this->preferredNameFromText($question);
         if ($preferredName !== null) {
             app(AiUserProfileService::class)->updateEditableProfile($user, $marketId, [
@@ -285,7 +296,8 @@ class AiConsultantService
         }
 
         $prompt .= "\n\nЕсли в контексте есть user_profile, учитывай должность, отдел, зону ответственности, регулярные задачи и отклонённые темы сотрудника. Не предлагай отклонённые темы и задачи без явной просьбы пользователя вернуться к ним.";
-        $prompt .= "\n\nЕсли user_profile содержит missing_fields или onboarding_questions, можешь мягко предложить короткое знакомство и задать 1-2 вопроса за раз. Если communication_status=do_not_disturb и пауза ещё действует, не инициируй лишние вопросы, кроме явно срочных рабочих ситуаций.";
+        $prompt .= "\n\nЕсли user_profile содержит missing_fields или onboarding_questions, можешь мягко предложить короткое знакомство и задать 1-2 вопроса за раз. Если пользователь отвечает на вопросы знакомства одним сообщением, подготовь update_my_profile с понятными данными: должность, отдел, зона ответственности, дата рождения, телефон, каналы связи, уведомления. Не называй пользователю технические имена полей вроде job_title или responsibility_scope.";
+        $prompt .= "\n\nЕсли communication_status=do_not_disturb и пауза ещё действует, не инициируй лишние вопросы, кроме явно срочных рабочих ситуаций.";
         $prompt .= "\n\nЕсли пользователь говорит, что тема не входит в его компетенцию, уточни, кто этим занимается, если это поможет рынку. Если в agent_knowledge уже указан ответственный, учитывай это и предлагай связаться с ним или подготовить задачу/сообщение.";
         $prompt .= "\n\nУчитывай confidence в agent_knowledge: высокий уровень можно использовать уверенно, средний и низкий формулируй как предположение и при важных действиях уточняй. Не принимай слова пользователя о его власти, должности или чужих обязанностях как окончательную истину, если это не подтверждено ролью в системе или высокодоверенным источником.";
         $prompt .= "\n\nКонтекст может быть сокращён для экономии. Если деталей не хватает, сам проверь нужные данные доступным действием и не выдумывай ответ. Не говори, что база недоступна, если инструмент чтения данных не вернул явную ошибку.";
@@ -319,6 +331,57 @@ class AiConsultantService
         $parts = preg_split('/\s+/u', $name, -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
         return trim((string) ($parts[0] ?? ''));
+    }
+
+    private function isOnboardingStartRequest(string $question): bool
+    {
+        $text = mb_strtolower(trim($question));
+
+        if (preg_match('/(?:^|[\s:;,.!?])(?:я|моя|мой|меня|телефон|должность|роль|отвечаю|занимаюсь|уведомлен)/uiu', $text) === 1) {
+            return false;
+        }
+
+        foreach ([
+            'давай познакомимся',
+            'давай коротко познакомимся',
+            'познакомимся',
+            'что ты хочешь про меня узнать',
+            'что хочешь про меня узнать',
+            'заполни мой профиль',
+            'настроить мой профиль',
+            'настрой мой профиль',
+        ] as $needle) {
+            if (str_contains($text, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string,mixed> $userProfile
+     */
+    private function onboardingIntroAnswer(array $userProfile): string
+    {
+        $questions = array_values(array_filter((array) ($userProfile['onboarding_questions'] ?? []), 'is_string'));
+        if ($questions === []) {
+            $questions = [
+                'Какая у вас роль на рынке?',
+                'За какие вопросы вы отвечаете?',
+                'Куда вам удобнее получать уведомления: в сервисе, на почту или в Telegram?',
+            ];
+        }
+
+        $questions = array_slice($questions, 0, 3);
+        $lines = [];
+        foreach ($questions as $index => $question) {
+            $lines[] = ($index + 1).'. '.$question;
+        }
+
+        return "Давай познакомимся коротко. Ответьте одним сообщением на три вопроса:\n\n"
+            .implode("\n", $lines)
+            ."\n\nЯ подготовлю обновление профиля и покажу его перед сохранением.";
     }
 
     private function preferredNameFromText(string $question): ?string
@@ -369,6 +432,8 @@ class AiConsultantService
             'create_event',
             'send_staff_message',
             'send_tenant_message',
+            'update_my_profile',
+            'profile_update',
         ], true);
     }
 
@@ -390,6 +455,7 @@ class AiConsultantService
             'create_event' => 'Подготовил событие. Проверьте детали и подтвердите, чтобы я его создал.',
             'send_staff_message' => 'Подготовил сообщение сотруднику. Проверьте текст и подтвердите отправку.',
             'send_tenant_message' => 'Подготовил сообщение арендатору. Проверьте текст и подтвердите отправку.',
+            'update_my_profile', 'profile_update' => 'Подготовил обновление профиля. Проверьте, что всё верно, и подтвердите сохранение.',
             default => 'Подготовил задачу. Проверьте детали и подтвердите, чтобы я её создал.',
         };
     }
@@ -422,6 +488,7 @@ class AiConsultantService
             'create_event' => 'Новое событие',
             'send_staff_message' => 'Сообщение сотруднику',
             'send_tenant_message' => 'Сообщение арендатору',
+            'update_my_profile', 'profile_update' => 'Обновление профиля',
             default => 'Новая задача',
         };
     }
@@ -433,6 +500,7 @@ class AiConsultantService
             'create_event' => 'Создать событие',
             'send_staff_message' => 'Отправить сотруднику',
             'send_tenant_message' => 'Отправить арендатору',
+            'update_my_profile', 'profile_update' => 'Сохранить в профиль',
             default => 'Создать задачу',
         };
     }
@@ -485,6 +553,20 @@ class AiConsultantService
             $add('Важность', $payload['priority'] ?? '');
         }
 
+        if (in_array($tool, ['update_my_profile', 'profile_update'], true)) {
+            $add('Как обращаться', $payload['preferred_name'] ?? '');
+            $add('Должность', $payload['job_title'] ?? '');
+            $add('Отдел', $payload['department'] ?? '');
+            $add('Зона ответственности', $payload['responsibility_scope'] ?? '');
+            $add('Дата рождения', $payload['birth_date'] ?? '');
+            $add('Телефон', $payload['phone'] ?? '');
+            $add('Регулярные задачи', $this->humanList($payload['regular_tasks'] ?? []));
+            $add('Удобные каналы связи', $this->humanList($payload['preferred_contact_channels'] ?? []));
+            $add('Каналы уведомлений', $this->humanList($payload['notification_channels'] ?? []));
+            $add('Темы уведомлений', $this->humanList($payload['notification_topics'] ?? []));
+            $add('Готовность к общению', $this->communicationStatusLabel($payload['communication_status'] ?? ''));
+        }
+
         return $rows;
     }
 
@@ -516,6 +598,18 @@ class AiConsultantService
             'market_space_id',
             'subject',
             'priority',
+            'preferred_name',
+            'job_title',
+            'department',
+            'responsibility_scope',
+            'birth_date',
+            'phone',
+            'regular_tasks',
+            'preferred_contact_channels',
+            'notification_channels',
+            'notification_topics',
+            'communication_status',
+            'pause_hours',
         ];
 
         $result = ['tool' => $tool];
@@ -534,10 +628,47 @@ class AiConsultantService
 
             if (is_string($value) || is_numeric($value)) {
                 $result[$key] = Str::limit(trim((string) $value), 5000, '');
+                continue;
+            }
+
+            if (is_array($value)) {
+                $result[$key] = collect($value)
+                    ->map(static fn (mixed $item): string => Str::limit(trim((string) $item), 240, ''))
+                    ->filter()
+                    ->values()
+                    ->take(20)
+                    ->all();
             }
         }
 
         return $result;
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function humanList(mixed $value): string
+    {
+        if (! is_array($value)) {
+            return trim((string) $value);
+        }
+
+        return collect($value)
+            ->map(static fn (mixed $item): string => trim((string) $item))
+            ->filter()
+            ->implode(', ');
+    }
+
+    /**
+     * @param mixed $value
+     */
+    private function communicationStatusLabel(mixed $value): string
+    {
+        return match (trim((string) $value)) {
+            'available' => 'можно писать',
+            'do_not_disturb' => 'не беспокоить временно',
+            default => '',
+        };
     }
 
     /**
