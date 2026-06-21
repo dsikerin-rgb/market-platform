@@ -47,6 +47,8 @@ class AiContextBudgeter
         return [
             'scope' => $this->compactValue($context['scope'] ?? [], 1, 180),
             'current_page' => $this->compactValue($context['current_page'] ?? [], 1, 180),
+            'user_profile' => $this->compactValue($context['user_profile'] ?? [], 1, 220),
+            'agent_knowledge' => $this->compactValue($context['agent_knowledge'] ?? [], 1, 220),
             'question_terms' => $this->compactValue($context['question_terms'] ?? [], 1, 180),
             'overview' => $this->compactValue($context['overview'] ?? [], 1, 180),
             '_context_budget' => [
