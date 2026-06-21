@@ -198,19 +198,24 @@ class AiUserProfileService
         foreach ([
             'job_title' => 'должность',
             'department' => 'отдел',
-            'responsibility_scope' => 'зона ответственности',
         ] as $field => $label) {
             if (array_key_exists($field, $payload)) {
-                $value = $this->cleanExtract((string) $payload[$field], $field === 'responsibility_scope' ? 240 : 100);
-                $profile->{$field} = $value !== '' ? $value : null;
+                $value = $this->cleanExtract((string) $payload[$field], 100);
+                $user->forceFill([$field => $value !== '' ? $value : null])->save();
                 $changed[] = $label;
             }
+        }
+
+        if (array_key_exists('responsibility_scope', $payload)) {
+            $value = $this->cleanExtract((string) $payload['responsibility_scope'], 240);
+            $profile->responsibility_scope = $value !== '' ? $value : null;
+            $changed[] = 'зона ответственности';
         }
 
         if (array_key_exists('birth_date', $payload)) {
             $birthDate = $this->parseBirthDate((string) $payload['birth_date']);
             if ($birthDate !== null) {
-                $profile->birth_date = $birthDate;
+                $user->forceFill(['birth_date' => $birthDate])->save();
                 $changed[] = 'дата рождения';
             }
         }
@@ -556,15 +561,21 @@ class AiUserProfileService
             $parts[] = 'Системные роли: '.$systemRoles;
         }
 
-        if (filled($profile->job_title)) {
+        if (filled($user->job_title ?? null)) {
+            $parts[] = 'Должность: '.trim((string) $user->job_title);
+        } elseif (filled($profile->job_title)) {
             $parts[] = 'Должность из переписки: '.trim((string) $profile->job_title).$this->authorityNote($profile, $user);
         }
 
-        if (filled($profile->department)) {
+        if (filled($user->department ?? null)) {
+            $parts[] = 'Отдел: '.trim((string) $user->department);
+        } elseif (filled($profile->department)) {
             $parts[] = 'Отдел из переписки: '.trim((string) $profile->department);
         }
 
-        if ($profile->birth_date) {
+        if ($user->birth_date) {
+            $parts[] = 'Дата рождения: '.$user->birth_date->format('d.m.Y');
+        } elseif ($profile->birth_date) {
             $parts[] = 'Дата рождения: '.$profile->birth_date->format('d.m.Y');
         }
 
@@ -622,10 +633,12 @@ class AiUserProfileService
      */
     private function compact(AiUserProfile $profile): array
     {
+        $user = $profile->user;
+
         return [
-            'job_title' => $profile->job_title,
-            'department' => $profile->department,
-            'birth_date' => $profile->birth_date?->toDateString(),
+            'job_title' => $user instanceof User ? ($user->job_title ?: $profile->job_title) : $profile->job_title,
+            'department' => $user instanceof User ? ($user->department ?: $profile->department) : $profile->department,
+            'birth_date' => ($user instanceof User ? $user->birth_date?->toDateString() : null) ?: $profile->birth_date?->toDateString(),
             'responsibility_scope' => $profile->responsibility_scope,
             'regular_tasks' => array_values(array_filter((array) ($profile->regular_tasks ?? []))),
             'rejected_topics' => array_values((array) ($profile->rejected_topics ?? [])),
@@ -646,7 +659,7 @@ class AiUserProfileService
     {
         $missing = [];
 
-        if (blank($profile->job_title)) {
+        if (blank($user?->job_title ?? null) && blank($profile->job_title)) {
             $missing[] = 'job_title';
         }
 
@@ -654,7 +667,7 @@ class AiUserProfileService
             $missing[] = 'responsibility_scope';
         }
 
-        if (! $profile->birth_date) {
+        if (! $user?->birth_date && ! $profile->birth_date) {
             $missing[] = 'birth_date';
         }
 

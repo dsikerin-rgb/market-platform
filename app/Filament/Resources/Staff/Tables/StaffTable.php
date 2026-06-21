@@ -80,6 +80,12 @@ class StaffTable
                     ->copyable()
                     ->toggleable(),
 
+                Tables\Columns\TextColumn::make('job_title')
+                    ->label('Должность')
+                    ->placeholder('Не указана')
+                    ->searchable()
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('market.name')
                     ->label('Рынок')
                     ->sortable()

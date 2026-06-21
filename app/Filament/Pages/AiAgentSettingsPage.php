@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Models\AiMessage;
+use App\Models\AiKnowledgeEntry;
 use App\Services\Ai\AiAgentSettings;
-use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -39,9 +39,16 @@ class AiAgentSettingsPage extends Page
      */
     public array $actionLog = [];
 
+    /**
+     * @var list<array<string, mixed>>
+     */
+    public array $knowledgeEntries = [];
+
     public static function canAccess(): bool
     {
-        return AdminCapabilities::canAccessMarketSettings(Filament::auth()->user());
+        $user = Filament::auth()->user();
+
+        return (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
     }
 
     public function mount(AiAgentSettings $settings): void
@@ -53,6 +60,7 @@ class AiAgentSettingsPage extends Page
 
         $this->form->fill($data);
         $this->actionLog = $this->loadActionLog();
+        $this->knowledgeEntries = $this->loadKnowledgeEntries();
     }
 
     public function getHeading(): string|Htmlable|null
@@ -244,6 +252,14 @@ class AiAgentSettingsPage extends Page
                                 ->viewData(fn (): array => ['actionLog' => $this->actionLog])
                                 ->columnSpanFull(),
                         ]),
+
+                    Tab::make('Справочник')
+                        ->visible(fn (): bool => $this->canViewAiResources())
+                        ->schema([
+                            View::make('filament.pages.partials.ai-agent-knowledge')
+                                ->viewData(fn (): array => ['knowledgeEntries' => $this->knowledgeEntries])
+                                ->columnSpanFull(),
+                        ]),
                 ]),
             ]);
     }
@@ -255,6 +271,7 @@ class AiAgentSettingsPage extends Page
         $settings->save($this->form->getState());
         $this->form->fill($this->formatSettingsForForm($settings->get()));
         $this->actionLog = $this->loadActionLog();
+        $this->knowledgeEntries = $this->loadKnowledgeEntries();
 
         Notification::make()
             ->title('Настройки ИИ-агента сохранены')
@@ -316,6 +333,44 @@ class AiAgentSettingsPage extends Page
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadKnowledgeEntries(): array
+    {
+        if (! $this->canViewAiResources()) {
+            return [];
+        }
+
+        return AiKnowledgeEntry::query()
+            ->with(['market:id,name', 'sourceUser:id,name,email'])
+            ->latest('updated_at')
+            ->limit(100)
+            ->get()
+            ->map(function (AiKnowledgeEntry $entry): array {
+                $value = (array) ($entry->value ?? []);
+
+                return [
+                    'updated_at' => $this->formatActionLogDate($entry->updated_at),
+                    'dictionary' => Str::limit((string) $entry->dictionary, 80, ''),
+                    'label' => Str::limit((string) $entry->label, 160, ''),
+                    'market' => Str::limit((string) ($entry->market?->name ?? 'Рынок'), 80, ''),
+                    'source' => Str::limit((string) ($entry->sourceUser?->name ?? 'Не указан'), 80, ''),
+                    'confidence' => (int) ($entry->confidence ?? 0),
+                    'topic' => Str::limit((string) ($value['topic'] ?? ''), 120, ''),
+                    'responsible' => Str::limit((string) ($value['responsible_name'] ?? ''), 120, ''),
+                ];
+            })
+            ->all();
+    }
+
+    private function canViewAiResources(): bool
+    {
+        $user = Filament::auth()->user();
+
+        return (bool) $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
     }
 
     /**

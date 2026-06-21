@@ -7,9 +7,12 @@ use App\Support\RoleScenarioCatalog;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Filament\Forms;
-use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Schemas\Components\View;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 
@@ -96,6 +99,29 @@ class StaffForm
                         ->placeholder('+7 900 000-00-00')
                         ->helperText('Необязательный номер для связи с сотрудником.')
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
+                        ->columnSpan(['default' => 12, 'md' => 6]),
+
+                    Forms\Components\TextInput::make('job_title')
+                        ->label('Должность')
+                        ->maxLength(255)
+                        ->nullable()
+                        ->placeholder('Управляющий, маркетолог, бухгалтер')
+                        ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
+                        ->columnSpan(['default' => 12, 'md' => 6]),
+
+                    Forms\Components\TextInput::make('department')
+                        ->label('Отдел')
+                        ->maxLength(255)
+                        ->nullable()
+                        ->placeholder('Администрация, финансы, маркетинг')
+                        ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
+                        ->columnSpan(['default' => 12, 'md' => 6]),
+
+                    Forms\Components\DatePicker::make('birth_date')
+                        ->label('Дата рождения')
+                        ->native(false)
+                        ->displayFormat('d.m.Y')
+                        ->helperText('Нужна для напоминаний о днях рождения сотрудников.')
                         ->columnSpan(['default' => 12, 'md' => 6]),
                 ]),
 
@@ -197,6 +223,102 @@ class StaffForm
                 ->visible(fn (string $operation): bool => $operation === 'create'
                     && (bool) $user
                     && ($user->isSuperAdmin() || $user->isMarketAdmin())),
+
+            Section::make('ИИ-агент')
+                ->description('Персональный профиль и знания агента по сотруднику. Видно только super-admin.')
+                ->schema([
+                    Tabs::make('staff_ai_agent_tabs')
+                        ->tabs([
+                            Tab::make('Профиль агента')
+                                ->schema([
+                                    Section::make('Рабочий контекст')
+                                        ->relationship('aiProfile')
+                                        ->schema([
+                                            Forms\Components\Hidden::make('market_id')
+                                                ->default(fn ($record) => $record?->market_id),
+
+                                            Grid::make(2)->schema([
+                                                Forms\Components\TextInput::make('job_title')
+                                                    ->label('Должность из переписки')
+                                                    ->maxLength(255),
+
+                                                Forms\Components\TextInput::make('department')
+                                                    ->label('Отдел из переписки')
+                                                    ->maxLength(255),
+
+                                                Forms\Components\DatePicker::make('birth_date')
+                                                    ->label('Дата рождения')
+                                                    ->native(false)
+                                                    ->displayFormat('d.m.Y'),
+
+                                                Forms\Components\Select::make('communication_status')
+                                                    ->label('Готовность к общению')
+                                                    ->options([
+                                                        'available' => 'Можно общаться',
+                                                        'do_not_disturb' => 'Временная пауза',
+                                                    ])
+                                                    ->default('available'),
+
+                                                Forms\Components\DateTimePicker::make('communication_paused_until')
+                                                    ->label('Пауза до')
+                                                    ->native(false)
+                                                    ->displayFormat('d.m.Y H:i'),
+
+                                                Forms\Components\Select::make('onboarding_status')
+                                                    ->label('Знакомство')
+                                                    ->options([
+                                                        'new' => 'Не начиналось',
+                                                        'incomplete' => 'Не завершено',
+                                                        'complete' => 'Завершено',
+                                                    ])
+                                                    ->default('new'),
+                                            ]),
+
+                                            Forms\Components\Textarea::make('responsibility_scope')
+                                                ->label('Зона ответственности из переписки')
+                                                ->rows(3)
+                                                ->columnSpanFull(),
+
+                                            Forms\Components\TagsInput::make('regular_tasks')
+                                                ->label('Регулярные задачи')
+                                                ->placeholder('Добавьте регулярную задачу')
+                                                ->columnSpanFull(),
+
+                                            Forms\Components\CheckboxList::make('preferred_contact_channels')
+                                                ->label('Предпочитаемые каналы связи')
+                                                ->options(UserNotificationPreferences::channelLabels())
+                                                ->columns(3),
+
+                                            Forms\Components\Textarea::make('profile_summary')
+                                                ->label('Сводка агента')
+                                                ->rows(5)
+                                                ->disabled()
+                                                ->dehydrated(false)
+                                                ->columnSpanFull(),
+                                        ])
+                                        ->columns(2),
+                                ]),
+
+                            Tab::make('Отклонённые темы')
+                                ->schema([
+                                    View::make('filament.resources.staff.partials.ai-profile-topics')
+                                        ->viewData(fn ($record): array => ['record' => $record])
+                                        ->columnSpanFull(),
+                                ]),
+
+                            Tab::make('Справочник агента')
+                                ->schema([
+                                    View::make('filament.resources.staff.partials.ai-profile-knowledge')
+                                        ->viewData(fn ($record): array => ['record' => $record])
+                                        ->columnSpanFull(),
+                                ]),
+                        ])
+                        ->columnSpanFull(),
+                ])
+                ->collapsible()
+                ->visible(fn (string $operation): bool => $operation === 'edit'
+                    && (bool) $user
+                    && $user->isSuperAdmin()),
         ]);
     }
 }
