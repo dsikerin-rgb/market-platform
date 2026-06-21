@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
@@ -40,6 +41,9 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         'name',
         'email',
         'phone',
+        'job_title',
+        'department',
+        'birth_date',
         'password',
         'market_id',
         'tenant_id',
@@ -75,6 +79,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             'telegram_linked_at' => 'datetime',
             'notification_preferences' => 'array',
             'last_seen_at' => 'datetime',
+            'birth_date' => 'date',
         ];
     }
 
@@ -86,6 +91,11 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
+    }
+
+    public function aiProfile(): HasOne
+    {
+        return $this->hasOne(AiUserProfile::class);
     }
 
     public function tenantSpaces(): BelongsToMany

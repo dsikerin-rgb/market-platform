@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\AiAgentSettingsPage;
 use App\Filament\Pages\MarketSettings;
 use App\Filament\Pages\OneCDebtDecisionPreview;
 use App\Filament\Pages\OneCReconciliation;
@@ -205,6 +206,20 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertTrue(AdminCapabilities::canUpdateMarketSettings($user));
     }
 
+    public function test_ai_agent_settings_are_super_admin_only(): void
+    {
+        $market = $this->createMarket();
+        $marketAdmin = $this->createMarketUser($market, 'market-admin');
+
+        $this->actingAsFilamentUser($marketAdmin);
+        self::assertFalse(AiAgentSettingsPage::canAccess());
+
+        $superAdmin = $this->createSuperAdmin();
+
+        $this->actingAsFilamentUser($superAdmin);
+        self::assertTrue(AiAgentSettingsPage::canAccess());
+    }
+
     public static function marketDirectoryManagerRoles(): array
     {
         return [
@@ -296,6 +311,20 @@ class AdminCapabilitiesAccessTest extends TestCase
             'email' => $roleName . '-' . uniqid('', true) . '@example.test',
         ]);
         $user->assignRole($roleName);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return $user;
+    }
+
+    private function createSuperAdmin(): User
+    {
+        Role::findOrCreate('super-admin', 'web');
+
+        $user = User::factory()->create([
+            'market_id' => null,
+            'email' => 'super-admin-' . uniqid('', true) . '@example.test',
+        ]);
+        $user->assignRole('super-admin');
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         return $user;
