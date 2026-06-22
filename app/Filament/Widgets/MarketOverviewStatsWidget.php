@@ -69,6 +69,8 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $maintenanceSpaces = (int) $spaceMetrics['maintenance_spaces'];
         $maintenanceArea = (float) $spaceMetrics['maintenance_area_sqm'];
         $rentableArea = (float) $spaceMetrics['rentable_area_sqm'];
+        $averageRate = $spaceMetrics['average_rent_rate_per_sqm'];
+        $pricedArea = (float) ($spaceMetrics['priced_area_sqm'] ?? 0);
 
         $tenantsNow = MarketSpaceDashboardMetrics::countCurrentTenants($marketId);
 
@@ -188,6 +190,18 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             icon: 'heroicon-o-chart-bar',
         );
         $stats[] = $this->makeStat(
+            label: 'Средняя ставка, ₽/м²',
+            value: is_numeric($averageRate) && $averageRate > 0
+                ? $this->formatMoney((float) $averageRate) . ' ₽'
+                : '—',
+            description: is_numeric($averageRate) && $averageRate > 0
+                ? 'Взвешено по ' . $this->formatArea($pricedArea) . ' с заданной ставкой'
+                : 'Нет данных по ставкам',
+            url: $spacesUrl,
+            color: is_numeric($averageRate) && $averageRate > 0 ? 'primary' : 'gray',
+            icon: 'heroicon-o-banknotes',
+        );
+        $stats[] = $this->makeStat(
             label: 'Начислено за месяц',
             value: $this->formatMoney($accruedValue) . ' ₽',
             description: $reportDesc,
@@ -239,6 +253,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $stats[] = $this->makeStat('Свободные места, м²', '0 м²', $note, null, 'warning', 'heroicon-o-sparkles');
         $stats[] = $this->makeStat('Служебные места, м²', '0 м²', $note, null, 'gray', 'heroicon-o-wrench-screwdriver');
         $stats[] = $this->makeStat('Заполняемость', '0 %', $note, null, 'gray', 'heroicon-o-chart-bar');
+        $stats[] = $this->makeStat('Средняя ставка, ₽/м²', '—', $note, null, 'gray', 'heroicon-o-banknotes');
         $stats[] = $this->makeStat('Начислено за месяц', '0 ₽', $note, null, 'primary', 'heroicon-o-banknotes');
         $stats[] = $this->makeStat('Оплачено за месяц', '0 ₽', $note, null, 'success', 'heroicon-o-arrow-down-circle');
         $stats[] = $this->makeStat('Долг на конец месяца', '0 ₽', $note, null, 'gray', 'heroicon-o-scale');

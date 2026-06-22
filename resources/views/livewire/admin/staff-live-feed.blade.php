@@ -361,6 +361,8 @@
         .staff-live-feed__list {
             display: grid;
             gap: 0.85rem;
+            max-height: 42rem;
+            overflow: auto;
             padding: 0 1.25rem 1.25rem;
         }
 

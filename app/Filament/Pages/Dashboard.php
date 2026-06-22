@@ -7,7 +7,6 @@ namespace App\Filament\Pages;
 
 use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketAttentionWidget;
-use App\Filament\Widgets\MarketAverageRentRateWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
 use App\Filament\Widgets\MarketSwitcherWidget;
 use App\Filament\Widgets\AccrualCompositionWidget;
@@ -202,10 +201,10 @@ class Dashboard extends BaseDashboard
                 ],
                 'widgets' => $this->resolveVisibleWorkspaceWidgets([
                     \App\Filament\Widgets\RevenueYearChartWidget::class,
+                    AccrualCompositionWidget::class,
                     OneCPaymentsSummaryWidget::class,
                     OneCAccrualPaymentReconciliationWidget::class,
                     OneCDebtSnapshotsHistoryWidget::class,
-                    AccrualCompositionWidget::class,
                 ]),
             ],
             [
@@ -219,7 +218,6 @@ class Dashboard extends BaseDashboard
                 ],
                 'widgets' => $this->resolveVisibleWorkspaceWidgets([
                     MarketOverviewStatsWidget::class,
-                    MarketAverageRentRateWidget::class,
                     MarketSpacesStatusChartWidget::class,
                 ]),
             ],
@@ -568,10 +566,6 @@ class Dashboard extends BaseDashboard
             'spaces_status' => [
                 'class' => MarketSpacesStatusChartWidget::class,
                 'label' => 'Статусы торговых мест',
-            ],
-            'average_rent_rate' => [
-                'class' => MarketAverageRentRateWidget::class,
-                'label' => 'Средняя ставка за м²',
             ],
             'recent_requests' => [
                 'class' => RecentTenantRequestsWidget::class,
