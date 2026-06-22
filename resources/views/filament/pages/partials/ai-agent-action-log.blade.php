@@ -44,8 +44,10 @@
         .ai-action-log__message--target{border-color:rgba(14,165,233,.38);background:rgba(224,242,254,.72)}
         .dark .ai-action-log__message--target{background:rgba(14,165,233,.14)}
         .ai-action-log__message-meta{display:flex;justify-content:space-between;gap:12px;font-size:11px;font-weight:800;line-height:1.25;color:#64748b}
-        .ai-action-log__message-body{margin-top:5px;font-size:13px;line-height:1.42;color:#0f172a}
+        .ai-action-log__message-body{margin-top:5px;font-size:13px;line-height:1.42;color:#0f172a;overflow-wrap:anywhere}
         .dark .ai-action-log__message-body{color:#e2e8f0}
+        .ai-action-log__message-body strong{font-weight:850;color:#0f172a}
+        .dark .ai-action-log__message-body strong{color:#f8fafc}
         .ai-action-log__chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
         .ai-action-log__chip{display:inline-flex;align-items:center;border-radius:999px;border:1px solid rgba(14,165,233,.28);background:rgba(224,242,254,.8);color:#075985;padding:4px 9px;font-size:12px;font-weight:800;text-decoration:none}
         .ai-action-log__empty{padding:18px;border:1px dashed rgba(148,163,184,.42);border-radius:12px;color:#64748b}
@@ -72,8 +74,6 @@
         .dark .ai-action-log__conversation-actor{color:#f8fafc}
         .ai-action-log__conversation-subtitle{font-size:12px;line-height:1.35;color:#64748b}
         .dark .ai-action-log__conversation-subtitle{color:#94a3b8}
-        .ai-action-log__conversation-preview{font-size:12px;line-height:1.35;color:#334155}
-        .dark .ai-action-log__conversation-preview{color:#cbd5e1}
         .ai-action-log__conversation-detail{display:grid;grid-template-rows:auto 1fr;min-width:0;background:linear-gradient(180deg,rgba(248,250,252,.78),rgba(255,255,255,.9))}
         .dark .ai-action-log__conversation-detail{background:rgba(15,23,42,.28)}
         .ai-action-log__conversation-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid rgba(148,163,184,.18)}
@@ -214,7 +214,7 @@
                                         <span>{{ $message['author'] }}</span>
                                         <span>{{ $message['created_at'] }}</span>
                                     </div>
-                                    <div class="ai-action-log__message-body">{{ $message['body'] }}</div>
+                                    <div class="ai-action-log__message-body">{!! $message['body_html'] ?? e($message['body'] ?? '') !!}</div>
                                 </div>
                             @endforeach
                         </div>
@@ -225,7 +225,7 @@
                                     <span>{{ $row['message_preview']['author'] }}</span>
                                     <span>{{ $row['message_preview']['created_at'] }}</span>
                                 </div>
-                                <div class="ai-action-log__message-body">{{ $row['message_preview']['body'] }}</div>
+                                <div class="ai-action-log__message-body">{!! $row['message_preview']['body_html'] ?? e($row['message_preview']['body'] ?? '') !!}</div>
                             </div>
                         </div>
                     @else
@@ -263,7 +263,6 @@
                 <div class="ai-action-log__conversation-list" aria-label="Переписки ИИ-агента">
                     @foreach (($conversationLog ?? []) as $conversation)
                         @php
-                            $lastMessage = collect($conversation['messages'] ?? [])->last();
                             $isActive = (int) ($selectedConversation['id'] ?? 0) === (int) $conversation['id'];
                         @endphp
 
@@ -281,9 +280,6 @@
                             <span class="ai-action-log__conversation-subtitle">{{ $conversation['market'] }}</span>
                             @if (filled($conversation['context_page_label']))
                                 <span class="ai-action-log__conversation-subtitle">{{ $conversation['context_page_label'] }}</span>
-                            @endif
-                            @if (! empty($lastMessage['body']))
-                                <span class="ai-action-log__conversation-preview">{{ $lastMessage['body'] }}</span>
                             @endif
                         </button>
                     @endforeach
@@ -313,12 +309,12 @@
 
                         <div class="ai-action-log__conversation-thread">
                             @forelse (($selectedConversation['messages'] ?? []) as $message)
-                                <div class="ai-action-log__message ai-action-log__message--{{ $message['role'] }}">
+                                <div class="ai-action-log__message ai-action-log__message--{{ $message['role_key'] }}">
                                     <div class="ai-action-log__message-meta">
                                         <span>{{ $message['author'] }}</span>
                                         <span>{{ $message['created_at'] }}</span>
                                     </div>
-                                    <div class="ai-action-log__message-body">{{ $message['body'] }}</div>
+                                    <div class="ai-action-log__message-body">{!! $message['body_html'] ?? e($message['body'] ?? '') !!}</div>
                                 </div>
                             @empty
                                 <div class="ai-action-log__context">
