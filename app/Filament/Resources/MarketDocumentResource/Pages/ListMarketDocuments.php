@@ -123,18 +123,11 @@ class ListMarketDocuments extends ListRecords
                     ->send();
             });
 
-        $createAction = Actions\CreateAction::make()
+        $createAction = Actions\Action::make('createDocument')
             ->label('Добавить документ')
-            ->icon('heroicon-o-arrow-up-tray');
-
-        if (method_exists($createAction, 'slideOver')) {
-            $createAction->slideOver();
-        }
-
-        if (method_exists($createAction, 'modalWidth')) {
-            $createAction->modalWidth('5xl');
-        }
-
+            ->icon('heroicon-o-arrow-up-tray')
+            ->url(fn (): string => MarketDocumentResource::getUrl('create'))
+            ->extraAttributes(['wire:navigate' => true]);
         return [$folderAction, $createAction];
     }
 
