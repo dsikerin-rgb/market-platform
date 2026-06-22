@@ -78,6 +78,8 @@ class AiAgentAuditLogTest extends TestCase
         $this->assertStringContainsString('Здесь видны проверки, ссылки, подготовленные действия и результат выполнения', $view);
         $this->assertStringContainsString('actionLogFilters.search', $view);
         $this->assertStringContainsString('$row[\'conversation_preview\']', $view);
+        $this->assertStringContainsString('Переписки ИИ-агента', $view);
+        $this->assertStringContainsString('$conversationLog', $view);
         $this->assertStringContainsString('$row[\'event_label\']', $view);
         $this->assertStringContainsString('Событий агента пока нет', $view);
     }
