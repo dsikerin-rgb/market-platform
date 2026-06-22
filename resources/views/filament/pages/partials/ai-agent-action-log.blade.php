@@ -56,8 +56,41 @@
         .ai-action-log__section-copy{margin-top:4px;font-size:13px;line-height:1.4;color:#64748b}
         .ai-action-log__counter{display:inline-flex;align-items:center;border-radius:999px;background:rgba(15,23,42,.06);padding:4px 9px;font-size:12px;font-weight:800;color:#475569}
         .dark .ai-action-log__counter{background:rgba(148,163,184,.14);color:#cbd5e1}
+        .ai-action-log__conversation-browser{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);min-height:520px;border:1px solid rgba(148,163,184,.24);border-radius:18px;background:rgba(255,255,255,.84);overflow:hidden;box-shadow:0 14px 38px rgba(15,23,42,.045)}
+        .dark .ai-action-log__conversation-browser{border-color:rgba(148,163,184,.22);background:rgba(15,23,42,.44)}
+        .ai-action-log__conversation-list{border-right:1px solid rgba(148,163,184,.22);background:rgba(248,250,252,.72);overflow:auto;max-height:620px}
+        .dark .ai-action-log__conversation-list{border-right-color:rgba(148,163,184,.18);background:rgba(15,23,42,.32)}
+        .ai-action-log__conversation-item{width:100%;display:grid;gap:6px;text-align:left;border:0;border-bottom:1px solid rgba(148,163,184,.16);background:transparent;padding:14px 16px;cursor:pointer;color:#0f172a}
+        .ai-action-log__conversation-item:hover{background:rgba(224,242,254,.58)}
+        .ai-action-log__conversation-item--active{background:#e0f2fe;box-shadow:inset 3px 0 0 #0ea5e9}
+        .dark .ai-action-log__conversation-item{color:#f8fafc;border-bottom-color:rgba(148,163,184,.13)}
+        .dark .ai-action-log__conversation-item:hover{background:rgba(14,165,233,.12)}
+        .dark .ai-action-log__conversation-item--active{background:rgba(14,165,233,.18)}
+        .ai-action-log__conversation-item-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;font-size:12px;line-height:1.25;color:#64748b}
+        .dark .ai-action-log__conversation-item-top{color:#94a3b8}
+        .ai-action-log__conversation-actor{font-size:14px;font-weight:850;line-height:1.25;color:#0f172a}
+        .dark .ai-action-log__conversation-actor{color:#f8fafc}
+        .ai-action-log__conversation-subtitle{font-size:12px;line-height:1.35;color:#64748b}
+        .dark .ai-action-log__conversation-subtitle{color:#94a3b8}
+        .ai-action-log__conversation-preview{font-size:12px;line-height:1.35;color:#334155}
+        .dark .ai-action-log__conversation-preview{color:#cbd5e1}
+        .ai-action-log__conversation-detail{display:grid;grid-template-rows:auto 1fr;min-width:0;background:linear-gradient(180deg,rgba(248,250,252,.78),rgba(255,255,255,.9))}
+        .dark .ai-action-log__conversation-detail{background:rgba(15,23,42,.28)}
+        .ai-action-log__conversation-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid rgba(148,163,184,.18)}
+        .ai-action-log__conversation-detail-title{font-size:18px;font-weight:850;line-height:1.25;color:#0f172a}
+        .dark .ai-action-log__conversation-detail-title{color:#f8fafc}
+        .ai-action-log__conversation-detail-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+        .ai-action-log__conversation-pill{display:inline-flex;align-items:center;border-radius:999px;background:rgba(15,23,42,.06);padding:4px 9px;font-size:12px;font-weight:750;color:#475569}
+        .dark .ai-action-log__conversation-pill{background:rgba(148,163,184,.14);color:#cbd5e1}
+        .ai-action-log__conversation-thread{display:grid;align-content:start;gap:10px;padding:18px 20px;overflow:auto;max-height:560px}
+        .ai-action-log__message--assistant{margin-right:auto;max-width:min(720px,88%)}
+        .ai-action-log__message--user{margin-left:auto;max-width:min(620px,82%);background:rgba(220,252,231,.78);border-color:rgba(34,197,94,.24)}
+        .ai-action-log__message--tool{max-width:min(720px,88%);background:rgba(241,245,249,.9)}
+        .dark .ai-action-log__message--user{background:rgba(34,197,94,.14);border-color:rgba(34,197,94,.22)}
+        .dark .ai-action-log__message--tool{background:rgba(30,41,59,.58)}
         @media (max-width:1100px){.ai-action-log__filters{grid-template-columns:1fr 1fr}.ai-action-log__row{grid-template-columns:1fr}}
-        @media (max-width:640px){.ai-action-log__head{display:block}.ai-action-log__filters{grid-template-columns:1fr}.ai-action-log__tools{margin-top:10px}.ai-action-log__conversation-head{display:block}}
+        @media (max-width:860px){.ai-action-log__conversation-browser{grid-template-columns:1fr}.ai-action-log__conversation-list{max-height:260px;border-right:0;border-bottom:1px solid rgba(148,163,184,.22)}}
+        @media (max-width:640px){.ai-action-log__head{display:block}.ai-action-log__filters{grid-template-columns:1fr}.ai-action-log__tools{margin-top:10px}.ai-action-log__conversation-head{display:block}.ai-action-log__conversation-detail-head{display:block}.ai-action-log__message--assistant,.ai-action-log__message--user,.ai-action-log__message--tool{max-width:100%}}
     </style>
 
     <div class="ai-action-log__head">
@@ -221,56 +254,89 @@
             <span class="ai-action-log__counter">{{ count($conversationLog ?? []) }}</span>
         </div>
 
-        <div class="ai-action-log">
-            @forelse (($conversationLog ?? []) as $conversation)
-                <div class="ai-action-log__row" wire:key="ai-conversation-log-row-{{ $conversation['id'] }}">
-                    <div class="ai-action-log__meta">
-                        <div>{{ $conversation['updated_at'] }}</div>
-                        <div>{{ $conversation['actor'] }}</div>
-                        <div>{{ $conversation['market'] }}</div>
-                        <div>Сообщений: {{ $conversation['messages_count'] }}</div>
-                    </div>
+        @if (empty($conversationLog ?? []))
+            <div class="ai-action-log__empty">
+                Переписок с агентом пока нет.
+            </div>
+        @else
+            <div class="ai-action-log__conversation-browser">
+                <div class="ai-action-log__conversation-list" aria-label="Переписки ИИ-агента">
+                    @foreach (($conversationLog ?? []) as $conversation)
+                        @php
+                            $lastMessage = collect($conversation['messages'] ?? [])->last();
+                            $isActive = (int) ($selectedConversation['id'] ?? 0) === (int) $conversation['id'];
+                        @endphp
 
-                    <div>
-                        <div class="ai-action-log__event">Диалог</div>
-                        <div class="ai-action-log__action">{{ $conversation['title'] }}</div>
-
-                        <div class="ai-action-log__summary">
+                        <button
+                            type="button"
+                            class="ai-action-log__conversation-item {{ $isActive ? 'ai-action-log__conversation-item--active' : '' }}"
+                            wire:key="ai-conversation-list-item-{{ $conversation['id'] }}"
+                            wire:click="selectConversation({{ (int) $conversation['id'] }})"
+                        >
+                            <span class="ai-action-log__conversation-item-top">
+                                <span>{{ $conversation['updated_at'] }}</span>
+                                <span>{{ $conversation['messages_count'] }} сообщ.</span>
+                            </span>
+                            <span class="ai-action-log__conversation-actor">{{ $conversation['actor'] }}</span>
+                            <span class="ai-action-log__conversation-subtitle">{{ $conversation['market'] }}</span>
                             @if (filled($conversation['context_page_label']))
-                                <div><strong>Страница:</strong> {{ $conversation['context_page_label'] }}</div>
+                                <span class="ai-action-log__conversation-subtitle">{{ $conversation['context_page_label'] }}</span>
                             @endif
+                            @if (! empty($lastMessage['body']))
+                                <span class="ai-action-log__conversation-preview">{{ $lastMessage['body'] }}</span>
+                            @endif
+                        </button>
+                    @endforeach
+                </div>
 
-                            @if (filled($conversation['context_page_url']))
-                                <div>
-                                    <a class="ai-action-log__conversation-link" href="{{ $conversation['context_page_url'] }}">
-                                        Открыть страницу
-                                    </a>
+                @if (! empty($selectedConversation))
+                    <div class="ai-action-log__conversation-detail" wire:key="ai-conversation-detail-{{ $selectedConversation['id'] }}">
+                        <div class="ai-action-log__conversation-detail-head">
+                            <div>
+                                <div class="ai-action-log__conversation-detail-title">{{ $selectedConversation['actor'] }}</div>
+                                <div class="ai-action-log__conversation-detail-meta">
+                                    <span class="ai-action-log__conversation-pill">{{ $selectedConversation['market'] }}</span>
+                                    <span class="ai-action-log__conversation-pill">{{ $selectedConversation['messages_count'] }} сообщений</span>
+                                    <span class="ai-action-log__conversation-pill">{{ $selectedConversation['updated_at'] }}</span>
+                                    @if (filled($selectedConversation['context_page_label']))
+                                        <span class="ai-action-log__conversation-pill">{{ $selectedConversation['context_page_label'] }}</span>
+                                    @endif
                                 </div>
+                            </div>
+
+                            @if (filled($selectedConversation['context_page_url']))
+                                <a class="ai-action-log__button ai-action-log__button--muted" href="{{ $selectedConversation['context_page_url'] }}">
+                                    Открыть страницу
+                                </a>
                             @endif
                         </div>
-                    </div>
 
-                    <div class="ai-action-log__messages">
-                        @forelse (($conversation['messages'] ?? []) as $message)
-                            <div class="ai-action-log__message">
-                                <div class="ai-action-log__message-meta">
-                                    <span>{{ $message['author'] }}</span>
-                                    <span>{{ $message['created_at'] }}</span>
+                        <div class="ai-action-log__conversation-thread">
+                            @forelse (($selectedConversation['messages'] ?? []) as $message)
+                                <div class="ai-action-log__message ai-action-log__message--{{ $message['role'] }}">
+                                    <div class="ai-action-log__message-meta">
+                                        <span>{{ $message['author'] }}</span>
+                                        <span>{{ $message['created_at'] }}</span>
+                                    </div>
+                                    <div class="ai-action-log__message-body">{{ $message['body'] }}</div>
                                 </div>
-                                <div class="ai-action-log__message-body">{{ $message['body'] }}</div>
-                            </div>
-                        @empty
-                            <div class="ai-action-log__context">
-                                В этом диалоге пока нет сообщений.
-                            </div>
-                        @endforelse
+                            @empty
+                                <div class="ai-action-log__context">
+                                    В этом диалоге пока нет сообщений.
+                                </div>
+                            @endforelse
+                        </div>
                     </div>
-                </div>
-            @empty
-                <div class="ai-action-log__empty">
-                    Переписок с агентом пока нет.
-                </div>
-            @endforelse
-        </div>
+                @else
+                    <div class="ai-action-log__conversation-detail">
+                        <div class="ai-action-log__conversation-thread">
+                            <div class="ai-action-log__empty">
+                                Выберите переписку слева.
+                            </div>
+                        </div>
+                    </div>
+                @endif
+            </div>
+        @endif
     </div>
 </div>

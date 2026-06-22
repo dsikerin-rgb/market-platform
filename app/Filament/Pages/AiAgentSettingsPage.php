@@ -49,6 +49,8 @@ class AiAgentSettingsPage extends Page
      */
     public array $conversationLog = [];
 
+    public ?int $selectedConversationId = null;
+
     /**
      * @var array{status:string,event_type:string,search:string}
      */
@@ -87,6 +89,7 @@ class AiAgentSettingsPage extends Page
         $this->form->fill($data);
         $this->actionLog = $this->loadActionLog();
         $this->conversationLog = $this->loadConversationLog();
+        $this->syncSelectedConversation();
         $this->knowledgeEntries = $this->loadKnowledgeEntries();
     }
 
@@ -284,6 +287,7 @@ class AiAgentSettingsPage extends Page
                                 ->viewData(fn (): array => [
                                     'actionLog' => $this->actionLog,
                                     'conversationLog' => $this->conversationLog,
+                                    'selectedConversation' => $this->selectedConversation(),
                                 ])
                                 ->columnSpanFull(),
                         ]),
@@ -310,6 +314,7 @@ class AiAgentSettingsPage extends Page
         $this->form->fill($this->formatSettingsForForm($settings->get()));
         $this->actionLog = $this->loadActionLog();
         $this->conversationLog = $this->loadConversationLog();
+        $this->syncSelectedConversation();
         $this->knowledgeEntries = $this->loadKnowledgeEntries();
 
         Notification::make()
@@ -322,12 +327,14 @@ class AiAgentSettingsPage extends Page
     {
         $this->actionLog = $this->loadActionLog();
         $this->conversationLog = $this->loadConversationLog();
+        $this->syncSelectedConversation();
     }
 
     public function refreshActionLog(): void
     {
         $this->actionLog = $this->loadActionLog();
         $this->conversationLog = $this->loadConversationLog();
+        $this->syncSelectedConversation();
     }
 
     public function resetActionLogFilters(): void
@@ -339,6 +346,13 @@ class AiAgentSettingsPage extends Page
         ];
         $this->actionLog = $this->loadActionLog();
         $this->conversationLog = $this->loadConversationLog();
+        $this->syncSelectedConversation();
+    }
+
+    public function selectConversation(int $conversationId): void
+    {
+        $this->selectedConversationId = $conversationId > 0 ? $conversationId : null;
+        $this->syncSelectedConversation();
     }
 
     public function approveKnowledge(int $entryId): void
@@ -605,6 +619,44 @@ class AiAgentSettingsPage extends Page
     }
 
     /**
+     * @return array<string, mixed>|null
+     */
+    private function selectedConversation(): ?array
+    {
+        $this->syncSelectedConversation();
+
+        foreach ($this->conversationLog as $conversation) {
+            if ((int) ($conversation['id'] ?? 0) === (int) $this->selectedConversationId) {
+                return $conversation;
+            }
+        }
+
+        return null;
+    }
+
+    private function syncSelectedConversation(): void
+    {
+        $ids = array_map(
+            static fn (array $conversation): int => (int) ($conversation['id'] ?? 0),
+            $this->conversationLog,
+        );
+
+        $ids = array_values(array_filter($ids, static fn (int $id): bool => $id > 0));
+
+        if ($ids === []) {
+            $this->selectedConversationId = null;
+
+            return;
+        }
+
+        if ($this->selectedConversationId !== null && in_array((int) $this->selectedConversationId, $ids, true)) {
+            return;
+        }
+
+        $this->selectedConversationId = $ids[0];
+    }
+
+    /**
      * @return array{status:string,event_type:string,search:string}
      */
     private function normalizedActionLogFilters(): array
@@ -783,6 +835,7 @@ class AiAgentSettingsPage extends Page
 
         return $messagesQuery
             ->latest('created_at')
+            ->latest('id')
             ->limit(10)
             ->get()
             ->reverse()
@@ -806,7 +859,8 @@ class AiAgentSettingsPage extends Page
         return $conversation->messages()
             ->whereIn('role', [AiMessage::ROLE_USER, AiMessage::ROLE_ASSISTANT, AiMessage::ROLE_TOOL])
             ->latest('created_at')
-            ->limit(8)
+            ->latest('id')
+            ->limit(20)
             ->get()
             ->reverse()
             ->map(function (AiMessage $message): array {
