@@ -299,14 +299,27 @@ class MarketDocumentResource extends BaseResource
 
     public static function canViewAny(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return static::canUseDocuments();
     }
 
     public static function canCreate(): bool
     {
-        return static::canViewAny();
+        return static::canUseDocuments();
+    }
+
+    public static function canUseDocuments(): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return (int) $user->market_id > 0;
     }
 
     public static function canEdit($record): bool

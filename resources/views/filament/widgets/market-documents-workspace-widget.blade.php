@@ -156,6 +156,14 @@
             gap: 8px;
         }
 
+        .mdw-content__actions {
+            width: 100%;
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
         .mdw-pill {
             display: inline-flex;
             align-items: center;
@@ -203,10 +211,17 @@
             .mdw-content__meta {
                 justify-content: flex-start;
             }
+
+            .mdw-content__actions {
+                justify-content: flex-start;
+                margin-top: 0;
+            }
         }
     </style>
 
     @php
+        $headerActions = $this->getCachedHeaderActions();
+        $headerActionsAlignment = $this->getHeaderActionsAlignment();
         $activeSection = collect($sections)->firstWhere('isActive', true) ?? $sections[0];
     @endphp
 
@@ -311,6 +326,15 @@
                     <span class="mdw-pill">{{ $activeSection['documents'] }} файлов</span>
                     <span class="mdw-pill">{{ $activeSection['folders'] }} папок</span>
                 </div>
+
+                @if (filled($headerActions))
+                    <div class="mdw-content__actions">
+                        <x-filament::actions
+                            :actions="$headerActions"
+                            :alignment="$headerActionsAlignment"
+                        />
+                    </div>
+                @endif
             </header>
 
             <div class="mdw-table">
