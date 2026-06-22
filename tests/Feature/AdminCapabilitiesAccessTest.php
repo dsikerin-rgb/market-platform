@@ -10,12 +10,14 @@ use App\Filament\Pages\OneCDebtDecisionPreview;
 use App\Filament\Pages\OneCReconciliation;
 use App\Filament\Pages\OneCSettlements;
 use App\Filament\Pages\ReportsHub;
+use App\Filament\Resources\MarketHolidayResource;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\MarketSpaceTypeResource;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Models\Market;
+use App\Models\MarketHoliday;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceType;
 use App\Models\Tenant;
@@ -139,6 +141,7 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertTrue(TenantResource::canViewAny());
         self::assertTrue(MarketSpaceTypeResource::canViewAny());
         self::assertTrue(AdminCapabilities::canViewFinance($user));
+        self::assertTrue(MarketSettings::canAccess());
         self::assertTrue(TenantContractResource::canViewAny());
         self::assertTrue(TenantContractResource::canEdit($contract));
 
@@ -150,6 +153,37 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertFalse(MarketSpaceTypeResource::canEdit($spaceType));
         self::assertFalse(AdminCapabilities::canManageTenantContracts($user));
         self::assertFalse(AdminCapabilities::canUpdateMarketSettings($user));
+    }
+
+    public function test_owner_can_create_and_edit_only_own_market_events(): void
+    {
+        $market = $this->createMarket();
+        $owner = $this->createMarketUser($market, 'market-owner');
+        $otherOwner = $this->createMarketUser($market, 'market-owner');
+
+        $this->actingAsFilamentUser($owner);
+
+        $ownEvent = MarketHoliday::query()->create([
+            'market_id' => (int) $market->id,
+            'title' => 'Owner event',
+            'starts_at' => now()->addDay()->toDateString(),
+            'source' => 'market_event',
+        ]);
+
+        $otherEvent = MarketHoliday::query()->create([
+            'market_id' => (int) $market->id,
+            'author_user_id' => (int) $otherOwner->id,
+            'title' => 'Other event',
+            'starts_at' => now()->addDays(2)->toDateString(),
+            'source' => 'market_event',
+        ]);
+
+        self::assertSame((int) $owner->id, (int) $ownEvent->author_user_id);
+        self::assertTrue(MarketHolidayResource::canViewAny());
+        self::assertTrue(MarketHolidayResource::canCreate());
+        self::assertTrue(MarketHolidayResource::canEdit($ownEvent));
+        self::assertFalse(MarketHolidayResource::canEdit($otherEvent));
+        self::assertFalse(MarketHolidayResource::canDelete($ownEvent));
     }
 
     /**

@@ -106,6 +106,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'market-operator' => [],
             'market-owner' => [
                 'markets.view',
+                'market-settings.view',
                 'marketplace.settings.view',
                 'marketplace.slides.viewAny',
                 'marketplace.slides.view',

@@ -62,6 +62,7 @@ class MarketHolidayResource extends BaseResource
         return [
             'title',
             'source',
+            'author.name',
             'market.name',
         ];
     }
@@ -104,6 +105,10 @@ class MarketHolidayResource extends BaseResource
                     Forms\Components\Hidden::make('audience_scope')
                         ->default('staff')
                         ->dehydrated(true),
+
+                    Forms\Components\Hidden::make('author_user_id')
+                        ->default(fn () => $user?->id)
+                        ->dehydrated(fn (?MarketHoliday $record): bool => ! $record?->exists),
 
                     Forms\Components\TextInput::make('title')
                         ->label('Название события')
@@ -567,12 +572,24 @@ class MarketHolidayResource extends BaseResource
             return true;
         }
 
-        return $user->market_id && $user->hasRole('market-admin');
+        return (bool) $user->market_id
+            && $user->hasAnyRole(['market-admin', 'market-owner']);
     }
 
     public static function canCreate(): bool
     {
-        return static::canViewAny();
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return (bool) $user->market_id
+            && $user->hasAnyRole(['market-admin', 'market-owner']);
     }
 
     public static function canEdit($record): bool
@@ -589,12 +606,27 @@ class MarketHolidayResource extends BaseResource
 
         return $user->market_id
             && (int) $record->market_id === (int) $user->market_id
-            && $user->hasRole('market-admin');
+            && (
+                $user->hasRole('market-admin')
+                || ($user->hasRole('market-owner') && (int) $record->author_user_id === (int) $user->id)
+            );
     }
 
     public static function canDelete($record): bool
     {
-        return static::canEdit($record);
+        $user = Filament::auth()->user();
+
+        if (! $user || ! ($record instanceof MarketHoliday)) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        return $user->market_id
+            && (int) $record->market_id === (int) $user->market_id
+            && $user->hasRole('market-admin');
     }
 
     protected static function resolvePrefilledStartDate(): ?string
