@@ -118,14 +118,14 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         }
 
         if ($occupiedArea > 0) {
-            $labels[] = $this->makeStatusLabel('Сдано', $occupiedArea, $totalArea);
+            $labels[] = $this->makeStatusLabel('Сдано арендаторам', $occupiedArea, $totalArea);
             $data[] = round($occupiedArea, 2);
             $backgroundColor[] = '#22C55E';
             $borderColor[] = '#FFFFFF';
         }
 
         if ($maintenanceArea > 0) {
-            $labels[] = $this->makeStatusLabel('Служебные места', $maintenanceArea, $totalArea);
+            $labels[] = $this->makeStatusLabel('Служебная площадь УК', $maintenanceArea, $totalArea);
             $data[] = round($maintenanceArea, 2);
             $backgroundColor[] = '#A855F7';
             $borderColor[] = '#FFFFFF';
