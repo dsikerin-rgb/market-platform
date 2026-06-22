@@ -320,11 +320,6 @@
             <header class="mdw-content__head">
                 <div>
                     <h2 class="mdw-content__title">{{ $activeSection['label'] }}</h2>
-                    <p class="mdw-content__subtitle">{{ $activeSection['description'] }}</p>
-                </div>
-                <div class="mdw-content__meta">
-                    <span class="mdw-pill">{{ $activeSection['documents'] }} файлов</span>
-                    <span class="mdw-pill">{{ $activeSection['folders'] }} папок</span>
                 </div>
 
                 @if (filled($headerActions))
