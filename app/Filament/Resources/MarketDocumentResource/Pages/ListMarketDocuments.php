@@ -86,6 +86,11 @@ class ListMarketDocuments extends ListRecords
 
     protected function getHeaderActions(): array
     {
+        return [];
+    }
+
+    public function getDocumentWorkspaceHeaderActions(): array
+    {
         $folderAction = Actions\Action::make('createFolder')
             ->label('Создать папку')
             ->icon('heroicon-o-folder-plus')

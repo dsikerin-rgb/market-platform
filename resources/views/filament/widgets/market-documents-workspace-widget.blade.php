@@ -220,7 +220,7 @@
     </style>
 
     @php
-        $headerActions = $this->getCachedHeaderActions();
+        $headerActions = $this->getDocumentWorkspaceHeaderActions();
         $headerActionsAlignment = $this->getHeaderActionsAlignment();
         $activeSection = collect($sections)->firstWhere('isActive', true) ?? $sections[0];
     @endphp
