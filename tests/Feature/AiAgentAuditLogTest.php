@@ -75,7 +75,9 @@ class AiAgentAuditLogTest extends TestCase
         $view = file_get_contents(resource_path('views/filament/pages/partials/ai-agent-action-log.blade.php'));
 
         $this->assertIsString($view);
-        $this->assertStringContainsString('Последние проверки, ссылки, черновики действий и результаты выполнения', $view);
+        $this->assertStringContainsString('Здесь видны проверки, ссылки, подготовленные действия и результат выполнения', $view);
+        $this->assertStringContainsString('actionLogFilters.search', $view);
+        $this->assertStringContainsString('$row[\'conversation_preview\']', $view);
         $this->assertStringContainsString('$row[\'event_label\']', $view);
         $this->assertStringContainsString('Событий агента пока нет', $view);
     }
