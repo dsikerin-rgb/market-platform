@@ -24,6 +24,7 @@ class MarketHoliday extends Model
      */
     protected $fillable = [
         'market_id',
+        'author_user_id',
         'title',
         'starts_at',
         'ends_at',
@@ -41,6 +42,7 @@ class MarketHoliday extends Model
 
     protected $casts = [
         'market_id' => 'integer',
+        'author_user_id' => 'integer',
         'starts_at' => 'date',
         'ends_at' => 'date',
         'all_day' => 'boolean',
@@ -53,6 +55,12 @@ class MarketHoliday extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (self $holiday): void {
+            if (blank($holiday->author_user_id) && auth()->check()) {
+                $holiday->author_user_id = (int) auth()->id();
+            }
+        });
+
         static::saving(function (self $holiday): void {
             $notifyBeforeDays = $holiday->notify_before_days;
 
@@ -79,6 +87,11 @@ class MarketHoliday extends Model
     public function market(): BelongsTo
     {
         return $this->belongsTo(Market::class);
+    }
+
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'author_user_id');
     }
 
     public function announcement(): HasOne

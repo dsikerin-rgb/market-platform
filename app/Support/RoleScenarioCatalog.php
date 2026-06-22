@@ -18,9 +18,9 @@ class RoleScenarioCatalog
                 'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
             ],
             'market-owner' => [
-                'label' => 'Собственник',
-                'description' => 'Контроль ключевых показателей, арендаторов, договоров и финансов без операционного редактирования.',
-                'topics' => ['calendar', 'tasks', 'reminders'],
+                'label' => 'Обозреватель',
+                'description' => 'Просмотр ключевых показателей, арендаторов, договоров, финансов и настроек без административного редактирования. Может вести переписку, ставить свои задачи и создавать свои события.',
+                'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
             ],
             'market-owner-director' => [
                 'label' => 'Собственник-директор',
