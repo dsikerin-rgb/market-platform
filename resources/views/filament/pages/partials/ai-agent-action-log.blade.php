@@ -49,6 +49,13 @@
         .ai-action-log__chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
         .ai-action-log__chip{display:inline-flex;align-items:center;border-radius:999px;border:1px solid rgba(14,165,233,.28);background:rgba(224,242,254,.8);color:#075985;padding:4px 9px;font-size:12px;font-weight:800;text-decoration:none}
         .ai-action-log__empty{padding:18px;border:1px dashed rgba(148,163,184,.42);border-radius:12px;color:#64748b}
+        .ai-action-log__section{display:grid;gap:12px;margin-top:18px}
+        .ai-action-log__section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px}
+        .ai-action-log__section-title{font-size:16px;font-weight:800;line-height:1.25;color:#0f172a}
+        .dark .ai-action-log__section-title{color:#f8fafc}
+        .ai-action-log__section-copy{margin-top:4px;font-size:13px;line-height:1.4;color:#64748b}
+        .ai-action-log__counter{display:inline-flex;align-items:center;border-radius:999px;background:rgba(15,23,42,.06);padding:4px 9px;font-size:12px;font-weight:800;color:#475569}
+        .dark .ai-action-log__counter{background:rgba(148,163,184,.14);color:#cbd5e1}
         @media (max-width:1100px){.ai-action-log__filters{grid-template-columns:1fr 1fr}.ai-action-log__row{grid-template-columns:1fr}}
         @media (max-width:640px){.ai-action-log__head{display:block}.ai-action-log__filters{grid-template-columns:1fr}.ai-action-log__tools{margin-top:10px}.ai-action-log__conversation-head{display:block}}
     </style>
@@ -200,5 +207,70 @@
                 Событий агента пока нет.
             </div>
         @endforelse
+    </div>
+
+    <div class="ai-action-log__section">
+        <div class="ai-action-log__section-head">
+            <div>
+                <div class="ai-action-log__section-title">Переписки ИИ-агента</div>
+                <div class="ai-action-log__section-copy">
+                    Последние диалоги с агентом сохраняются отдельно от событий действий. Фильтр поиска выше также ищет по тексту сообщений.
+                </div>
+            </div>
+
+            <span class="ai-action-log__counter">{{ count($conversationLog ?? []) }}</span>
+        </div>
+
+        <div class="ai-action-log">
+            @forelse (($conversationLog ?? []) as $conversation)
+                <div class="ai-action-log__row" wire:key="ai-conversation-log-row-{{ $conversation['id'] }}">
+                    <div class="ai-action-log__meta">
+                        <div>{{ $conversation['updated_at'] }}</div>
+                        <div>{{ $conversation['actor'] }}</div>
+                        <div>{{ $conversation['market'] }}</div>
+                        <div>Сообщений: {{ $conversation['messages_count'] }}</div>
+                    </div>
+
+                    <div>
+                        <div class="ai-action-log__event">Диалог</div>
+                        <div class="ai-action-log__action">{{ $conversation['title'] }}</div>
+
+                        <div class="ai-action-log__summary">
+                            @if (filled($conversation['context_page_label']))
+                                <div><strong>Страница:</strong> {{ $conversation['context_page_label'] }}</div>
+                            @endif
+
+                            @if (filled($conversation['context_page_url']))
+                                <div>
+                                    <a class="ai-action-log__conversation-link" href="{{ $conversation['context_page_url'] }}">
+                                        Открыть страницу
+                                    </a>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="ai-action-log__messages">
+                        @forelse (($conversation['messages'] ?? []) as $message)
+                            <div class="ai-action-log__message">
+                                <div class="ai-action-log__message-meta">
+                                    <span>{{ $message['author'] }}</span>
+                                    <span>{{ $message['created_at'] }}</span>
+                                </div>
+                                <div class="ai-action-log__message-body">{{ $message['body'] }}</div>
+                            </div>
+                        @empty
+                            <div class="ai-action-log__context">
+                                В этом диалоге пока нет сообщений.
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            @empty
+                <div class="ai-action-log__empty">
+                    Переписок с агентом пока нет.
+                </div>
+            @endforelse
+        </div>
     </div>
 </div>

@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Models\AiAgentAuditEvent;
-use App\Models\AiMessage;
+use App\Models\AiConversation;
 use App\Models\AiKnowledgeEntry;
+use App\Models\AiMessage;
 use App\Services\Ai\AiAgentAuditService;
 use App\Services\Ai\AiAgentSettings;
 use App\Services\Ai\AiKnowledgeService;
@@ -42,6 +43,11 @@ class AiAgentSettingsPage extends Page
      * @var list<array<string, mixed>>
      */
     public array $actionLog = [];
+
+    /**
+     * @var list<array<string, mixed>>
+     */
+    public array $conversationLog = [];
 
     /**
      * @var array{status:string,event_type:string,search:string}
@@ -80,6 +86,7 @@ class AiAgentSettingsPage extends Page
 
         $this->form->fill($data);
         $this->actionLog = $this->loadActionLog();
+        $this->conversationLog = $this->loadConversationLog();
         $this->knowledgeEntries = $this->loadKnowledgeEntries();
     }
 
@@ -274,7 +281,10 @@ class AiAgentSettingsPage extends Page
                     Tab::make('Журнал')
                         ->schema([
                             View::make('filament.pages.partials.ai-agent-action-log')
-                                ->viewData(fn (): array => ['actionLog' => $this->actionLog])
+                                ->viewData(fn (): array => [
+                                    'actionLog' => $this->actionLog,
+                                    'conversationLog' => $this->conversationLog,
+                                ])
                                 ->columnSpanFull(),
                         ]),
 
@@ -299,6 +309,7 @@ class AiAgentSettingsPage extends Page
         $settings->save($this->form->getState());
         $this->form->fill($this->formatSettingsForForm($settings->get()));
         $this->actionLog = $this->loadActionLog();
+        $this->conversationLog = $this->loadConversationLog();
         $this->knowledgeEntries = $this->loadKnowledgeEntries();
 
         Notification::make()
@@ -310,11 +321,13 @@ class AiAgentSettingsPage extends Page
     public function updatedActionLogFilters(): void
     {
         $this->actionLog = $this->loadActionLog();
+        $this->conversationLog = $this->loadConversationLog();
     }
 
     public function refreshActionLog(): void
     {
         $this->actionLog = $this->loadActionLog();
+        $this->conversationLog = $this->loadConversationLog();
     }
 
     public function resetActionLogFilters(): void
@@ -325,6 +338,7 @@ class AiAgentSettingsPage extends Page
             'search' => '',
         ];
         $this->actionLog = $this->loadActionLog();
+        $this->conversationLog = $this->loadConversationLog();
     }
 
     public function approveKnowledge(int $entryId): void
@@ -540,6 +554,57 @@ class AiAgentSettingsPage extends Page
     }
 
     /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadConversationLog(): array
+    {
+        if (! DatabaseSchema::hasTable('ai_conversations') || ! DatabaseSchema::hasTable('ai_messages')) {
+            return [];
+        }
+
+        $filters = $this->normalizedActionLogFilters();
+
+        return AiConversation::query()
+            ->with(['user:id,name,email', 'market:id,name'])
+            ->withCount('messages')
+            ->when($filters['search'] !== '', function ($query) use ($filters): void {
+                $like = '%'.$filters['search'].'%';
+
+                $query->where(function ($scope) use ($like): void {
+                    $scope
+                        ->where('title', 'like', $like)
+                        ->orWhere('context_page_label', 'like', $like)
+                        ->orWhere('context_page_url', 'like', $like)
+                        ->orWhereHas('user', function ($userQuery) use ($like): void {
+                            $userQuery
+                                ->where('name', 'like', $like)
+                                ->orWhere('email', 'like', $like);
+                        })
+                        ->orWhereHas('market', fn ($marketQuery) => $marketQuery->where('name', 'like', $like))
+                        ->orWhereHas('messages', fn ($messageQuery) => $messageQuery->where('body', 'like', $like));
+                });
+            })
+            ->latest('updated_at')
+            ->limit(100)
+            ->get()
+            ->map(function (AiConversation $conversation): array {
+                return [
+                    'id' => (int) $conversation->id,
+                    'updated_at' => $this->formatActionLogDate($conversation->updated_at),
+                    'actor' => Str::limit(trim((string) ($conversation->user?->name ?? 'Сотрудник')), 80, ''),
+                    'market' => Str::limit(trim((string) ($conversation->market?->name ?? 'Рынок')), 80, ''),
+                    'title' => Str::limit(trim((string) ($conversation->title ?: 'Диалог с ИИ-консультантом')), 120, ''),
+                    'context_page_label' => Str::limit(trim((string) ($conversation->context_page_label ?? '')), 120, ''),
+                    'context_page_url' => trim((string) ($conversation->context_page_url ?? '')),
+                    'messages_count' => (int) ($conversation->messages_count ?? 0),
+                    'messages' => $this->conversationMessagesPreview($conversation),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * @return array{status:string,event_type:string,search:string}
      */
     private function normalizedActionLogFilters(): array
@@ -727,6 +792,27 @@ class AiAgentSettingsPage extends Page
                 return [
                     ...$preview,
                     'is_target' => $targetMessage instanceof AiMessage && (int) $targetMessage->id === (int) $message->id,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array{role:string,author:string,body:string,created_at:string,is_target:bool}>
+     */
+    private function conversationMessagesPreview(AiConversation $conversation): array
+    {
+        return $conversation->messages()
+            ->whereIn('role', [AiMessage::ROLE_USER, AiMessage::ROLE_ASSISTANT, AiMessage::ROLE_TOOL])
+            ->latest('created_at')
+            ->limit(8)
+            ->get()
+            ->reverse()
+            ->map(function (AiMessage $message): array {
+                return [
+                    ...$this->actionMessagePreview($message),
+                    'is_target' => false,
                 ];
             })
             ->values()
