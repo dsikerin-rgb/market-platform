@@ -657,29 +657,14 @@
                 margin-bottom: 0;
             }
 
-            .dashboard-workspace__communication-grid {
-                display: grid;
-                grid-template-columns: minmax(0, 1fr);
-                gap: 1rem;
+            .dashboard-workspace__live-feed-row {
                 width: 100%;
-            }
-
-            .dashboard-workspace__communication-main,
-            .dashboard-workspace__communication-requests {
                 min-width: 0;
             }
 
             @media (min-width: 1280px) {
-                .dashboard-workspace__communication-grid {
-                    grid-template-columns: repeat(3, minmax(0, 1fr));
-                }
-
-                .dashboard-workspace__communication-main {
-                    grid-column: span 2 / span 2;
-                }
-
-                .dashboard-workspace__communication-requests {
-                    grid-column: 1 / -1;
+                .dashboard-workspace__live-feed-row {
+                    width: calc(((100% - 2rem) / 3 * 2) + 1rem);
                 }
             }
 
@@ -1023,8 +1008,12 @@
                 </section>
             @endforeach
 
-            <section class="dashboard-workspace__panel">
-                @if ($communicationSection)
+            <div class="dashboard-workspace__live-feed-row">
+                @livewire('admin.staff-live-feed')
+            </div>
+
+            @if ($communicationSection && $communicationSection['widgets'] !== [])
+                <section class="dashboard-workspace__panel">
                     <div class="dashboard-workspace__panel-head">
                         <div class="dashboard-workspace__section-head">
                             <div class="dashboard-workspace__section-title">
@@ -1039,27 +1028,17 @@
                             </div>
                         </div>
                     </div>
-                @endif
 
-                <div class="dashboard-workspace__panel-body">
-                    <div class="dashboard-workspace__communication-grid">
-                        <div class="dashboard-workspace__communication-main">
-                            @livewire('admin.staff-live-feed')
-                        </div>
-
-                        @if ($communicationSection && $communicationSection['widgets'] !== [])
-                            <div class="dashboard-workspace__communication-requests">
-                                <x-filament-widgets::widgets
-                                    :columns="1"
-                                    :data="$widgetData"
-                                    :widgets="$communicationSection['widgets']"
-                                    class="dashboard-workspace__widgets"
-                                />
-                            </div>
-                        @endif
+                    <div class="dashboard-workspace__panel-body">
+                        <x-filament-widgets::widgets
+                            :columns="1"
+                            :data="$widgetData"
+                            :widgets="$communicationSection['widgets']"
+                            class="dashboard-workspace__widgets"
+                        />
                     </div>
-                </div>
-            </section>
+                </section>
+            @endif
         </div>
     @endif
 </x-filament-panels::page>
