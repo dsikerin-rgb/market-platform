@@ -84,4 +84,14 @@ class Market extends Model
     {
         return $this->hasMany(MarketplaceChat::class);
     }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(MarketDocument::class);
+    }
+
+    public function documentFolders(): HasMany
+    {
+        return $this->hasMany(MarketDocumentFolder::class);
+    }
 }
