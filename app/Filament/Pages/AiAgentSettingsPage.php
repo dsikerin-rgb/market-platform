@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Pages;
 
 use App\Models\AiAgentAuditEvent;
+use App\Models\AiMessage;
 use App\Models\AiKnowledgeEntry;
 use App\Services\Ai\AiAgentAuditService;
 use App\Services\Ai\AiAgentSettings;
@@ -41,6 +42,15 @@ class AiAgentSettingsPage extends Page
      * @var list<array<string, mixed>>
      */
     public array $actionLog = [];
+
+    /**
+     * @var array{status:string,event_type:string,search:string}
+     */
+    public array $actionLogFilters = [
+        'status' => '',
+        'event_type' => '',
+        'search' => '',
+    ];
 
     /**
      * @var list<array<string, mixed>>
@@ -297,6 +307,26 @@ class AiAgentSettingsPage extends Page
             ->send();
     }
 
+    public function updatedActionLogFilters(): void
+    {
+        $this->actionLog = $this->loadActionLog();
+    }
+
+    public function refreshActionLog(): void
+    {
+        $this->actionLog = $this->loadActionLog();
+    }
+
+    public function resetActionLogFilters(): void
+    {
+        $this->actionLogFilters = [
+            'status' => '',
+            'event_type' => '',
+            'search' => '',
+        ];
+        $this->actionLog = $this->loadActionLog();
+    }
+
     public function approveKnowledge(int $entryId): void
     {
         $this->reviewKnowledge($entryId, AiKnowledgeService::STATUS_APPROVED, 'Знание подтверждено');
@@ -441,26 +471,68 @@ class AiAgentSettingsPage extends Page
 
         $audit = app(AiAgentAuditService::class);
 
+        $filters = $this->normalizedActionLogFilters();
+
         return AiAgentAuditEvent::query()
-            ->with(['user:id,name,email', 'market:id,name'])
+            ->with([
+                'user:id,name,email',
+                'market:id,name',
+                'conversation:id,user_id,market_id,title,context_page_url,context_page_label,updated_at',
+                'message:id,ai_conversation_id,role,body,metadata,created_at',
+            ])
+            ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+            ->when($filters['event_type'] !== '', fn ($query) => $query->where('event_type', $filters['event_type']))
+            ->when($filters['search'] !== '', function ($query) use ($filters): void {
+                $search = $filters['search'];
+                $like = '%'.$search.'%';
+
+                $query->where(function ($scope) use ($like): void {
+                    $scope
+                        ->where('title', 'like', $like)
+                        ->orWhere('tool', 'like', $like)
+                        ->orWhere('result_message', 'like', $like)
+                        ->orWhereHas('user', function ($userQuery) use ($like): void {
+                            $userQuery
+                                ->where('name', 'like', $like)
+                                ->orWhere('email', 'like', $like);
+                        })
+                        ->orWhereHas('market', fn ($marketQuery) => $marketQuery->where('name', 'like', $like))
+                        ->orWhereHas('message', fn ($messageQuery) => $messageQuery->where('body', 'like', $like))
+                        ->orWhereHas('conversation.messages', fn ($messageQuery) => $messageQuery->where('body', 'like', $like));
+                });
+            })
             ->latest()
             ->limit(200)
             ->get()
             ->map(function (AiAgentAuditEvent $event) use ($audit): array {
                 $status = strtolower(trim((string) $event->status));
+                $conversation = $event->conversation;
+                $message = $event->message;
 
                 return [
+                    'id' => (int) $event->id,
                     'created_at' => $this->formatActionLogDate($event->created_at),
                     'actor' => Str::limit(trim((string) ($event->user?->name ?? 'Сотрудник')), 80, ''),
                     'market' => Str::limit(trim((string) ($event->market?->name ?? 'Рынок')), 80, ''),
                     'event_label' => $audit->eventLabel((string) $event->event_type),
                     'title' => Str::limit(trim((string) ($event->title ?: $audit->toolLabel((string) $event->tool))), 120, ''),
+                    'tool' => Str::limit(trim((string) ($event->tool ?? '')), 80, ''),
                     'status' => $status,
                     'status_label' => $audit->statusLabel($status),
                     'summary' => $this->actionSummary((array) ($event->summary ?? [])),
                     'result_message' => Str::limit(trim((string) ($event->result_message ?? '')), 220, ''),
                     'duration_ms' => (int) ($event->duration_ms ?? 0),
                     'chips_count' => count((array) ($event->chips ?? [])),
+                    'chips' => $this->actionChips((array) ($event->chips ?? [])),
+                    'conversation_id' => (int) ($event->ai_conversation_id ?? 0),
+                    'message_id' => (int) ($event->ai_message_id ?? 0),
+                    'conversation_title' => Str::limit(trim((string) ($conversation?->title ?: 'Диалог с ИИ-консультантом')), 120, ''),
+                    'conversation_url' => '',
+                    'context_page_label' => Str::limit(trim((string) ($conversation?->context_page_label ?? '')), 120, ''),
+                    'context_page_url' => trim((string) ($conversation?->context_page_url ?? '')),
+                    'conversation_messages_count' => $conversation ? $conversation->messages()->count() : 0,
+                    'message_preview' => $message instanceof AiMessage ? $this->actionMessagePreview($message) : null,
+                    'conversation_preview' => $this->actionConversationPreview($event),
                 ];
             })
             ->values()
@@ -468,11 +540,32 @@ class AiAgentSettingsPage extends Page
     }
 
     /**
+     * @return array{status:string,event_type:string,search:string}
+     */
+    private function normalizedActionLogFilters(): array
+    {
+        return [
+            'status' => in_array((string) ($this->actionLogFilters['status'] ?? ''), ['success', 'failed', 'pending', 'cancelled'], true)
+                ? (string) $this->actionLogFilters['status']
+                : '',
+            'event_type' => in_array((string) ($this->actionLogFilters['event_type'] ?? ''), [
+                AiAgentAuditService::EVENT_TOOL_CALL,
+                AiAgentAuditService::EVENT_ACTION_PREPARED,
+                AiAgentAuditService::EVENT_ACTION_DENIED,
+                AiAgentAuditService::EVENT_ACTION_CANCELLED,
+            ], true)
+                ? (string) $this->actionLogFilters['event_type']
+                : '',
+            'search' => Str::limit(trim((string) ($this->actionLogFilters['search'] ?? '')), 100, ''),
+        ];
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private function loadKnowledgeEntries(): array
     {
-        if (! $this->canViewAiResources()) {
+        if (! $this->canViewAiResources() || ! DatabaseSchema::hasTable('ai_knowledge_entries')) {
             return [];
         }
 
@@ -570,6 +663,89 @@ class AiAgentSettingsPage extends Page
             ->filter(static fn (array $row): bool => $row['label'] !== '' && $row['value'] !== '')
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array<int, mixed>  $chips
+     * @return list<array{label:string,url:string}>
+     */
+    private function actionChips(array $chips): array
+    {
+        return collect($chips)
+            ->filter(static fn (mixed $chip): bool => is_array($chip))
+            ->map(static fn (array $chip): array => [
+                'label' => Str::limit(trim((string) ($chip['label'] ?? '')), 90, ''),
+                'url' => trim((string) ($chip['url'] ?? '')),
+            ])
+            ->filter(static fn (array $chip): bool => $chip['label'] !== '' && $chip['url'] !== '')
+            ->take(6)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array{role:string,author:string,body:string,created_at:string}
+     */
+    private function actionMessagePreview(AiMessage $message): array
+    {
+        $metadata = (array) ($message->metadata ?? []);
+
+        return [
+            'role' => $this->actionMessageRole((string) $message->role),
+            'author' => Str::limit(trim((string) ($metadata['user_name'] ?? '')) ?: $this->actionMessageRole((string) $message->role), 80, ''),
+            'body' => Str::limit($this->compactActionText((string) $message->body), 260, ''),
+            'created_at' => $this->formatActionLogDate($message->created_at),
+        ];
+    }
+
+    /**
+     * @return list<array{role:string,author:string,body:string,created_at:string,is_target:bool}>
+     */
+    private function actionConversationPreview(AiAgentAuditEvent $event): array
+    {
+        $conversation = $event->conversation;
+        if (! $conversation) {
+            return [];
+        }
+
+        $targetMessage = $event->message;
+        $messagesQuery = $conversation->messages()
+            ->whereIn('role', [AiMessage::ROLE_USER, AiMessage::ROLE_ASSISTANT, AiMessage::ROLE_TOOL]);
+
+        if ($targetMessage instanceof AiMessage) {
+            $messagesQuery->where('created_at', '<=', $targetMessage->created_at);
+        }
+
+        return $messagesQuery
+            ->latest('created_at')
+            ->limit(10)
+            ->get()
+            ->reverse()
+            ->map(function (AiMessage $message) use ($targetMessage): array {
+                $preview = $this->actionMessagePreview($message);
+
+                return [
+                    ...$preview,
+                    'is_target' => $targetMessage instanceof AiMessage && (int) $targetMessage->id === (int) $message->id,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function actionMessageRole(string $role): string
+    {
+        return match ($role) {
+            AiMessage::ROLE_USER => 'Пользователь',
+            AiMessage::ROLE_ASSISTANT => 'ИИ-консультант',
+            AiMessage::ROLE_TOOL => 'Проверка',
+            default => 'Сообщение',
+        };
+    }
+
+    private function compactActionText(string $value): string
+    {
+        return trim(preg_replace('/\s+/u', ' ', $value) ?: $value);
     }
 
     private function formatActionLogDate(mixed $value): string
