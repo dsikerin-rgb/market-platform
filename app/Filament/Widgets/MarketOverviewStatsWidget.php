@@ -69,6 +69,9 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $maintenanceSpaces = (int) $spaceMetrics['maintenance_spaces'];
         $maintenanceArea = (float) $spaceMetrics['maintenance_area_sqm'];
         $rentableArea = (float) $spaceMetrics['rentable_area_sqm'];
+        $leasedSpaces = $occupiedSpaces + $maintenanceSpaces;
+        $leasedArea = $occupiedArea + $maintenanceArea;
+        $rentableAreaWithService = $rentableArea + $maintenanceArea;
         $averageRate = $spaceMetrics['average_rent_rate_per_sqm'];
         $pricedArea = (float) ($spaceMetrics['priced_area_sqm'] ?? 0);
 
@@ -88,12 +91,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 
         $tenantsUrl = TenantResource::getUrl('index');
         $spacesUrl = MarketSpaceResource::getUrl('index');
-        $occupiedSpacesUrl = $this->appendQueryString($spacesUrl, [
-            'tab' => 'occupied',
-            'tableFilters' => [
-                'effective_occupancy' => ['value' => 'occupied'],
-            ],
-        ]);
         $vacantSpacesUrl = $this->appendQueryString($spacesUrl, [
             'tab' => 'vacant',
             'tableFilters' => [
@@ -127,15 +124,17 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $debtValue = $debt ?? ($accruedValue - $paidValue);
         $marketScopeDesc = $isSuperAdmin ? 'На выбранном рынке' : 'На вашем рынке';
         $accountingScopeDesc = $marketScopeDesc . ' · ' . number_format($totalSpaces, 0, ',', ' ') . ' учётных мест';
-        $occupancyRate = $rentableArea > 0
-            ? round(($occupiedArea / $rentableArea) * 100)
+        $occupancyRate = $rentableAreaWithService > 0
+            ? round(($leasedArea / $rentableAreaWithService) * 100)
             : 0;
-        $occupancyDesc = $rentableArea > 0
-            ? 'Сдано ' . $this->formatArea($occupiedArea) . ' из ' . $this->formatArea($rentableArea) . ' арендуемых м²'
+        $occupancyDesc = $rentableAreaWithService > 0
+            ? 'Сдано ' . $this->formatArea($leasedArea) . ' из ' . $this->formatArea($rentableAreaWithService) . ' арендуемых м²'
             : 'На рынке пока нет учётных мест';
+        $leasedDesc = 'Арендаторы: ' . $this->formatArea($occupiedArea) . ' · ' . number_format($occupiedSpaces, 0, ',', ' ') . ' шт.';
 
         if ($maintenanceSpaces > 0) {
-            $occupancyDesc .= ' · служебных: ' . $this->formatArea($maintenanceArea);
+            $occupancyDesc .= ' · в том числе УК: ' . $this->formatArea($maintenanceArea);
+            $leasedDesc .= ' · УК: ' . $this->formatArea($maintenanceArea) . ' · ' . number_format($maintenanceSpaces, 0, ',', ' ') . ' шт.';
         }
 
         $stats[] = $this->makeStat(
@@ -156,12 +155,12 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         );
         $stats[] = $this->makeStat(
             label: 'Сдано, м²',
-            value: $this->formatArea($occupiedArea),
-            description: 'Открыть список сданных мест · ' . number_format($occupiedSpaces, 0, ',', ' ') . ' шт.',
-            url: $occupiedSpacesUrl,
+            value: $this->formatArea($leasedArea),
+            description: $leasedDesc,
+            url: $spacesUrl,
             color: 'success',
             icon: 'heroicon-o-check-circle',
-            linkTitle: 'Открыть фактически занятые места',
+            linkTitle: 'Открыть фонд мест',
         );
         $stats[] = $this->makeStat(
             label: 'Свободные места, м²',
@@ -186,7 +185,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             value: $occupancyRate . ' %',
             description: $occupancyDesc,
             url: null,
-            color: $occupiedSpaces > 0 ? 'success' : 'gray',
+            color: $leasedSpaces > 0 ? 'success' : 'gray',
             icon: 'heroicon-o-chart-bar',
         );
         $stats[] = $this->makeStat(
