@@ -80,6 +80,9 @@ class AiAgentAuditLogTest extends TestCase
         $this->assertStringContainsString('$row[\'conversation_preview\']', $view);
         $this->assertStringContainsString('Переписки ИИ-агента', $view);
         $this->assertStringContainsString('$conversationLog', $view);
+        $this->assertStringContainsString('$selectedConversation', $view);
+        $this->assertStringContainsString('selectConversation', $view);
+        $this->assertStringContainsString('ai-action-log__conversation-browser', $view);
         $this->assertStringContainsString('$row[\'event_label\']', $view);
         $this->assertStringContainsString('Событий агента пока нет', $view);
     }
