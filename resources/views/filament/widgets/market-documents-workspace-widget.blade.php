@@ -264,6 +264,8 @@
                     </div>
                 @endif
 
+                <p class="mdw-tree__section">Общий</p>
+
                 @php($sharedSection = collect($sections)->firstWhere('key', 'shared'))
                 @if ($sharedSection)
                     <a href="{{ $sharedSection['url'] }}" class="mdw-node {{ $sharedSection['isActive'] ? 'is-active' : '' }}">
@@ -271,7 +273,7 @@
                             <x-filament::icon icon="heroicon-o-users" class="h-5 w-5" />
                         </span>
                         <span class="mdw-node__body">
-                            <span class="mdw-node__label"></span>
+                            <span class="mdw-node__label">Общий</span>
                             <span class="mdw-node__meta">{{ $sharedSection['documents'] }} файлов · {{ $sharedSection['folders'] }} папок</span>
                         </span>
                     </a>
