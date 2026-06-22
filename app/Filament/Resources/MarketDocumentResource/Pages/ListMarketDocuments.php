@@ -77,7 +77,7 @@ class ListMarketDocuments extends ListRecords
             ),
             'shared' => $this->makeTab(
                 $tabClass,
-                'Общий диск',
+                'Общее',
                 fn (Builder $query): Builder => $query->where('visibility', MarketDocument::VISIBILITY_SHARED)
             ),
             'all' => $tabClass::make('Все документы'),
@@ -265,7 +265,7 @@ class ListMarketDocuments extends ListRecords
             ],
             [
                 'key' => 'shared',
-                'label' => 'Общий диск',
+                'label' => 'Общее',
                 'description' => 'Файлы рынка',
                 'icon' => 'heroicon-o-users',
                 'url' => MarketDocumentResource::getUrl('index', ['tab' => 'shared']),
@@ -312,7 +312,7 @@ class ListMarketDocuments extends ListRecords
             ->get()
             ->map(fn (MarketDocumentFolder $folder): array => [
                 'name' => $folder->displayName(),
-                'section' => $folder->visibility === MarketDocument::VISIBILITY_SHARED ? 'Общий диск' : 'Личный диск',
+                'section' => $folder->visibility === MarketDocument::VISIBILITY_SHARED ? 'Общее' : 'Личный',
                 'documents' => (int) ($folder->documents_count ?? 0),
             ])
             ->values()

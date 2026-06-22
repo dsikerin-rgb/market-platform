@@ -273,7 +273,7 @@
                             <x-filament::icon icon="heroicon-o-users" class="h-5 w-5" />
                         </span>
                         <span class="mdw-node__body">
-                            <span class="mdw-node__label">Общий диск</span>
+                            <span class="mdw-node__label">Общее</span>
                             <span class="mdw-node__meta">{{ $sharedSection['documents'] }} файлов · {{ $sharedSection['folders'] }} папок</span>
                         </span>
                     </a>
