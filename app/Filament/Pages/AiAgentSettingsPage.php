@@ -801,22 +801,27 @@ class AiAgentSettingsPage extends Page
     }
 
     /**
-     * @return array{role:string,author:string,body:string,created_at:string}
+     * @return array{role:string,role_key:string,author:string,body:string,body_html:string,created_at:string}
      */
     private function actionMessagePreview(AiMessage $message): array
     {
         $metadata = (array) ($message->metadata ?? []);
+        $body = $this->compactActionText((string) $message->body);
+        $limitedBody = Str::limit($body, 2000, '');
+        $role = (string) $message->role;
 
         return [
-            'role' => $this->actionMessageRole((string) $message->role),
-            'author' => Str::limit(trim((string) ($metadata['user_name'] ?? '')) ?: $this->actionMessageRole((string) $message->role), 80, ''),
-            'body' => Str::limit($this->compactActionText((string) $message->body), 260, ''),
+            'role' => $this->actionMessageRole($role),
+            'role_key' => in_array($role, [AiMessage::ROLE_USER, AiMessage::ROLE_ASSISTANT, AiMessage::ROLE_TOOL], true) ? $role : 'message',
+            'author' => Str::limit(trim((string) ($metadata['user_name'] ?? '')) ?: $this->actionMessageRole($role), 80, ''),
+            'body' => $limitedBody,
+            'body_html' => $this->formatActionMessageBodyHtml($limitedBody),
             'created_at' => $this->formatActionLogDate($message->created_at),
         ];
     }
 
     /**
-     * @return list<array{role:string,author:string,body:string,created_at:string,is_target:bool}>
+     * @return list<array{role:string,role_key:string,author:string,body:string,body_html:string,created_at:string,is_target:bool}>
      */
     private function actionConversationPreview(AiAgentAuditEvent $event): array
     {
@@ -852,7 +857,7 @@ class AiAgentSettingsPage extends Page
     }
 
     /**
-     * @return list<array{role:string,author:string,body:string,created_at:string,is_target:bool}>
+     * @return list<array{role:string,role_key:string,author:string,body:string,body_html:string,created_at:string,is_target:bool}>
      */
     private function conversationMessagesPreview(AiConversation $conversation): array
     {
@@ -886,6 +891,21 @@ class AiAgentSettingsPage extends Page
     private function compactActionText(string $value): string
     {
         return trim(preg_replace('/\s+/u', ' ', $value) ?: $value);
+    }
+
+    private function formatActionMessageBodyHtml(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $value = preg_replace('/\s*🔹\s*/u', "\n• ", $value) ?: $value;
+        $html = e($value);
+        $html = preg_replace('/\*\*(.+?)\*\*/u', '<strong>$1</strong>', $html) ?: $html;
+        $html = str_replace('**', '', $html);
+
+        return nl2br($html, false);
     }
 
     private function formatActionLogDate(mixed $value): string
