@@ -111,21 +111,21 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         $borderColor = [];
 
         if ($vacantArea > 0) {
-            $labels[] = 'Свободно (' . $this->formatAreaLabel($vacantArea) . ')';
+            $labels[] = $this->makeStatusLabel('Свободно', $vacantArea, $totalArea);
             $data[] = round($vacantArea, 2);
             $backgroundColor[] = '#94A3B8';
             $borderColor[] = '#FFFFFF';
         }
 
         if ($occupiedArea > 0) {
-            $labels[] = 'Сдано (' . $this->formatAreaLabel($occupiedArea) . ')';
+            $labels[] = $this->makeStatusLabel('Сдано', $occupiedArea, $totalArea);
             $data[] = round($occupiedArea, 2);
             $backgroundColor[] = '#22C55E';
             $borderColor[] = '#FFFFFF';
         }
 
         if ($maintenanceArea > 0) {
-            $labels[] = 'Служебные места (' . $this->formatAreaLabel($maintenanceArea) . ')';
+            $labels[] = $this->makeStatusLabel('Служебные места', $maintenanceArea, $totalArea);
             $data[] = round($maintenanceArea, 2);
             $backgroundColor[] = '#A855F7';
             $borderColor[] = '#FFFFFF';
@@ -188,5 +188,27 @@ class MarketSpacesStatusChartWidget extends ChartWidget
         $precision = abs($value - round($value)) < 0.01 ? 0 : 1;
 
         return number_format($value, $precision, ',', ' ') . ' м²';
+    }
+
+    private function makeStatusLabel(string $label, float $area, float $totalArea): string
+    {
+        return $label
+            . ' — '
+            . $this->formatPercentLabel($area, $totalArea)
+            . ' ('
+            . $this->formatAreaLabel($area)
+            . ')';
+    }
+
+    private function formatPercentLabel(float $value, float $total): string
+    {
+        if ($total <= 0.0) {
+            return '0 %';
+        }
+
+        $percent = ($value / $total) * 100;
+        $precision = abs($percent - round($percent)) < 0.05 ? 0 : 1;
+
+        return number_format($percent, $precision, ',', ' ') . ' %';
     }
 }
