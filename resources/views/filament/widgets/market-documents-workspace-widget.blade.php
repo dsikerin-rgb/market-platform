@@ -24,33 +24,9 @@
             background: #f8fafc;
         }
 
-        .mdw-sidebar__title {
-            margin: 0;
-            color: #0f172a;
-            font-size: 18px;
-            font-weight: 850;
-            line-height: 1.15;
-        }
-
-        .mdw-sidebar__hint {
-            margin: 4px 0 0;
-            color: #64748b;
-            font-size: 13px;
-            line-height: 1.35;
-        }
-
         .mdw-tree {
             display: grid;
             gap: 6px;
-        }
-
-        .mdw-tree__section {
-            margin: 8px 0 2px;
-            color: #64748b;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
         }
 
         .mdw-node {
@@ -132,25 +108,10 @@
             align-items: center;
             justify-content: space-between;
             gap: 16px;
-            min-height: 84px;
-            padding: 18px 22px;
+            min-height: 64px;
+            padding: 12px 18px;
             border-bottom: 1px solid rgba(226, 232, 240, 0.9);
             background: #ffffff;
-        }
-
-        .mdw-content__title {
-            margin: 0;
-            color: #0f172a;
-            font-size: 24px;
-            font-weight: 850;
-            line-height: 1.15;
-        }
-
-        .mdw-content__subtitle {
-            margin: 5px 0 0;
-            color: #64748b;
-            font-size: 14px;
-            line-height: 1.3;
         }
 
         .mdw-content__meta {
@@ -162,7 +123,6 @@
 
         .mdw-content__actions {
             width: 100%;
-            margin-top: 10px;
             display: flex;
             justify-content: flex-end;
             gap: 8px;
@@ -272,33 +232,10 @@
             gap: 8px;
         }
 
-        .mdw-pill {
-            display: inline-flex;
-            align-items: center;
-            min-height: 28px;
-            padding: 5px 10px;
-            border-radius: 999px;
-            color: #334155;
-            background: #f1f5f9;
-            font-size: 12px;
-            font-weight: 800;
-            line-height: 1;
-        }
-
         .mdw-table {
             min-width: 0;
             padding: 0;
             background: #ffffff;
-        }
-
-        .mdw-empty-folders {
-            margin: 8px 0 0;
-            padding: 10px;
-            border-radius: 12px;
-            color: #64748b;
-            background: #ffffff;
-            font-size: 13px;
-            line-height: 1.35;
         }
 
         @media (max-width: 900px) {
@@ -329,20 +266,12 @@
 
     @php
         $activeSection = collect($sections)->firstWhere('isActive', true) ?? $sections[0];
-        $contentTitle = $activeFolder['name'] ?? $activeSection['label'];
     @endphp
 
     <div>
     <div class="mdw-explorer">
         <aside class="mdw-sidebar" aria-label="Папки документов">
-            <div>
-                <p class="mdw-sidebar__title">Диск</p>
-                <p class="mdw-sidebar__hint">Выберите диск или папку слева. Содержимое откроется справа.</p>
-            </div>
-
             <nav class="mdw-tree">
-                <p class="mdw-tree__section">Личный</p>
-
                 @php($personalSection = collect($sections)->firstWhere('key', 'personal'))
                 @if ($personalSection)
                     <a href="{{ $personalSection['url'] }}" class="mdw-node {{ $personalSection['isActive'] ? 'is-active' : '' }}">
@@ -371,8 +300,6 @@
                         @endforeach
                     </div>
                 @endif
-
-                <p class="mdw-tree__section">Общий диск</p>
 
                 @php($sharedSection = collect($sections)->firstWhere('key', 'shared'))
                 @if ($sharedSection)
@@ -403,12 +330,6 @@
                     </div>
                 @endif
 
-                @if (($folderGroups['personal'] ?? []) === [] && ($folderGroups['shared'] ?? []) === [])
-                    <p class="mdw-empty-folders">Папок пока нет. Нажмите «Создать папку», чтобы собрать документы по темам.</p>
-                @endif
-
-                <p class="mdw-tree__section">Быстрый доступ</p>
-
                 @php($sharedWithMeSection = collect($sections)->firstWhere('key', 'shared-with-me'))
                 @if ($sharedWithMeSection)
                     <a href="{{ $sharedWithMeSection['url'] }}" class="mdw-node {{ $sharedWithMeSection['isActive'] ? 'is-active' : '' }}">
@@ -438,39 +359,35 @@
         </aside>
 
         <section class="mdw-content">
+            @if (($activeSection['key'] ?? '') !== 'shared-with-me')
             <header class="mdw-content__head">
-                <div>
-                    <h2 class="mdw-content__title">{{ $contentTitle }}</h2>
-                </div>
+                <div class="mdw-content__actions">
+                    <button type="button" class="mdw-action-button" x-on:click="$dispatch('mdw-open-create-folder')">
+                        <x-filament::icon icon="heroicon-o-folder-plus" class="h-4 w-4" />
+                        <span>Создать папку</span>
+                    </button>
 
-                @if (($activeSection['key'] ?? '') !== 'shared-with-me')
-                    <div class="mdw-content__actions">
-                        <button type="button" class="mdw-action-button" x-on:click="$dispatch('mdw-open-create-folder')">
-                            <x-filament::icon icon="heroicon-o-folder-plus" class="h-4 w-4" />
-                            <span>Создать папку</span>
+                    <form method="POST" action="{{ route('filament.admin.market-documents.upload') }}" enctype="multipart/form-data">
+                        @csrf
+                        <input type="hidden" name="active_tab" value="{{ $activeSection['key'] ?? 'personal' }}">
+                        <input type="hidden" name="selected_folder_id" value="{{ $activeFolder['id'] ?? '' }}">
+
+                        <button type="button" class="mdw-action-button is-primary" onclick="this.closest('form').querySelector('[data-mdw-file-input]').click()">
+                            <x-filament::icon icon="heroicon-o-arrow-up-tray" class="h-4 w-4" />
+                            <span>Добавить документ</span>
                         </button>
 
-                        <form method="POST" action="{{ route('filament.admin.market-documents.upload') }}" enctype="multipart/form-data">
-                            @csrf
-                            <input type="hidden" name="active_tab" value="{{ $activeSection['key'] ?? 'personal' }}">
-                            <input type="hidden" name="selected_folder_id" value="{{ $activeFolder['id'] ?? '' }}">
-
-                            <button type="button" class="mdw-action-button is-primary" onclick="this.closest('form').querySelector('[data-mdw-file-input]').click()">
-                                <x-filament::icon icon="heroicon-o-arrow-up-tray" class="h-4 w-4" />
-                                <span>Добавить документ</span>
-                            </button>
-
-                            <input
-                                type="file"
-                                name="document"
-                                class="mdw-hidden-file-input"
-                                data-mdw-file-input
-                                onchange="if (this.files && this.files.length > 0) this.form.submit()"
-                            />
-                        </form>
-                    </div>
-                @endif
+                        <input
+                            type="file"
+                            name="document"
+                            class="mdw-hidden-file-input"
+                            data-mdw-file-input
+                            onchange="if (this.files && this.files.length > 0) this.form.submit()"
+                        />
+                    </form>
+                </div>
             </header>
+            @endif
 
             <div class="mdw-table">
                 {{ $slot }}
