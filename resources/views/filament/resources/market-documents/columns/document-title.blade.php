@@ -8,9 +8,9 @@
     $foreground = $type['foreground'];
 @endphp
 
-<span class="inline-flex min-w-0 items-center gap-2.5">
-    <span class="inline-flex h-6 w-6 shrink-0 items-center justify-center" title="{{ $type['label'] }}">
-        <svg aria-hidden="true" viewBox="0 0 24 24" class="h-5 w-5 overflow-visible">
+<span style="display:inline-flex;align-items:center;gap:10px;min-width:0;max-width:100%;">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;" title="{{ $type['label'] }}">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" style="display:block;width:22px;height:22px;overflow:visible;flex:0 0 22px;">
             <path
                 d="M6 2.75h7.3L18 7.45v13.8H6z"
                 fill="#fff"
@@ -44,7 +44,7 @@
         </svg>
     </span>
 
-    <span class="min-w-0 font-semibold leading-snug text-slate-950">
+    <span style="min-width:0;color:#0f172a;font-weight:650;line-height:1.2;overflow-wrap:anywhere;">
         {{ $title }}
     </span>
 </span>
