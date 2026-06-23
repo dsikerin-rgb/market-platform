@@ -10,33 +10,41 @@
 
 <span style="display:inline-flex;align-items:center;gap:10px;min-width:0;max-width:100%;">
     <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;" title="{{ $type['label'] }}">
-        <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22" style="display:block;width:22px;height:22px;overflow:visible;flex:0 0 22px;">
+        <svg aria-hidden="true" viewBox="0 0 32 32" width="24" height="24" style="display:block;width:24px;height:24px;overflow:hidden;flex:0 0 24px;">
             <path
-                d="M6 2.75h7.3L18 7.45v13.8H6z"
+                d="M8.25 2.75h12.9L27 8.65v20.1a2 2 0 0 1-2 2H8.25a2 2 0 0 1-2-2v-24a2 2 0 0 1 2-2Z"
                 fill="#fff"
                 stroke="{{ $background }}"
-                stroke-width="1.7"
+                stroke-width="1.35"
                 stroke-linejoin="round"
             />
-            <path d="M13.3 2.75v4.7H18" fill="#fff" stroke="{{ $background }}" stroke-width="1.7" stroke-linejoin="round" />
+            <path d="M21.15 2.9v5.75H27" fill="#eaf2ff" stroke="{{ $background }}" stroke-width="1.35" stroke-linejoin="round" />
+            <rect x="2.9" y="11.1" width="17.8" height="14.2" rx="2.1" fill="{{ $background }}" />
 
             @if ($kind === 'sheet')
-                <rect x="7.7" y="8.9" width="8.6" height="7.9" rx="1" fill="{{ $background }}" />
-                <path d="M10.55 8.9v7.9M13.45 8.9v7.9M7.7 11.55h8.6M7.7 14.2h8.6" stroke="#fff" stroke-width=".65" opacity=".9" />
-            @elseif ($kind === 'image')
-                <rect x="7.5" y="8.5" width="9" height="8" rx="1.3" fill="{{ $background }}" />
-                <circle cx="10" cy="10.9" r=".85" fill="#fff" />
-                <path d="M8.5 15.2l2.6-2.5 1.7 1.7 1.4-1.2 1.8 2" fill="none" stroke="#fff" stroke-width=".8" stroke-linecap="round" stroke-linejoin="round" />
-            @elseif ($kind === 'file')
-                <path d="M8.7 10.2h6.6M8.7 12.8h5.6M8.7 15.4h4.5" stroke="{{ $background }}" stroke-width="1.45" stroke-linecap="round" />
-            @else
-                <rect x="7.2" y="9.1" width="9.6" height="7.1" rx="1.1" fill="{{ $background }}" />
                 <text
-                    x="12"
-                    y="14.25"
+                    x="8.25"
+                    y="20.7"
+                    text-anchor="middle"
+                    fill="#fff"
+                    font-size="8.35"
+                    font-weight="800"
+                    font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                >X</text>
+                <path d="M12.2 14.35h5.05v7.3H12.2zM14.72 14.35v7.3M12.2 16.78h5.05M12.2 19.22h5.05" fill="none" stroke="#fff" stroke-width=".75" opacity=".9" />
+            @elseif ($kind === 'image')
+                <circle cx="8.65" cy="15.55" r="1.15" fill="#fff" />
+                <path d="M6.1 21.3l3.75-3.55 2.4 2.2 1.85-1.75 3.1 3.1" fill="none" stroke="#fff" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round" />
+            @elseif ($kind === 'file')
+                <path d="M10.9 15.5h12.3M10.9 19.15h10.2M10.9 22.8h8.1" stroke="{{ $background }}" stroke-width="1.35" stroke-linecap="round" opacity=".75" />
+                <path d="M7 15.45h9.55M7 18.3h8.1M7 21.15h6.45" stroke="#fff" stroke-width="1.15" stroke-linecap="round" />
+            @else
+                <text
+                    x="11.8"
+                    y="{{ strlen($mark) > 1 ? '20.1' : '21.15' }}"
                     text-anchor="middle"
                     fill="{{ $foreground }}"
-                    font-size="{{ strlen($mark) > 1 ? '4.1' : '6.7' }}"
+                    font-size="{{ strlen($mark) > 2 ? '4.3' : (strlen($mark) > 1 ? '5.15' : '8.9') }}"
                     font-weight="800"
                     font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
                 >{{ $mark }}</text>
