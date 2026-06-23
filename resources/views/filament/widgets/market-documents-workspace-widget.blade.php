@@ -97,6 +97,23 @@
             padding-left: 12px;
         }
 
+        .mdw-folder-list .mdw-node {
+            align-items: flex-start;
+        }
+
+        .mdw-folder-list .mdw-node__icon {
+            margin-top: 1px;
+        }
+
+        .mdw-folder-list .mdw-node__label {
+            display: -webkit-box;
+            overflow-wrap: anywhere;
+            text-overflow: clip;
+            white-space: normal;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+        }
+
         .mdw-content {
             display: flex;
             min-width: 0;
