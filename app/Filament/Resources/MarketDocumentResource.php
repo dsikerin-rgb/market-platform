@@ -173,7 +173,6 @@ class MarketDocumentResource extends BaseResource
             ->columns([
                 TextColumn::make('title')
                     ->label('Документ')
-                    ->description(fn (MarketDocument $record): string => $record->resolvedFileName())
                     ->searchable()
                     ->sortable()
                     ->wrap(),
