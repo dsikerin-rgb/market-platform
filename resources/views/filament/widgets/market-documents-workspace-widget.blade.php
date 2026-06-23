@@ -156,6 +156,14 @@
             gap: 8px;
         }
 
+        .mdw-content__actions {
+            width: 100%;
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
         .mdw-pill {
             display: inline-flex;
             align-items: center;
@@ -203,17 +211,25 @@
             .mdw-content__meta {
                 justify-content: flex-start;
             }
+
+            .mdw-content__actions {
+                justify-content: flex-start;
+                margin-top: 0;
+            }
         }
     </style>
 
     @php
+        $headerActions = $this->getDocumentWorkspaceHeaderActions();
+        $headerActionsAlignment = $this->getHeaderActionsAlignment();
         $activeSection = collect($sections)->firstWhere('isActive', true) ?? $sections[0];
+        $contentTitle = $activeFolder['name'] ?? $activeSection['label'];
     @endphp
 
     <div class="mdw-explorer">
         <aside class="mdw-sidebar" aria-label="Папки документов">
             <div>
-                <p class="mdw-sidebar__title">Документы</p>
+                <p class="mdw-sidebar__title">Диск</p>
                 <p class="mdw-sidebar__hint">Выберите диск или папку слева. Содержимое откроется справа.</p>
             </div>
 
@@ -236,7 +252,7 @@
                 @if (($folderGroups['personal'] ?? []) !== [])
                     <div class="mdw-folder-list">
                         @foreach ($folderGroups['personal'] as $folder)
-                            <div class="mdw-node">
+                            <a href="{{ $folder['url'] }}" class="mdw-node {{ $folder['isActive'] ? 'is-active' : '' }}">
                                 <span class="mdw-node__icon">
                                     <x-filament::icon icon="heroicon-o-folder" class="h-5 w-5" />
                                 </span>
@@ -244,12 +260,12 @@
                                     <span class="mdw-node__label">{{ $folder['name'] }}</span>
                                     <span class="mdw-node__meta">{{ $folder['documents'] }} файлов</span>
                                 </span>
-                            </div>
+                            </a>
                         @endforeach
                     </div>
                 @endif
 
-                <p class="mdw-tree__section">Общий</p>
+                <p class="mdw-tree__section">Общий диск</p>
 
                 @php($sharedSection = collect($sections)->firstWhere('key', 'shared'))
                 @if ($sharedSection)
@@ -267,7 +283,7 @@
                 @if (($folderGroups['shared'] ?? []) !== [])
                     <div class="mdw-folder-list">
                         @foreach ($folderGroups['shared'] as $folder)
-                            <div class="mdw-node">
+                            <a href="{{ $folder['url'] }}" class="mdw-node {{ $folder['isActive'] ? 'is-active' : '' }}">
                                 <span class="mdw-node__icon">
                                     <x-filament::icon icon="heroicon-o-folder" class="h-5 w-5" />
                                 </span>
@@ -275,7 +291,7 @@
                                     <span class="mdw-node__label">{{ $folder['name'] }}</span>
                                     <span class="mdw-node__meta">{{ $folder['documents'] }} файлов</span>
                                 </span>
-                            </div>
+                            </a>
                         @endforeach
                     </div>
                 @endif
@@ -304,13 +320,17 @@
         <section class="mdw-content">
             <header class="mdw-content__head">
                 <div>
-                    <h2 class="mdw-content__title">{{ $activeSection['label'] }}</h2>
-                    <p class="mdw-content__subtitle">{{ $activeSection['description'] }}</p>
+                    <h2 class="mdw-content__title">{{ $contentTitle }}</h2>
                 </div>
-                <div class="mdw-content__meta">
-                    <span class="mdw-pill">{{ $activeSection['documents'] }} файлов</span>
-                    <span class="mdw-pill">{{ $activeSection['folders'] }} папок</span>
-                </div>
+
+                @if (filled($headerActions))
+                    <div class="mdw-content__actions">
+                        <x-filament::actions
+                            :actions="$headerActions"
+                            :alignment="$headerActionsAlignment"
+                        />
+                    </div>
+                @endif
             </header>
 
             <div class="mdw-table">
