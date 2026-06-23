@@ -5,17 +5,23 @@ declare(strict_types=1);
 namespace App\Filament\Resources\MarketDocumentResource\Pages;
 
 use App\Filament\Resources\MarketDocumentResource;
+use App\Models\Market;
 use App\Models\MarketDocument;
 use App\Models\MarketDocumentFolder;
-use Filament\Actions;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema as DbSchema;
+use Illuminate\Support\Facades\Validator;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 use RuntimeException;
 
 class ListMarketDocuments extends ListRecords
 {
+    use WithFileUploads;
+
     protected static string $resource = MarketDocumentResource::class;
 
     protected static ?string $title = 'Диск';
@@ -29,6 +35,12 @@ class ListMarketDocuments extends ListRecords
 
     public ?int $selectedFolderId = null;
 
+    public bool $isCreateFolderModalOpen = false;
+
+    public string $newFolderName = '';
+
+    public mixed $documentUpload = null;
+
     public function mount(): void
     {
         parent::mount();
@@ -40,7 +52,7 @@ class ListMarketDocuments extends ListRecords
             $this->activeTab = (string) $legacyTab;
         }
 
-        if (! in_array($this->activeTab, ['personal', 'shared', 'all'], true)) {
+        if (! in_array($this->activeTab, ['personal', 'shared', 'shared-with-me', 'all'], true)) {
             $this->activeTab = 'personal';
         }
 
@@ -89,6 +101,11 @@ class ListMarketDocuments extends ListRecords
                 'Общий',
                 fn (Builder $query): Builder => $query->where('visibility', MarketDocument::VISIBILITY_SHARED)
             ),
+            'shared-with-me' => $this->makeTab(
+                $tabClass,
+                'Со мной поделились',
+                fn (Builder $query): Builder => $this->scopeSharedWithMe($query)
+            ),
             'all' => $tabClass::make('Все документы'),
         ];
     }
@@ -100,25 +117,128 @@ class ListMarketDocuments extends ListRecords
 
     public function getDocumentWorkspaceHeaderActions(): array
     {
-        $folderAction = Actions\Action::make('createFolder')
-            ->label('Создать папку')
-            ->icon('heroicon-o-folder-plus')
-            ->color('gray')
-            ->url(fn (): string => MarketDocumentResource::getUrl(
-                'create-folder',
-                $this->selectedFolderId ? ['folder' => $this->selectedFolderId] : ['tab' => $this->activeTab],
-            ))
-            ->extraAttributes(['wire:navigate' => true]);
+        return [];
+    }
 
-        $createAction = Actions\Action::make('createDocument')
-            ->label('Добавить документ')
-            ->icon('heroicon-o-arrow-up-tray')
-            ->url(fn (): string => MarketDocumentResource::getUrl(
-                'create',
-                $this->selectedFolderId ? ['folder' => $this->selectedFolderId] : [],
-            ))
-            ->extraAttributes(['wire:navigate' => true]);
-        return [$folderAction, $createAction];
+    public function openCreateFolderModal(): void
+    {
+        $this->newFolderName = '';
+        $this->resetErrorBag('newFolderName');
+        $this->isCreateFolderModalOpen = true;
+    }
+
+    public function closeCreateFolderModal(): void
+    {
+        $this->isCreateFolderModalOpen = false;
+        $this->newFolderName = '';
+        $this->resetErrorBag('newFolderName');
+    }
+
+    public function createFolder(): void
+    {
+        $user = Filament::auth()->user();
+        abort_unless($user && MarketDocumentResource::canCreate(), 403);
+
+        Validator::make(
+            ['newFolderName' => $this->newFolderName],
+            ['newFolderName' => ['required', 'string', 'max:255']],
+            [],
+            ['newFolderName' => 'название папки'],
+        )->validate();
+
+        $parentFolder = $this->selectedFolder();
+        $visibility = $parentFolder?->visibility ?: $this->currentTargetVisibility();
+        $marketId = $parentFolder?->market_id ?: $this->resolvedMarketId();
+        $ownerUserId = $visibility === MarketDocument::VISIBILITY_PERSONAL
+            ? ($parentFolder?->owner_user_id ?: (int) $user->id)
+            : null;
+        $parentId = $parentFolder?->id;
+
+        $folder = MarketDocumentFolder::query()->create([
+            'market_id' => $marketId ?: $user->market_id,
+            'owner_user_id' => $ownerUserId,
+            'parent_id' => $parentId,
+            'visibility' => $visibility,
+            'name' => trim($this->newFolderName),
+            'sort_order' => $this->nextFolderSortOrder(
+                $visibility,
+                $marketId ? (int) $marketId : null,
+                $ownerUserId,
+                $parentId ? (int) $parentId : null,
+            ),
+        ]);
+
+        $this->closeCreateFolderModal();
+
+        Notification::make()
+            ->title('Папка создана')
+            ->success()
+            ->send();
+
+        $this->redirect($this->workspaceUrl($folder->visibility, (int) $folder->id));
+    }
+
+    public function updatedDocumentUpload(): void
+    {
+        $user = Filament::auth()->user();
+        abort_unless($user && MarketDocumentResource::canCreate(), 403);
+
+        $file = $this->documentUpload;
+
+        if (! $file instanceof TemporaryUploadedFile) {
+            return;
+        }
+
+        $parentFolder = $this->selectedFolder();
+        $visibility = $parentFolder?->visibility ?: $this->currentTargetVisibility();
+        $marketId = $parentFolder?->market_id ?: $this->resolvedMarketId();
+        $ownerUserId = $visibility === MarketDocument::VISIBILITY_PERSONAL
+            ? ($parentFolder?->owner_user_id ?: (int) $user->id)
+            : null;
+        $folderId = $parentFolder?->id;
+        $directory = MarketDocument::storageDirectory(
+            $marketId ? (int) $marketId : null,
+            $ownerUserId,
+            $visibility,
+            $folderId ? (int) $folderId : null,
+        );
+        $path = $file->store($directory, MarketDocument::storageDisk());
+
+        if (! is_string($path) || $path === '') {
+            Notification::make()
+                ->title('Не удалось загрузить документ')
+                ->danger()
+                ->send();
+
+            $this->documentUpload = null;
+
+            return;
+        }
+
+        $originalName = trim($file->getClientOriginalName());
+
+        MarketDocument::query()->create([
+            'market_id' => $marketId ?: $user->market_id,
+            'owner_user_id' => $ownerUserId,
+            'uploaded_by_user_id' => (int) $user->id,
+            'folder_id' => $folderId,
+            'visibility' => $visibility,
+            'category' => MarketDocument::CATEGORY_GENERAL,
+            'title' => $originalName !== '' ? $originalName : null,
+            'file_path' => $path,
+            'original_name' => $originalName !== '' ? $originalName : basename($path),
+            'mime_type' => $file->getMimeType(),
+            'file_size' => $file->getSize(),
+        ]);
+
+        $this->documentUpload = null;
+
+        Notification::make()
+            ->title('Документ добавлен')
+            ->success()
+            ->send();
+
+        $this->dispatch('$refresh');
     }
 
     protected static function resolveTabClass(): string
@@ -149,9 +269,15 @@ class ListMarketDocuments extends ListRecords
     {
         $query = parent::getTableQuery();
 
-        return $this->selectedFolderId
-            ? $query->where('folder_id', $this->selectedFolderId)
-            : $query;
+        if ($this->selectedFolderId) {
+            return $query->where('folder_id', $this->selectedFolderId);
+        }
+
+        if ($this->activeTab === 'shared-with-me') {
+            return $this->scopeSharedWithMe($query);
+        }
+
+        return $query;
     }
 
     /**
@@ -159,7 +285,7 @@ class ListMarketDocuments extends ListRecords
      */
     public function documentWorkspaceData(): array
     {
-        $activeTab = in_array($this->activeTab, ['personal', 'shared', 'all'], true)
+        $activeTab = in_array($this->activeTab, ['personal', 'shared', 'shared-with-me', 'all'], true)
             ? (string) $this->activeTab
             : 'personal';
 
@@ -201,6 +327,16 @@ class ListMarketDocuments extends ListRecords
                 'folders' => $this->foldersCount('shared'),
             ],
             [
+                'key' => 'shared-with-me',
+                'label' => 'Со мной поделились',
+                'description' => 'Файлы, которыми поделились',
+                'icon' => 'heroicon-o-share',
+                'url' => $this->workspaceUrl('shared-with-me'),
+                'isActive' => $activeTab === 'shared-with-me' && ! $this->selectedFolderId,
+                'documents' => $this->documentsCount('shared-with-me'),
+                'folders' => 0,
+            ],
+            [
                 'key' => 'all',
                 'label' => 'Все документы',
                 'description' => 'Весь доступный архив',
@@ -235,6 +371,8 @@ class ListMarketDocuments extends ListRecords
             $query->where('visibility', MarketDocument::VISIBILITY_PERSONAL);
         } elseif ($section === 'shared') {
             $query->where('visibility', MarketDocument::VISIBILITY_SHARED);
+        } elseif ($section === 'shared-with-me') {
+            $this->scopeSharedWithMe($query);
         }
 
         return $query
@@ -295,9 +433,26 @@ class ListMarketDocuments extends ListRecords
             $query->where('visibility', MarketDocument::VISIBILITY_PERSONAL);
         } elseif ($section === 'shared') {
             $query->where('visibility', MarketDocument::VISIBILITY_SHARED);
+        } elseif ($section === 'shared-with-me') {
+            return 0;
         }
 
         return (int) $query->count();
+    }
+
+    private function scopeSharedWithMe(Builder $query): Builder
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user || ! DbSchema::hasTable('market_document_shares')) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereHas('shares', function (Builder $shareQuery) use ($user): void {
+            $shareQuery
+                ->where('shared_with_user_id', (int) $user->id)
+                ->whereNull('revoked_at');
+        });
     }
 
     private function documentsCountForFolder(int $folderId): int
@@ -367,6 +522,57 @@ class ListMarketDocuments extends ListRecords
         }
 
         return $query->visibleFor($user);
+    }
+
+    private function currentTargetVisibility(): string
+    {
+        return $this->activeTab === MarketDocument::VISIBILITY_SHARED
+            ? MarketDocument::VISIBILITY_SHARED
+            : MarketDocument::VISIBILITY_PERSONAL;
+    }
+
+    private function resolvedMarketId(): ?int
+    {
+        $user = Filament::auth()->user();
+
+        if ($selectedMarketId = $this->selectedMarketIdFromSession()) {
+            return $selectedMarketId;
+        }
+
+        if ($user?->market_id) {
+            return (int) $user->market_id;
+        }
+
+        if ($user?->isSuperAdmin()) {
+            $marketId = Market::query()->orderBy('id')->value('id');
+
+            return filled($marketId) ? (int) $marketId : null;
+        }
+
+        return null;
+    }
+
+    private function nextFolderSortOrder(string $visibility, ?int $marketId, ?int $ownerUserId, ?int $parentId): int
+    {
+        if (! DbSchema::hasTable('market_document_folders')) {
+            return 0;
+        }
+
+        $max = MarketDocumentFolder::query()
+            ->where('visibility', MarketDocument::normalizeVisibility($visibility))
+            ->when($marketId, fn (Builder $query): Builder => $query->where('market_id', $marketId))
+            ->when(
+                $visibility === MarketDocument::VISIBILITY_PERSONAL && $ownerUserId,
+                fn (Builder $query): Builder => $query->where('owner_user_id', $ownerUserId),
+            )
+            ->when(
+                $parentId,
+                fn (Builder $query): Builder => $query->where('parent_id', $parentId),
+                fn (Builder $query): Builder => $query->whereNull('parent_id'),
+            )
+            ->max('sort_order');
+
+        return ((int) $max) + 10;
     }
 
     private function selectedFolder(): ?MarketDocumentFolder

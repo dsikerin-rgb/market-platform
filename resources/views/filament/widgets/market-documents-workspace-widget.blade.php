@@ -1,5 +1,9 @@
 <x-filament::section>
     <style>
+        [x-cloak] {
+            display: none !important;
+        }
+
         .mdw-explorer {
             display: grid;
             grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
@@ -164,6 +168,110 @@
             gap: 8px;
         }
 
+        .mdw-action-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 38px;
+            padding: 8px 13px;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            border-radius: 8px;
+            color: #0f172a;
+            background: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .mdw-action-button:hover {
+            border-color: rgba(14, 165, 233, 0.45);
+            background: #f8fafc;
+        }
+
+        .mdw-action-button.is-primary {
+            border-color: #0ea5e9;
+            color: #ffffff;
+            background: #0ea5e9;
+        }
+
+        .mdw-hidden-file-input {
+            display: none;
+        }
+
+        .mdw-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            display: grid;
+            place-items: center;
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.18);
+            backdrop-filter: blur(3px);
+        }
+
+        .mdw-modal {
+            width: min(420px, 100%);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 22px 60px rgba(15, 23, 42, 0.2);
+            backdrop-filter: blur(14px);
+        }
+
+        .mdw-modal__body {
+            display: grid;
+            gap: 14px;
+            padding: 18px;
+        }
+
+        .mdw-modal__title {
+            margin: 0;
+            color: #0f172a;
+            font-size: 18px;
+            font-weight: 850;
+            line-height: 1.2;
+        }
+
+        .mdw-modal__label {
+            display: grid;
+            gap: 7px;
+            color: #334155;
+            font-size: 13px;
+            font-weight: 750;
+        }
+
+        .mdw-modal__input {
+            width: 100%;
+            min-height: 42px;
+            border: 1px solid rgba(148, 163, 184, 0.65);
+            border-radius: 8px;
+            padding: 8px 10px;
+            color: #0f172a;
+            background: #ffffff;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .mdw-modal__input:focus {
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+        }
+
+        .mdw-modal__error {
+            margin: 0;
+            color: #dc2626;
+            font-size: 13px;
+            line-height: 1.3;
+        }
+
+        .mdw-modal__actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
         .mdw-pill {
             display: inline-flex;
             align-items: center;
@@ -220,12 +328,11 @@
     </style>
 
     @php
-        $headerActions = $this->getDocumentWorkspaceHeaderActions();
-        $headerActionsAlignment = $this->getHeaderActionsAlignment();
         $activeSection = collect($sections)->firstWhere('isActive', true) ?? $sections[0];
         $contentTitle = $activeFolder['name'] ?? $activeSection['label'];
     @endphp
 
+    <div>
     <div class="mdw-explorer">
         <aside class="mdw-sidebar" aria-label="Папки документов">
             <div>
@@ -302,6 +409,19 @@
 
                 <p class="mdw-tree__section">Быстрый доступ</p>
 
+                @php($sharedWithMeSection = collect($sections)->firstWhere('key', 'shared-with-me'))
+                @if ($sharedWithMeSection)
+                    <a href="{{ $sharedWithMeSection['url'] }}" class="mdw-node {{ $sharedWithMeSection['isActive'] ? 'is-active' : '' }}">
+                        <span class="mdw-node__icon">
+                            <x-filament::icon icon="heroicon-o-share" class="h-5 w-5" />
+                        </span>
+                        <span class="mdw-node__body">
+                            <span class="mdw-node__label">Со мной поделились</span>
+                            <span class="mdw-node__meta">{{ $sharedWithMeSection['documents'] }} файлов</span>
+                        </span>
+                    </a>
+                @endif
+
                 @php($allSection = collect($sections)->firstWhere('key', 'all'))
                 @if ($allSection)
                     <a href="{{ $allSection['url'] }}" class="mdw-node {{ $allSection['isActive'] ? 'is-active' : '' }}">
@@ -323,12 +443,31 @@
                     <h2 class="mdw-content__title">{{ $contentTitle }}</h2>
                 </div>
 
-                @if (filled($headerActions))
+                @if (($activeSection['key'] ?? '') !== 'shared-with-me')
                     <div class="mdw-content__actions">
-                        <x-filament::actions
-                            :actions="$headerActions"
-                            :alignment="$headerActionsAlignment"
-                        />
+                        <button type="button" class="mdw-action-button" x-on:click="$dispatch('mdw-open-create-folder')">
+                            <x-filament::icon icon="heroicon-o-folder-plus" class="h-4 w-4" />
+                            <span>Создать папку</span>
+                        </button>
+
+                        <form method="POST" action="{{ route('filament.admin.market-documents.upload') }}" enctype="multipart/form-data">
+                            @csrf
+                            <input type="hidden" name="active_tab" value="{{ $activeSection['key'] ?? 'personal' }}">
+                            <input type="hidden" name="selected_folder_id" value="{{ $activeFolder['id'] ?? '' }}">
+
+                            <button type="button" class="mdw-action-button is-primary" onclick="this.closest('form').querySelector('[data-mdw-file-input]').click()">
+                                <x-filament::icon icon="heroicon-o-arrow-up-tray" class="h-4 w-4" />
+                                <span>Добавить документ</span>
+                            </button>
+
+                            <input
+                                type="file"
+                                name="document"
+                                class="mdw-hidden-file-input"
+                                data-mdw-file-input
+                                onchange="if (this.files && this.files.length > 0) this.form.submit()"
+                            />
+                        </form>
                     </div>
                 @endif
             </header>
@@ -337,5 +476,47 @@
                 {{ $slot }}
             </div>
         </section>
+    </div>
+
+    <div
+        class="mdw-modal-backdrop"
+        x-data="{ isCreateFolderModalOpen: @js($errors->has('name')) }"
+        x-cloak
+        x-show="isCreateFolderModalOpen"
+        x-on:mdw-open-create-folder.window="isCreateFolderModalOpen = true"
+        x-on:keydown.escape.window="isCreateFolderModalOpen = false"
+    >
+        <form class="mdw-modal" method="POST" action="{{ route('filament.admin.market-documents.folders.store') }}">
+            @csrf
+            <input type="hidden" name="active_tab" value="{{ $activeSection['key'] ?? 'personal' }}">
+            <input type="hidden" name="selected_folder_id" value="{{ $activeFolder['id'] ?? '' }}">
+
+            <div class="mdw-modal__body">
+                <h3 class="mdw-modal__title">Новая папка</h3>
+
+                <label class="mdw-modal__label">
+                    <span>Название папки</span>
+                    <input
+                        type="text"
+                        name="name"
+                        class="mdw-modal__input"
+                        value="{{ old('name') }}"
+                        autocomplete="off"
+                        required
+                        autofocus
+                    />
+                </label>
+
+                @error('name')
+                    <p class="mdw-modal__error">{{ $message }}</p>
+                @enderror
+
+                <div class="mdw-modal__actions">
+                    <button type="button" class="mdw-action-button" x-on:click="isCreateFolderModalOpen = false">Отмена</button>
+                    <button type="submit" class="mdw-action-button is-primary">Создать</button>
+                </div>
+            </div>
+        </form>
+    </div>
     </div>
 </x-filament::section>

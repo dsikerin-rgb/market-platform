@@ -113,6 +113,11 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         return $this->hasMany(MarketDocument::class, 'uploaded_by_user_id');
     }
 
+    public function sharedMarketDocuments(): HasMany
+    {
+        return $this->hasMany(MarketDocumentShare::class, 'shared_with_user_id');
+    }
+
     public function tenantSpaces(): BelongsToMany
     {
         return $this->belongsToMany(MarketSpace::class, 'tenant_user_market_spaces', 'user_id', 'market_space_id')

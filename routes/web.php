@@ -34,6 +34,8 @@ use App\Http\Controllers\Marketplace\StoreController as MarketplaceStoreControll
 use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
 use App\Models\Market;
+use App\Models\MarketDocument;
+use App\Models\MarketDocumentFolder;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceGroupEpisode;
 use App\Models\MarketSpaceGroupEpisodeChild;
@@ -174,6 +176,160 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         return back()->with('status', 'Договор ' . $label . ' удалён.');
     })->name('filament.admin.tenants.contracts.delete');
+
+    Route::post('/admin/market-documents/folders', function (Request $request) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+        abort_unless(
+            Schema::hasTable('market_document_folders') && Schema::hasTable('market_documents'),
+            503,
+            'Market documents schema is missing. Run migrations.',
+        );
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'active_tab' => ['nullable', 'string', 'max:64'],
+            'selected_folder_id' => ['nullable', 'integer'],
+        ]);
+
+        $parentFolder = null;
+        $selectedFolderId = is_numeric($validated['selected_folder_id'] ?? null)
+            ? (int) $validated['selected_folder_id']
+            : 0;
+
+        if ($selectedFolderId > 0) {
+            $parentFolder = MarketDocumentFolder::query()
+                ->visibleFor($user)
+                ->whereNull('archived_at')
+                ->find($selectedFolderId);
+        }
+
+        $tab = (string) ($validated['active_tab'] ?? 'personal');
+        $visibility = $parentFolder?->visibility ?: ($tab === MarketDocument::VISIBILITY_SHARED
+            ? MarketDocument::VISIBILITY_SHARED
+            : MarketDocument::VISIBILITY_PERSONAL);
+
+        $marketId = $parentFolder?->market_id ?: (int) ($user->market_id ?? 0);
+        if ($marketId <= 0 && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $marketId = (int) Market::query()->orderBy('id')->value('id');
+        }
+
+        abort_unless($marketId > 0, 422, 'Не выбран рынок для папки.');
+
+        $ownerUserId = $visibility === MarketDocument::VISIBILITY_PERSONAL
+            ? ($parentFolder?->owner_user_id ?: (int) $user->id)
+            : null;
+        $parentId = $parentFolder?->id;
+
+        $maxSortOrder = MarketDocumentFolder::query()
+            ->where('visibility', $visibility)
+            ->where('market_id', $marketId)
+            ->when(
+                $visibility === MarketDocument::VISIBILITY_PERSONAL && $ownerUserId,
+                fn ($query) => $query->where('owner_user_id', $ownerUserId),
+            )
+            ->when(
+                $parentId,
+                fn ($query) => $query->where('parent_id', $parentId),
+                fn ($query) => $query->whereNull('parent_id'),
+            )
+            ->max('sort_order');
+
+        $folder = MarketDocumentFolder::query()->create([
+            'market_id' => $marketId,
+            'owner_user_id' => $ownerUserId,
+            'parent_id' => $parentId,
+            'visibility' => $visibility,
+            'name' => trim((string) $validated['name']),
+            'sort_order' => ((int) $maxSortOrder) + 10,
+        ]);
+
+        return redirect()
+            ->to(url('/admin/market-documents?' . http_build_query([
+                'tab' => $folder->visibility,
+                'folder' => (int) $folder->id,
+            ])))
+            ->with('status', 'Папка создана.');
+    })->name('filament.admin.market-documents.folders.store');
+
+    Route::post('/admin/market-documents/upload', function (Request $request) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+        abort_unless(
+            Schema::hasTable('market_document_folders') && Schema::hasTable('market_documents'),
+            503,
+            'Market documents schema is missing. Run migrations.',
+        );
+
+        $validated = $request->validate([
+            'document' => ['required', 'file', 'max:51200'],
+            'active_tab' => ['nullable', 'string', 'max:64'],
+            'selected_folder_id' => ['nullable', 'integer'],
+        ]);
+
+        $file = $request->file('document');
+        abort_unless($file instanceof \Illuminate\Http\UploadedFile, 422, 'Файл не выбран.');
+
+        $parentFolder = null;
+        $selectedFolderId = is_numeric($validated['selected_folder_id'] ?? null)
+            ? (int) $validated['selected_folder_id']
+            : 0;
+
+        if ($selectedFolderId > 0) {
+            $parentFolder = MarketDocumentFolder::query()
+                ->visibleFor($user)
+                ->whereNull('archived_at')
+                ->find($selectedFolderId);
+        }
+
+        $tab = (string) ($validated['active_tab'] ?? 'personal');
+        $visibility = $parentFolder?->visibility ?: ($tab === MarketDocument::VISIBILITY_SHARED
+            ? MarketDocument::VISIBILITY_SHARED
+            : MarketDocument::VISIBILITY_PERSONAL);
+
+        $marketId = $parentFolder?->market_id ?: (int) ($user->market_id ?? 0);
+        if ($marketId <= 0 && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            $marketId = (int) Market::query()->orderBy('id')->value('id');
+        }
+
+        abort_unless($marketId > 0, 422, 'Не выбран рынок для документа.');
+
+        $ownerUserId = $visibility === MarketDocument::VISIBILITY_PERSONAL
+            ? ($parentFolder?->owner_user_id ?: (int) $user->id)
+            : null;
+        $folderId = $parentFolder?->id;
+        $directory = MarketDocument::storageDirectory(
+            $marketId,
+            $ownerUserId,
+            $visibility,
+            $folderId ? (int) $folderId : null,
+        );
+        $path = $file->store($directory, MarketDocument::storageDisk());
+        abort_unless(is_string($path) && $path !== '', 500, 'Не удалось сохранить файл.');
+
+        $originalName = trim((string) $file->getClientOriginalName());
+
+        MarketDocument::query()->create([
+            'market_id' => $marketId,
+            'owner_user_id' => $ownerUserId,
+            'uploaded_by_user_id' => (int) $user->id,
+            'folder_id' => $folderId,
+            'visibility' => $visibility,
+            'category' => MarketDocument::CATEGORY_GENERAL,
+            'title' => $originalName !== '' ? $originalName : basename($path),
+            'file_path' => $path,
+            'original_name' => $originalName !== '' ? $originalName : basename($path),
+            'mime_type' => $file->getMimeType(),
+            'file_size' => (int) ($file->getSize() ?: 0),
+        ]);
+
+        return redirect()
+            ->to(url('/admin/market-documents?' . http_build_query(array_filter([
+                'tab' => $visibility,
+                'folder' => $folderId ? (int) $folderId : null,
+            ], static fn ($value) => $value !== null))))
+            ->with('status', 'Документ добавлен.');
+    })->name('filament.admin.market-documents.upload');
 
     Route::post('/admin/requests/start', function (Request $request) {
         $user = Filament::auth()->user();
