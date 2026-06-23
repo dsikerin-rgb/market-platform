@@ -34,7 +34,7 @@ class MarketDocumentResource extends BaseResource
 
     protected static ?string $navigationLabel = 'Диск';
     protected static ?string $modelLabel = 'документ';
-    protected static ?string $pluralModelLabel = 'Документы';
+    protected static ?string $pluralModelLabel = 'Диск';
     protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-folder';
     protected static ?int $navigationSort = 75;
@@ -44,17 +44,19 @@ class MarketDocumentResource extends BaseResource
         $user = Filament::auth()->user();
         $isSuperAdmin = (bool) $user && $user->isSuperAdmin();
         $selectedMarketId = static::selectedMarketIdFromSession();
+        $selectedFolder = static::selectedFolderFromRequest();
 
         $marketField = $isSuperAdmin && ! $selectedMarketId
             ? Forms\Components\Select::make('market_id')
                 ->label('Рынок')
                 ->relationship('market', 'name')
+                ->default(fn (?MarketDocument $record) => $record?->market_id ?: $selectedFolder?->market_id)
                 ->required()
                 ->searchable()
                 ->preload()
                 ->reactive()
             : Forms\Components\Hidden::make('market_id')
-                ->default(fn (?MarketDocument $record) => $record?->market_id ?: ($selectedMarketId ?: $user?->market_id))
+                ->default(fn (?MarketDocument $record) => $record?->market_id ?: ($selectedFolder?->market_id ?: ($selectedMarketId ?: $user?->market_id)))
                 ->dehydrated(true);
 
         return $schema->components([
@@ -66,14 +68,14 @@ class MarketDocumentResource extends BaseResource
                     Forms\Components\Select::make('visibility')
                         ->label('Раздел')
                         ->options(MarketDocument::visibilityOptions())
-                        ->default(MarketDocument::VISIBILITY_PERSONAL)
+                        ->default(fn (?MarketDocument $record) => $record?->visibility ?: ($selectedFolder?->visibility ?: MarketDocument::VISIBILITY_PERSONAL))
                         ->required()
                         ->reactive(),
 
                     Forms\Components\Select::make('owner_user_id')
                         ->label('Владелец личного раздела')
                         ->options(fn (Get $get): array => static::ownerOptions($get('market_id') ? (int) $get('market_id') : null))
-                        ->default(fn (?MarketDocument $record) => $record?->owner_user_id ?: $user?->id)
+                        ->default(fn (?MarketDocument $record) => $record?->owner_user_id ?: ($selectedFolder?->owner_user_id ?: $user?->id))
                         ->searchable()
                         ->preload()
                         ->required(fn (Get $get): bool => $get('visibility') === MarketDocument::VISIBILITY_PERSONAL)
@@ -94,6 +96,7 @@ class MarketDocumentResource extends BaseResource
                             (string) ($get('visibility') ?: MarketDocument::VISIBILITY_PERSONAL),
                             $get('owner_user_id') ? (int) $get('owner_user_id') : null,
                         ))
+                        ->default(fn (?MarketDocument $record) => $record?->folder_id ?: $selectedFolder?->id)
                         ->placeholder('Без папки')
                         ->searchable()
                         ->preload(),
@@ -577,5 +580,24 @@ class MarketDocumentResource extends BaseResource
             ?? session('selected_market_id');
 
         return filled($value) ? (int) $value : null;
+    }
+
+    private static function selectedFolderFromRequest(): ?MarketDocumentFolder
+    {
+        if (! DbSchema::hasTable('market_document_folders')) {
+            return null;
+        }
+
+        $folderId = request()->query('folder');
+
+        if (! filled($folderId)) {
+            return null;
+        }
+
+        return MarketDocumentFolder::query()
+            ->visibleFor(Filament::auth()->user())
+            ->whereNull('archived_at')
+            ->with('parent')
+            ->find((int) $folderId);
     }
 }

@@ -223,6 +223,7 @@
         $headerActions = $this->getDocumentWorkspaceHeaderActions();
         $headerActionsAlignment = $this->getHeaderActionsAlignment();
         $activeSection = collect($sections)->firstWhere('isActive', true) ?? $sections[0];
+        $contentTitle = $activeFolder['name'] ?? $activeSection['label'];
     @endphp
 
     <div class="mdw-explorer">
@@ -251,7 +252,7 @@
                 @if (($folderGroups['personal'] ?? []) !== [])
                     <div class="mdw-folder-list">
                         @foreach ($folderGroups['personal'] as $folder)
-                            <div class="mdw-node">
+                            <a href="{{ $folder['url'] }}" class="mdw-node {{ $folder['isActive'] ? 'is-active' : '' }}">
                                 <span class="mdw-node__icon">
                                     <x-filament::icon icon="heroicon-o-folder" class="h-5 w-5" />
                                 </span>
@@ -259,7 +260,7 @@
                                     <span class="mdw-node__label">{{ $folder['name'] }}</span>
                                     <span class="mdw-node__meta">{{ $folder['documents'] }} файлов</span>
                                 </span>
-                            </div>
+                            </a>
                         @endforeach
                     </div>
                 @endif
@@ -282,7 +283,7 @@
                 @if (($folderGroups['shared'] ?? []) !== [])
                     <div class="mdw-folder-list">
                         @foreach ($folderGroups['shared'] as $folder)
-                            <div class="mdw-node">
+                            <a href="{{ $folder['url'] }}" class="mdw-node {{ $folder['isActive'] ? 'is-active' : '' }}">
                                 <span class="mdw-node__icon">
                                     <x-filament::icon icon="heroicon-o-folder" class="h-5 w-5" />
                                 </span>
@@ -290,7 +291,7 @@
                                     <span class="mdw-node__label">{{ $folder['name'] }}</span>
                                     <span class="mdw-node__meta">{{ $folder['documents'] }} файлов</span>
                                 </span>
-                            </div>
+                            </a>
                         @endforeach
                     </div>
                 @endif
@@ -319,7 +320,7 @@
         <section class="mdw-content">
             <header class="mdw-content__head">
                 <div>
-                    <h2 class="mdw-content__title">{{ $activeSection['label'] }}</h2>
+                    <h2 class="mdw-content__title">{{ $contentTitle }}</h2>
                 </div>
 
                 @if (filled($headerActions))

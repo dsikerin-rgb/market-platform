@@ -26,9 +26,12 @@ class ListMarketDocuments extends ListRecords
 
     protected array $queryString = [
         'activeTab' => ['as' => 'tab', 'except' => 'personal'],
+        'selectedFolderId' => ['as' => 'folder', 'except' => null],
     ];
 
     public ?string $activeTab = 'personal';
+
+    public ?int $selectedFolderId = null;
 
     public function mount(): void
     {
@@ -43,6 +46,16 @@ class ListMarketDocuments extends ListRecords
 
         if (! in_array($this->activeTab, ['personal', 'shared', 'all'], true)) {
             $this->activeTab = 'personal';
+        }
+
+        $this->selectedFolderId = $this->selectedFolder()?->id;
+
+        if ($this->selectedFolderId && $this->activeTab !== 'all') {
+            $folder = $this->selectedFolder();
+
+            if ($folder) {
+                $this->activeTab = $folder->visibility;
+            }
         }
     }
 
@@ -126,7 +139,10 @@ class ListMarketDocuments extends ListRecords
         $createAction = Actions\Action::make('createDocument')
             ->label('Добавить документ')
             ->icon('heroicon-o-arrow-up-tray')
-            ->url(fn (): string => MarketDocumentResource::getUrl('create'))
+            ->url(fn (): string => MarketDocumentResource::getUrl(
+                'create',
+                $this->selectedFolderId ? ['folder' => $this->selectedFolderId] : [],
+            ))
             ->extraAttributes(['wire:navigate' => true]);
         return [$folderAction, $createAction];
     }
@@ -139,17 +155,21 @@ class ListMarketDocuments extends ListRecords
         $user = Filament::auth()->user();
         $selectedMarketId = $this->selectedMarketIdFromSession();
         $isSuperAdmin = (bool) $user && $user->isSuperAdmin();
+        $selectedFolder = $this->selectedFolder();
+        $defaultVisibility = $selectedFolder?->visibility
+            ?: ($this->activeTab === MarketDocument::VISIBILITY_SHARED ? MarketDocument::VISIBILITY_SHARED : MarketDocument::VISIBILITY_PERSONAL);
 
         $marketField = $isSuperAdmin && ! $selectedMarketId
             ? Forms\Components\Select::make('market_id')
                 ->label('Рынок')
                 ->options(fn (): array => Market::query()->orderBy('name')->pluck('name', 'id')->all())
+                ->default($selectedFolder?->market_id)
                 ->required()
                 ->searchable()
                 ->preload()
                 ->reactive()
             : Forms\Components\Hidden::make('market_id')
-                ->default($selectedMarketId ?: $user?->market_id)
+                ->default($selectedFolder?->market_id ?: ($selectedMarketId ?: $user?->market_id))
                 ->dehydrated(true);
 
         return [
@@ -158,14 +178,14 @@ class ListMarketDocuments extends ListRecords
             Forms\Components\Select::make('visibility')
                 ->label('Раздел')
                 ->options(MarketDocument::visibilityOptions())
-                ->default(MarketDocument::VISIBILITY_PERSONAL)
+                ->default($defaultVisibility)
                 ->required()
                 ->reactive(),
 
             Forms\Components\Select::make('owner_user_id')
                 ->label('Владелец личного раздела')
                 ->options(fn (Get $get): array => MarketDocumentResource::ownerOptions($get('market_id') ? (int) $get('market_id') : null))
-                ->default($user?->id)
+                ->default($selectedFolder?->owner_user_id ?: $user?->id)
                 ->searchable()
                 ->preload()
                 ->required(fn (Get $get): bool => $get('visibility') === MarketDocument::VISIBILITY_PERSONAL)
@@ -181,6 +201,7 @@ class ListMarketDocuments extends ListRecords
                     $get('owner_user_id') ? (int) $get('owner_user_id') : null,
                 ))
                 ->placeholder('В корне раздела')
+                ->default($selectedFolder?->id)
                 ->searchable()
                 ->preload(),
 
@@ -221,8 +242,17 @@ class ListMarketDocuments extends ListRecords
         return $tab;
     }
 
+    protected function getTableQuery(): Builder
+    {
+        $query = parent::getTableQuery();
+
+        return $this->selectedFolderId
+            ? $query->where('folder_id', $this->selectedFolderId)
+            : $query;
+    }
+
     /**
-     * @return array{activeTab:string,sections:array<int, array<string, mixed>>,folderGroups:array<string, list<array{name:string,section:string,documents:int}>>}
+     * @return array{activeTab:string,sections:array<int, array<string, mixed>>,folderGroups:array<string, list<array{id:int,name:string,section:string,url:string,isActive:bool,documents:int}>>,activeFolder:?array{id:int,name:string,section:string,url:string,isActive:bool,documents:int}}
      */
     public function documentWorkspaceData(): array
     {
@@ -237,6 +267,7 @@ class ListMarketDocuments extends ListRecords
                 'personal' => $this->foldersForSection('personal'),
                 'shared' => $this->foldersForSection('shared'),
             ],
+            'activeFolder' => $this->activeFolderData(),
         ];
     }
 
@@ -251,8 +282,8 @@ class ListMarketDocuments extends ListRecords
                 'label' => 'Личный диск',
                 'description' => 'Файлы сотрудника',
                 'icon' => 'heroicon-o-user-circle',
-                'url' => MarketDocumentResource::getUrl('index', ['tab' => 'personal']),
-                'isActive' => $activeTab === 'personal',
+                'url' => $this->workspaceUrl('personal'),
+                'isActive' => $activeTab === 'personal' && ! $this->selectedFolderId,
                 'documents' => $this->documentsCount('personal'),
                 'folders' => $this->foldersCount('personal'),
             ],
@@ -261,8 +292,8 @@ class ListMarketDocuments extends ListRecords
                 'label' => 'Общий',
                 'description' => 'Файлы рынка',
                 'icon' => 'heroicon-o-users',
-                'url' => MarketDocumentResource::getUrl('index', ['tab' => 'shared']),
-                'isActive' => $activeTab === 'shared',
+                'url' => $this->workspaceUrl('shared'),
+                'isActive' => $activeTab === 'shared' && ! $this->selectedFolderId,
                 'documents' => $this->documentsCount('shared'),
                 'folders' => $this->foldersCount('shared'),
             ],
@@ -271,8 +302,8 @@ class ListMarketDocuments extends ListRecords
                 'label' => 'Все документы',
                 'description' => 'Весь доступный архив',
                 'icon' => 'heroicon-o-folder-open',
-                'url' => MarketDocumentResource::getUrl('index', ['tab' => 'all']),
-                'isActive' => $activeTab === 'all',
+                'url' => $this->workspaceUrl('all'),
+                'isActive' => $activeTab === 'all' && ! $this->selectedFolderId,
                 'documents' => $this->documentsCount('all'),
                 'folders' => $this->foldersCount('all'),
             ],
@@ -280,7 +311,7 @@ class ListMarketDocuments extends ListRecords
     }
 
     /**
-     * @return list<array{name:string,section:string,documents:int}>
+     * @return list<array{id:int,name:string,section:string,url:string,isActive:bool,documents:int}>
      */
     private function foldersForSection(string $section): array
     {
@@ -290,10 +321,12 @@ class ListMarketDocuments extends ListRecords
 
         $query = $this->folderBaseQuery()
             ->whereNull('archived_at')
-            ->withCount('documents')
+            ->withCount([
+                'documents' => fn (Builder $query): Builder => $query->whereNull('archived_at'),
+            ])
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->limit(8);
+            ->limit(200);
 
         if ($section === 'personal') {
             $query->where('visibility', MarketDocument::VISIBILITY_PERSONAL);
@@ -304,12 +337,47 @@ class ListMarketDocuments extends ListRecords
         return $query
             ->get()
             ->map(fn (MarketDocumentFolder $folder): array => [
+                'id' => (int) $folder->id,
                 'name' => $folder->displayName(),
                 'section' => $folder->visibility === MarketDocument::VISIBILITY_SHARED ? 'Общий' : 'Личный',
+                'url' => $this->workspaceUrl($folder->visibility, (int) $folder->id),
+                'isActive' => (int) $this->selectedFolderId === (int) $folder->id,
                 'documents' => (int) ($folder->documents_count ?? 0),
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array{id:int,name:string,section:string,url:string,isActive:bool,documents:int}|null
+     */
+    private function activeFolderData(): ?array
+    {
+        $folder = $this->selectedFolder();
+
+        if (! $folder) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $folder->id,
+            'name' => $folder->displayName(),
+            'section' => $folder->visibility === MarketDocument::VISIBILITY_SHARED ? 'Общий' : 'Личный',
+            'url' => $this->workspaceUrl($folder->visibility, (int) $folder->id),
+            'isActive' => true,
+            'documents' => $this->documentsCountForFolder((int) $folder->id),
+        ];
+    }
+
+    private function workspaceUrl(string $tab, ?int $folderId = null): string
+    {
+        $params = ['tab' => $tab];
+
+        if ($folderId) {
+            $params['folder'] = $folderId;
+        }
+
+        return MarketDocumentResource::getUrl('index', $params);
     }
 
     private function documentsCount(string $section): int
@@ -327,6 +395,18 @@ class ListMarketDocuments extends ListRecords
         }
 
         return (int) $query->count();
+    }
+
+    private function documentsCountForFolder(int $folderId): int
+    {
+        if (! DbSchema::hasTable('market_documents')) {
+            return 0;
+        }
+
+        return (int) $this->documentBaseQuery()
+            ->whereNull('archived_at')
+            ->where('folder_id', $folderId)
+            ->count();
     }
 
     private function foldersCount(string $section): int
@@ -384,6 +464,18 @@ class ListMarketDocuments extends ListRecords
         }
 
         return $query->visibleFor($user);
+    }
+
+    private function selectedFolder(): ?MarketDocumentFolder
+    {
+        if (! $this->selectedFolderId || ! DbSchema::hasTable('market_document_folders')) {
+            return null;
+        }
+
+        return $this->folderBaseQuery()
+            ->whereNull('archived_at')
+            ->with('parent')
+            ->find((int) $this->selectedFolderId);
     }
 
     protected function selectedMarketIdFromSession(): ?int

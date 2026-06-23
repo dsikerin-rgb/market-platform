@@ -8,6 +8,7 @@
             'activeTab' => $workspace['activeTab'],
             'sections' => $workspace['sections'],
             'folderGroups' => $workspace['folderGroups'],
+            'activeFolder' => $workspace['activeFolder'],
         ])
             {{ $this->table }}
         @endcomponent
