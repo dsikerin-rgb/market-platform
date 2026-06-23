@@ -25,6 +25,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema as DbSchema;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -173,6 +174,8 @@ class MarketDocumentResource extends BaseResource
             ->columns([
                 TextColumn::make('title')
                     ->label('Документ')
+                    ->formatStateUsing(fn ($state, MarketDocument $record): HtmlString => static::documentTitleWithType($record))
+                    ->html()
                     ->searchable()
                     ->sortable()
                     ->wrap(),
@@ -439,6 +442,68 @@ class MarketDocumentResource extends BaseResource
         $base = $subject !== '' ? $subject : ('Обращение #' . $request->id);
 
         return Str::limit($ticket !== '' ? "{$base} · {$ticket}" : $base, 90);
+    }
+
+    protected static function documentTitleWithType(MarketDocument $record): HtmlString
+    {
+        $title = trim((string) $record->title);
+        $fileName = $record->resolvedFileName();
+        $extension = static::documentExtension($record);
+        $type = static::documentTypeMeta($extension, (string) $record->mime_type);
+
+        $label = e($title !== '' ? $title : $fileName);
+        $typeLabel = e($type['label']);
+        $background = e($type['background']);
+        $foreground = e($type['foreground']);
+
+        return new HtmlString(<<<HTML
+<span style="display:flex;align-items:center;gap:10px;min-width:0;">
+    <span title="{$typeLabel}" style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:0 0 34px;border-radius:9px;background:{$background};color:{$foreground};font-size:10px;font-weight:850;line-height:1;letter-spacing:.02em;text-transform:uppercase;box-shadow:inset 0 0 0 1px rgba(15,23,42,.08);">{$typeLabel}</span>
+    <span style="min-width:0;color:#0f172a;font-weight:800;line-height:1.2;overflow-wrap:anywhere;">{$label}</span>
+</span>
+HTML);
+    }
+
+    protected static function documentExtension(MarketDocument $record): string
+    {
+        $name = trim($record->resolvedFileName());
+        $extension = strtolower((string) pathinfo($name, PATHINFO_EXTENSION));
+
+        if ($extension !== '') {
+            return $extension;
+        }
+
+        $mime = strtolower(trim((string) $record->mime_type));
+
+        return match (true) {
+            str_contains($mime, 'pdf') => 'pdf',
+            str_contains($mime, 'word') || str_contains($mime, 'document') => 'doc',
+            str_contains($mime, 'spreadsheet') || str_contains($mime, 'excel') => 'xls',
+            str_contains($mime, 'presentation') || str_contains($mime, 'powerpoint') => 'ppt',
+            str_starts_with($mime, 'image/') => 'img',
+            str_starts_with($mime, 'text/') => 'txt',
+            default => 'file',
+        };
+    }
+
+    /**
+     * @return array{label:string,background:string,foreground:string}
+     */
+    protected static function documentTypeMeta(string $extension, string $mime): array
+    {
+        $extension = strtolower(trim($extension));
+        $mime = strtolower(trim($mime));
+
+        return match (true) {
+            $extension === 'pdf' => ['label' => 'PDF', 'background' => '#fee2e2', 'foreground' => '#b91c1c'],
+            in_array($extension, ['doc', 'docx', 'rtf', 'odt'], true) => ['label' => Str::upper($extension), 'background' => '#dbeafe', 'foreground' => '#1d4ed8'],
+            in_array($extension, ['xls', 'xlsx', 'csv', 'ods'], true) => ['label' => Str::upper($extension), 'background' => '#dcfce7', 'foreground' => '#15803d'],
+            in_array($extension, ['ppt', 'pptx', 'odp'], true) => ['label' => Str::upper($extension), 'background' => '#ffedd5', 'foreground' => '#c2410c'],
+            in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'], true) || str_starts_with($mime, 'image/') => ['label' => 'IMG', 'background' => '#f3e8ff', 'foreground' => '#7e22ce'],
+            in_array($extension, ['zip', 'rar', '7z', 'tar', 'gz'], true) => ['label' => 'ZIP', 'background' => '#f1f5f9', 'foreground' => '#475569'],
+            in_array($extension, ['txt', 'md', 'log'], true) || str_starts_with($mime, 'text/') => ['label' => 'TXT', 'background' => '#e0f2fe', 'foreground' => '#0369a1'],
+            default => ['label' => $extension !== '' && $extension !== 'file' ? Str::upper(Str::limit($extension, 4, '')) : 'FILE', 'background' => '#f1f5f9', 'foreground' => '#334155'],
+        };
     }
 
     /**
