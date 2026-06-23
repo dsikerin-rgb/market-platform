@@ -21,7 +21,6 @@ use Filament\Forms;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -172,23 +171,10 @@ class MarketDocumentResource extends BaseResource
 
         $table = $table
             ->columns([
-                IconColumn::make('file_type_icon')
-                    ->label('')
-                    ->state(fn (MarketDocument $record): string => static::documentTypeMeta(
-                        static::documentExtension($record),
-                        (string) $record->mime_type,
-                    )['kind'])
-                    ->icon(fn (string $state): string => static::documentTypeIconName($state))
-                    ->color(fn (string $state): string => static::documentTypeIconColor($state))
-                    ->tooltip(fn (MarketDocument $record): string => static::documentTypeMeta(
-                        static::documentExtension($record),
-                        (string) $record->mime_type,
-                    )['label'])
-                    ->alignCenter(),
-
                 TextColumn::make('title')
                     ->label('Документ')
                     ->formatStateUsing(fn ($state, MarketDocument $record): string => static::documentTitleLabel($record))
+                    ->view('filament.resources.market-documents.columns.document-title')
                     ->searchable()
                     ->sortable()
                     ->wrap(),
@@ -457,12 +443,20 @@ class MarketDocumentResource extends BaseResource
         return Str::limit($ticket !== '' ? "{$base} · {$ticket}" : $base, 90);
     }
 
-    protected static function documentTitleLabel(MarketDocument $record): string
+    public static function documentTitleLabel(MarketDocument $record): string
     {
         $title = trim((string) $record->title);
         $fileName = $record->resolvedFileName();
 
         return $title !== '' ? $title : $fileName;
+    }
+
+    /**
+     * @return array{label:string,kind:string,mark:string,background:string,foreground:string}
+     */
+    public static function documentTypeMetaForRecord(MarketDocument $record): array
+    {
+        return static::documentTypeMeta(static::documentExtension($record), (string) $record->mime_type);
     }
 
     protected static function documentExtension(MarketDocument $record): string
@@ -488,7 +482,7 @@ class MarketDocumentResource extends BaseResource
     }
 
     /**
-     * @return array{label:string,kind:string}
+     * @return array{label:string,kind:string,mark:string,background:string,foreground:string}
      */
     protected static function documentTypeMeta(string $extension, string $mime): array
     {
@@ -496,40 +490,14 @@ class MarketDocumentResource extends BaseResource
         $mime = strtolower(trim($mime));
 
         return match (true) {
-            $extension === 'pdf' => ['label' => 'PDF', 'kind' => 'pdf'],
-            in_array($extension, ['doc', 'docx', 'rtf', 'odt'], true) => ['label' => Str::upper($extension), 'kind' => 'document'],
-            in_array($extension, ['xls', 'xlsx', 'csv', 'ods'], true) => ['label' => Str::upper($extension), 'kind' => 'sheet'],
-            in_array($extension, ['ppt', 'pptx', 'odp'], true) => ['label' => Str::upper($extension), 'kind' => 'presentation'],
-            in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'], true) || str_starts_with($mime, 'image/') => ['label' => 'IMG', 'kind' => 'image'],
-            in_array($extension, ['zip', 'rar', '7z', 'tar', 'gz'], true) => ['label' => 'ZIP', 'kind' => 'archive'],
-            in_array($extension, ['txt', 'md', 'log'], true) || str_starts_with($mime, 'text/') => ['label' => 'TXT', 'kind' => 'text'],
-            default => ['label' => $extension !== '' && $extension !== 'file' ? Str::upper(Str::limit($extension, 4, '')) : 'FILE', 'kind' => 'file'],
-        };
-    }
-
-    protected static function documentTypeIconName(string $kind): string
-    {
-        return match ($kind) {
-            'pdf' => 'heroicon-o-document-text',
-            'document' => 'heroicon-o-document',
-            'sheet' => 'heroicon-o-table-cells',
-            'presentation' => 'heroicon-o-presentation-chart-bar',
-            'image' => 'heroicon-o-photo',
-            'archive' => 'heroicon-o-archive-box',
-            'text' => 'heroicon-o-document-text',
-            default => 'heroicon-o-document',
-        };
-    }
-
-    protected static function documentTypeIconColor(string $kind): string
-    {
-        return match ($kind) {
-            'pdf' => 'danger',
-            'document' => 'info',
-            'sheet' => 'success',
-            'presentation' => 'warning',
-            'image' => 'primary',
-            default => 'gray',
+            $extension === 'pdf' => ['label' => 'PDF', 'kind' => 'pdf', 'mark' => 'PDF', 'background' => '#dc2626', 'foreground' => '#ffffff'],
+            in_array($extension, ['doc', 'docx', 'rtf', 'odt'], true) => ['label' => Str::upper($extension), 'kind' => 'document', 'mark' => 'W', 'background' => '#2563eb', 'foreground' => '#ffffff'],
+            in_array($extension, ['xls', 'xlsx', 'csv', 'ods'], true) => ['label' => Str::upper($extension), 'kind' => 'sheet', 'mark' => 'X', 'background' => '#16a34a', 'foreground' => '#ffffff'],
+            in_array($extension, ['ppt', 'pptx', 'odp'], true) => ['label' => Str::upper($extension), 'kind' => 'presentation', 'mark' => 'P', 'background' => '#ea580c', 'foreground' => '#ffffff'],
+            in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'], true) || str_starts_with($mime, 'image/') => ['label' => 'IMG', 'kind' => 'image', 'mark' => '', 'background' => '#9333ea', 'foreground' => '#ffffff'],
+            in_array($extension, ['zip', 'rar', '7z', 'tar', 'gz'], true) => ['label' => 'ZIP', 'kind' => 'archive', 'mark' => 'ZIP', 'background' => '#64748b', 'foreground' => '#ffffff'],
+            in_array($extension, ['txt', 'md', 'log'], true) || str_starts_with($mime, 'text/') => ['label' => 'TXT', 'kind' => 'text', 'mark' => 'T', 'background' => '#0284c7', 'foreground' => '#ffffff'],
+            default => ['label' => $extension !== '' && $extension !== 'file' ? Str::upper(Str::limit($extension, 4, '')) : 'FILE', 'kind' => 'file', 'mark' => '', 'background' => '#64748b', 'foreground' => '#ffffff'],
         };
     }
 
