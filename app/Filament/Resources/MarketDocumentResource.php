@@ -21,11 +21,11 @@ use Filament\Forms;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema as DbSchema;
-use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -172,10 +172,23 @@ class MarketDocumentResource extends BaseResource
 
         $table = $table
             ->columns([
+                IconColumn::make('file_type_icon')
+                    ->label('')
+                    ->state(fn (MarketDocument $record): string => static::documentTypeMeta(
+                        static::documentExtension($record),
+                        (string) $record->mime_type,
+                    )['kind'])
+                    ->icon(fn (string $state): string => static::documentTypeIconName($state))
+                    ->color(fn (string $state): string => static::documentTypeIconColor($state))
+                    ->tooltip(fn (MarketDocument $record): string => static::documentTypeMeta(
+                        static::documentExtension($record),
+                        (string) $record->mime_type,
+                    )['label'])
+                    ->alignCenter(),
+
                 TextColumn::make('title')
                     ->label('Документ')
-                    ->formatStateUsing(fn ($state, MarketDocument $record): HtmlString => static::documentTitleWithType($record))
-                    ->html()
+                    ->formatStateUsing(fn ($state, MarketDocument $record): string => static::documentTitleLabel($record))
                     ->searchable()
                     ->sortable()
                     ->wrap(),
@@ -444,23 +457,12 @@ class MarketDocumentResource extends BaseResource
         return Str::limit($ticket !== '' ? "{$base} · {$ticket}" : $base, 90);
     }
 
-    protected static function documentTitleWithType(MarketDocument $record): HtmlString
+    protected static function documentTitleLabel(MarketDocument $record): string
     {
         $title = trim((string) $record->title);
         $fileName = $record->resolvedFileName();
-        $extension = static::documentExtension($record);
-        $type = static::documentTypeMeta($extension, (string) $record->mime_type);
 
-        $label = e($title !== '' ? $title : $fileName);
-        $typeLabel = e($type['label']);
-        $icon = static::documentTypeIcon($type);
-
-        return new HtmlString(<<<HTML
-<span style="display:flex;align-items:center;gap:10px;min-width:0;">
-    <span title="{$typeLabel}" style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;">{$icon}</span>
-    <span style="min-width:0;color:#0f172a;font-weight:800;line-height:1.2;overflow-wrap:anywhere;">{$label}</span>
-</span>
-HTML);
+        return $title !== '' ? $title : $fileName;
     }
 
     protected static function documentExtension(MarketDocument $record): string
@@ -486,7 +488,7 @@ HTML);
     }
 
     /**
-     * @return array{label:string,background:string,foreground:string,kind:string}
+     * @return array{label:string,kind:string}
      */
     protected static function documentTypeMeta(string $extension, string $mime): array
     {
@@ -494,56 +496,41 @@ HTML);
         $mime = strtolower(trim($mime));
 
         return match (true) {
-            $extension === 'pdf' => ['label' => 'PDF', 'background' => '#fee2e2', 'foreground' => '#dc2626', 'kind' => 'pdf'],
-            in_array($extension, ['doc', 'docx', 'rtf', 'odt'], true) => ['label' => Str::upper($extension), 'background' => '#dbeafe', 'foreground' => '#2563eb', 'kind' => 'document'],
-            in_array($extension, ['xls', 'xlsx', 'csv', 'ods'], true) => ['label' => Str::upper($extension), 'background' => '#dcfce7', 'foreground' => '#16a34a', 'kind' => 'sheet'],
-            in_array($extension, ['ppt', 'pptx', 'odp'], true) => ['label' => Str::upper($extension), 'background' => '#ffedd5', 'foreground' => '#ea580c', 'kind' => 'presentation'],
-            in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'], true) || str_starts_with($mime, 'image/') => ['label' => 'IMG', 'background' => '#f3e8ff', 'foreground' => '#9333ea', 'kind' => 'image'],
-            in_array($extension, ['zip', 'rar', '7z', 'tar', 'gz'], true) => ['label' => 'ZIP', 'background' => '#f1f5f9', 'foreground' => '#64748b', 'kind' => 'archive'],
-            in_array($extension, ['txt', 'md', 'log'], true) || str_starts_with($mime, 'text/') => ['label' => 'TXT', 'background' => '#e0f2fe', 'foreground' => '#0284c7', 'kind' => 'text'],
-            default => ['label' => $extension !== '' && $extension !== 'file' ? Str::upper(Str::limit($extension, 4, '')) : 'FILE', 'background' => '#f1f5f9', 'foreground' => '#475569', 'kind' => 'file'],
+            $extension === 'pdf' => ['label' => 'PDF', 'kind' => 'pdf'],
+            in_array($extension, ['doc', 'docx', 'rtf', 'odt'], true) => ['label' => Str::upper($extension), 'kind' => 'document'],
+            in_array($extension, ['xls', 'xlsx', 'csv', 'ods'], true) => ['label' => Str::upper($extension), 'kind' => 'sheet'],
+            in_array($extension, ['ppt', 'pptx', 'odp'], true) => ['label' => Str::upper($extension), 'kind' => 'presentation'],
+            in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'], true) || str_starts_with($mime, 'image/') => ['label' => 'IMG', 'kind' => 'image'],
+            in_array($extension, ['zip', 'rar', '7z', 'tar', 'gz'], true) => ['label' => 'ZIP', 'kind' => 'archive'],
+            in_array($extension, ['txt', 'md', 'log'], true) || str_starts_with($mime, 'text/') => ['label' => 'TXT', 'kind' => 'text'],
+            default => ['label' => $extension !== '' && $extension !== 'file' ? Str::upper(Str::limit($extension, 4, '')) : 'FILE', 'kind' => 'file'],
         };
     }
 
-    /**
-     * @param array{label:string,background:string,foreground:string,kind:string} $type
-     */
-    protected static function documentTypeIcon(array $type): string
+    protected static function documentTypeIconName(string $kind): string
     {
-        $background = e($type['background']);
-        $foreground = e($type['foreground']);
-
-        $symbol = match ($type['kind']) {
-            'pdf' => <<<SVG
-<path d="M11.5 25.5c4.5-6.5 7.5-12 6.5-15.3-.7-2.2-3.4-1.5-2.8 1.3.7 3.5 4.9 10.2 8.7 12.6 2.6 1.7 4.1-.7 1.7-2-3.5-1.9-11.3.4-15 2.4" fill="none" stroke="{$foreground}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-SVG,
-            'document' => <<<SVG
-<path d="M12.5 15.5h11M12.5 19h11M12.5 22.5h8" fill="none" stroke="{$foreground}" stroke-width="2" stroke-linecap="round"/>
-SVG,
-            'sheet' => <<<SVG
-<path d="M11.5 13.5h13v11h-13zM11.5 17h13M11.5 20.5h13M15.8 13.5v11M20.2 13.5v11" fill="none" stroke="{$foreground}" stroke-width="1.6" stroke-linejoin="round"/>
-SVG,
-            'presentation' => <<<SVG
-<path d="M11.5 14h13v8.5h-13zM18 22.5v3M15.5 25.5h5" fill="none" stroke="{$foreground}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-SVG,
-            'image' => <<<SVG
-<path d="M11.5 23.5l4.2-4.6 3.1 3.2 2.2-2.3 3.5 3.7M14 15.5h.1" fill="none" stroke="{$foreground}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-SVG,
-            'archive' => <<<SVG
-<path d="M15 12.5h6M15 16h6M15 19.5h6M16 23h4" fill="none" stroke="{$foreground}" stroke-width="2" stroke-linecap="round"/>
-SVG,
-            default => <<<SVG
-<path d="M12.5 15.5h11M12.5 19.5h9M12.5 23.5h6" fill="none" stroke="{$foreground}" stroke-width="2" stroke-linecap="round"/>
-SVG,
+        return match ($kind) {
+            'pdf' => 'heroicon-o-document-text',
+            'document' => 'heroicon-o-document',
+            'sheet' => 'heroicon-o-table-cells',
+            'presentation' => 'heroicon-o-presentation-chart-bar',
+            'image' => 'heroicon-o-photo',
+            'archive' => 'heroicon-o-archive-box',
+            'text' => 'heroicon-o-document-text',
+            default => 'heroicon-o-document',
         };
+    }
 
-        return <<<HTML
-<svg aria-hidden="true" viewBox="0 0 36 36" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M9 3.5h12.5L28 10v22.5H9z" fill="{$background}" stroke="{$foreground}" stroke-width="1.8" stroke-linejoin="round"/>
-    <path d="M21.5 3.5V10H28" fill="#fff" stroke="{$foreground}" stroke-width="1.8" stroke-linejoin="round"/>
-    {$symbol}
-</svg>
-HTML;
+    protected static function documentTypeIconColor(string $kind): string
+    {
+        return match ($kind) {
+            'pdf' => 'danger',
+            'document' => 'info',
+            'sheet' => 'success',
+            'presentation' => 'warning',
+            'image' => 'primary',
+            default => 'gray',
+        };
     }
 
     /**
