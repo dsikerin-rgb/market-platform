@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
@@ -131,6 +132,11 @@ class MarketDocument extends Model
         return $this->morphTo('related');
     }
 
+    public function shares(): HasMany
+    {
+        return $this->hasMany(MarketDocumentShare::class);
+    }
+
     public function scopeVisibleFor(Builder $query, ?User $user): Builder
     {
         if (! $user) {
@@ -145,13 +151,25 @@ class MarketDocument extends Model
             return $query->whereRaw('1 = 0');
         }
 
-        return $query
-            ->where('market_id', (int) $user->market_id)
-            ->where(function (Builder $inner) use ($user): void {
-                $inner
-                    ->where('visibility', self::VISIBILITY_SHARED)
-                    ->orWhere('owner_user_id', (int) $user->id);
+        return $query->where(function (Builder $outer) use ($user): void {
+            $outer->where(function (Builder $marketScope) use ($user): void {
+                $marketScope
+                    ->where('market_id', (int) $user->market_id)
+                    ->where(function (Builder $inner) use ($user): void {
+                        $inner
+                            ->where('visibility', self::VISIBILITY_SHARED)
+                            ->orWhere('owner_user_id', (int) $user->id);
+                    });
             });
+
+            if (Schema::hasTable('market_document_shares')) {
+                $outer->orWhereHas('shares', function (Builder $shareQuery) use ($user): void {
+                    $shareQuery
+                        ->where('shared_with_user_id', (int) $user->id)
+                        ->whereNull('revoked_at');
+                });
+            }
+        });
     }
 
     /**

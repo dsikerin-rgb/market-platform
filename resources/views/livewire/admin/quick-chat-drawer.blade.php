@@ -553,6 +553,18 @@
             outline: none;
         }
 
+        .quick-chat__text-link {
+            color: #0369a1;
+            font-weight: 750;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .quick-chat__text-link:hover,
+        .quick-chat__text-link:focus-visible {
+            color: #075985;
+        }
+
         .quick-chat__suggestions {
             display: flex;
             flex-wrap: wrap;
@@ -1198,8 +1210,8 @@
                                                 <span>{{ $message['created_at'] }}</span>
                                             @endif
                                         </div>
-                                        @if (filled($message['body']))
-                                            <div class="quick-chat__bubble-text">{{ $message['body'] }}</div>
+                                        @if (filled($message['body_html'] ?? $message['body']))
+                                            <div class="quick-chat__bubble-text">{!! $message['body_html'] ?? e($message['body']) !!}</div>
                                         @endif
 
                                         @if (! empty($message['chips']))
@@ -1211,7 +1223,7 @@
                                                     @endphp
 
                                                     @if ($chipLabel !== '' && $chipUrl !== '')
-                                                        <a class="quick-chat__chip" href="{{ $chipUrl }}">{{ $chipLabel }}</a>
+                                                        <a class="quick-chat__chip" href="{{ $chipUrl }}" target="_blank" rel="noopener noreferrer">{{ $chipLabel }}</a>
                                                     @endif
                                                 @endforeach
                                             </div>

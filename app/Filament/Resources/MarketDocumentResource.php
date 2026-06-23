@@ -7,24 +7,26 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\MarketDocumentResource\Pages;
 use App\Models\MarketDocument;
 use App\Models\MarketDocumentFolder;
+use App\Models\MarketDocumentShare;
 use App\Models\MarketSpace;
 use App\Models\Task;
 use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\TenantRequest;
 use App\Models\User;
+use App\Notifications\MarketDocumentSharedNotification;
+use App\Support\StaffConversationService;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class MarketDocumentResource extends BaseResource
 {
@@ -38,6 +40,11 @@ class MarketDocumentResource extends BaseResource
     protected static \UnitEnum|string|null $navigationGroup = null;
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-folder';
     protected static ?int $navigationSort = 75;
+
+    public static function getNavigationLabel(): string
+    {
+        return 'Диск';
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -171,44 +178,6 @@ class MarketDocumentResource extends BaseResource
                     ->sortable()
                     ->wrap(),
 
-                TextColumn::make('visibility')
-                    ->label('Раздел')
-                    ->formatStateUsing(fn (?string $state, MarketDocument $record): string => $record->visibilityLabel())
-                    ->badge()
-                    ->color(fn (?string $state): string => $state === MarketDocument::VISIBILITY_SHARED ? 'primary' : 'gray')
-                    ->sortable(),
-
-                TextColumn::make('category')
-                    ->label('Категория')
-                    ->formatStateUsing(fn (?string $state, MarketDocument $record): string => $record->categoryLabel())
-                    ->badge()
-                    ->color('gray')
-                    ->sortable(),
-
-                TextColumn::make('folder.name')
-                    ->label('Папка')
-                    ->formatStateUsing(fn (?string $state, MarketDocument $record): string => $record->folder?->displayName() ?? 'Без папки')
-                    ->placeholder('Без папки')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('related_id')
-                    ->label('Связано с')
-                    ->formatStateUsing(fn ($state, MarketDocument $record): string => $record->relatedLabel())
-                    ->toggleable(isToggledHiddenByDefault: false),
-
-                TextColumn::make('owner.name')
-                    ->label('Личный раздел')
-                    ->placeholder('Общий раздел')
-                    ->sortable()
-                    ->searchable(),
-
-                TextColumn::make('market.name')
-                    ->label('Рынок')
-                    ->visible(fn (): bool => (bool) $user && $user->isSuperAdmin())
-                    ->sortable()
-                    ->searchable(),
-
                 TextColumn::make('uploadedBy.name')
                     ->label('Добавил')
                     ->toggleable(isToggledHiddenByDefault: true)
@@ -224,37 +193,7 @@ class MarketDocumentResource extends BaseResource
                     ->label('Добавлен')
                     ->dateTime('d.m.Y H:i')
                     ->sortable(),
-
-                TextColumn::make('archived_at')
-                    ->label('Архив')
-                    ->dateTime('d.m.Y H:i')
-                    ->placeholder('Активен')
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                SelectFilter::make('category')
-                    ->label('Категория')
-                    ->options(MarketDocument::categoryOptions()),
-
-                SelectFilter::make('folder_id')
-                    ->label('Папка')
-                    ->options(fn (): array => static::folderOptions(null, null, null)),
-
-                TernaryFilter::make('archived')
-                    ->label('Архив')
-                    ->placeholder('Все')
-                    ->trueLabel('Только архив')
-                    ->falseLabel('Только активные')
-                    ->default(false)
-                    ->queries(
-                        true: fn (Builder $query): Builder => $query->whereNotNull('archived_at'),
-                        false: fn (Builder $query): Builder => $query->whereNull('archived_at'),
-                        blank: fn (Builder $query): Builder => $query,
-                    ),
-            ])
-            ->recordUrl(fn (MarketDocument $record): ?string => static::canEdit($record)
-                ? static::getUrl('edit', ['record' => $record])
-                : null)
             ->defaultSort('created_at', 'desc')
             ->emptyStateIcon('heroicon-o-folder-open')
             ->emptyStateHeading('Документов пока нет')
@@ -273,16 +212,14 @@ class MarketDocumentResource extends BaseResource
     {
         return [
             'index' => Pages\ListMarketDocuments::route('/'),
-            'create' => Pages\CreateMarketDocument::route('/create'),
-            'create-folder' => Pages\CreateMarketDocumentFolder::route('/folders/create'),
-            'edit' => Pages\EditMarketDocument::route('/{record}/edit'),
         ];
     }
 
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->with(['market', 'owner', 'uploadedBy', 'folder.parent', 'related']);
+            ->with(['market', 'owner', 'uploadedBy', 'folder.parent', 'related'])
+            ->whereNull('archived_at');
 
         $user = Filament::auth()->user();
 
@@ -527,44 +464,209 @@ class MarketDocumentResource extends BaseResource
             $actions[] = $download;
         }
 
-        if (class_exists(\Filament\Actions\EditAction::class)) {
-            $actions[] = \Filament\Actions\EditAction::make()->label('Редактировать');
-        } elseif (class_exists(\Filament\Tables\Actions\EditAction::class)) {
-            $actions[] = \Filament\Tables\Actions\EditAction::make()->label('Редактировать');
-        }
+        $share = class_exists(\Filament\Actions\Action::class)
+            ? \Filament\Actions\Action::make('share')
+            : (class_exists(\Filament\Tables\Actions\Action::class) ? \Filament\Tables\Actions\Action::make('share') : null);
 
-        $archive = class_exists(\Filament\Actions\Action::class)
-            ? \Filament\Actions\Action::make('archive')
-            : (class_exists(\Filament\Tables\Actions\Action::class) ? \Filament\Tables\Actions\Action::make('archive') : null);
-
-        if ($archive) {
-            $archive
-                ->label('В архив')
-                ->icon('heroicon-o-archive-box')
+        if ($share) {
+            $share
+                ->label('Поделиться')
+                ->icon('heroicon-o-share')
                 ->color('gray')
-                ->requiresConfirmation()
-                ->visible(fn (MarketDocument $record): bool => blank($record->archived_at))
-                ->action(fn (MarketDocument $record): bool => $record->update(['archived_at' => now()]));
+                ->modalHeading('Поделиться файлом')
+                ->modalSubmitActionLabel('Отправить')
+                ->visible(fn (MarketDocument $record): bool => static::canEdit($record))
+                ->form([
+                    Forms\Components\Select::make('recipient_id')
+                        ->label('Получатель')
+                        ->options(fn (): array => static::shareRecipientOptions())
+                        ->searchable()
+                        ->preload()
+                        ->required()
+                        ->reactive(),
+                    Forms\Components\CheckboxList::make('channels')
+                        ->label('Как отправить')
+                        ->options(fn (Get $get): array => static::shareChannelOptions($get('recipient_id') ? (int) $get('recipient_id') : null))
+                        ->default(['dialog'])
+                        ->required()
+                        ->columns(1)
+                        ->helperText('Telegram появится в списке только если он подключен у получателя.'),
+                    Forms\Components\Textarea::make('message')
+                        ->label('Сообщение')
+                        ->rows(3)
+                        ->maxLength(1000)
+                        ->placeholder('Напишите короткое сообщение к файлу, если нужно.'),
+                ])
+                ->action(fn (MarketDocument $record, array $data): mixed => static::shareDocument($record, $data));
 
-            $actions[] = $archive;
-        }
-
-        $restore = class_exists(\Filament\Actions\Action::class)
-            ? \Filament\Actions\Action::make('restore')
-            : (class_exists(\Filament\Tables\Actions\Action::class) ? \Filament\Tables\Actions\Action::make('restore') : null);
-
-        if ($restore) {
-            $restore
-                ->label('Вернуть')
-                ->icon('heroicon-o-arrow-uturn-left')
-                ->color('primary')
-                ->visible(fn (MarketDocument $record): bool => filled($record->archived_at))
-                ->action(fn (MarketDocument $record): bool => $record->update(['archived_at' => null]));
-
-            $actions[] = $restore;
+            $actions[] = $share;
         }
 
         return $actions;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected static function shareRecipientOptions(): array
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return [];
+        }
+
+        return User::query()
+            ->whereKeyNot((int) $user->id)
+            ->when(! $user->isSuperAdmin(), fn (Builder $query): Builder => $query->where('market_id', (int) $user->market_id))
+            ->whereNotNull('market_id')
+            ->whereDoesntHave('roles', fn (Builder $query): Builder => $query->whereIn('name', ['merchant', 'merchant-user', 'buyer', 'tenant']))
+            ->orderBy('name')
+            ->limit(200)
+            ->get(['id', 'name', 'email', 'telegram_chat_id'])
+            ->mapWithKeys(function (User $recipient): array {
+                $name = trim((string) $recipient->name);
+                $email = trim((string) $recipient->email);
+                $label = $name !== '' ? $name : ($email !== '' ? $email : ('Сотрудник #' . $recipient->id));
+
+                return [(int) $recipient->id => $label];
+            })
+            ->all();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function shareChannelOptions(?int $recipientId): array
+    {
+        $options = [
+            'dialog' => 'Личным сообщением',
+            'mail' => 'На почту',
+        ];
+
+        if ($recipientId) {
+            $hasTelegram = User::query()
+                ->whereKey($recipientId)
+                ->whereNotNull('telegram_chat_id')
+                ->exists();
+
+            if ($hasTelegram) {
+                $options['telegram'] = 'В Telegram';
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    protected static function shareDocument(MarketDocument $record, array $data): mixed
+    {
+        $author = Filament::auth()->user();
+
+        if (! $author || ! static::canEdit($record)) {
+            abort(403);
+        }
+
+        if (! DbSchema::hasTable('market_document_shares')) {
+            throw ValidationException::withMessages([
+                'recipient_id' => 'Доступ к файлам еще не подготовлен. Обновите базу данных.',
+            ]);
+        }
+
+        $recipientId = (int) ($data['recipient_id'] ?? 0);
+        $recipient = User::query()
+            ->whereKey($recipientId)
+            ->whereNotNull('market_id')
+            ->first();
+
+        if (! $recipient instanceof User || (int) $recipient->id === (int) $author->id) {
+            throw ValidationException::withMessages([
+                'recipient_id' => 'Выберите сотрудника, которому нужно открыть доступ.',
+            ]);
+        }
+
+        if (! $author->isSuperAdmin() && (int) $recipient->market_id !== (int) $author->market_id) {
+            abort(403);
+        }
+
+        $channels = array_values(array_intersect(
+            array_map('strval', (array) ($data['channels'] ?? [])),
+            array_keys(static::shareChannelOptions((int) $recipient->id)),
+        ));
+
+        if ($channels === []) {
+            throw ValidationException::withMessages([
+                'channels' => 'Выберите хотя бы один способ отправки.',
+            ]);
+        }
+
+        MarketDocumentShare::query()->updateOrCreate(
+            [
+                'market_document_id' => (int) $record->id,
+                'shared_with_user_id' => (int) $recipient->id,
+            ],
+            [
+                'shared_by_user_id' => (int) $author->id,
+                'access_level' => MarketDocumentShare::ACCESS_VIEW,
+                'revoked_at' => null,
+            ],
+        );
+
+        $message = trim((string) ($data['message'] ?? ''));
+        $body = static::shareMessageText($record, $author, $message);
+
+        if (in_array('dialog', $channels, true)) {
+            app(StaffConversationService::class)->startConversation(
+                $author,
+                $recipient,
+                'Файл: ' . $record->resolvedFileName(),
+                $body,
+                [static::shareAttachmentPayload($record)],
+            );
+        }
+
+        $notificationChannels = array_values(array_intersect($channels, ['mail', 'telegram']));
+        if ($notificationChannels !== []) {
+            $recipient->notify(new MarketDocumentSharedNotification($record, $author, $message, $notificationChannels));
+        }
+
+        \Filament\Notifications\Notification::make()
+            ->title('Доступ открыт')
+            ->body('Файл появится у получателя в разделе «Со мной поделились».')
+            ->success()
+            ->send();
+
+        return null;
+    }
+
+    protected static function shareMessageText(MarketDocument $record, User $author, string $message): string
+    {
+        $authorName = trim((string) ($author->name ?: $author->email));
+        $text = ($authorName !== '' ? $authorName : 'Сотрудник') . ' поделился с вами файлом: ' . $record->resolvedFileName();
+
+        if ($message !== '') {
+            $text .= PHP_EOL . $message;
+        }
+
+        return $text;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected static function shareAttachmentPayload(MarketDocument $record): array
+    {
+        $mime = trim((string) ($record->mime_type ?? ''));
+
+        return [
+            'path' => (string) $record->file_path,
+            'name' => $record->resolvedFileName(),
+            'mime' => $mime !== '' ? $mime : 'application/octet-stream',
+            'size' => (int) ($record->file_size ?? 0),
+            'is_image' => str_starts_with($mime, 'image/'),
+        ];
     }
 
     protected static function selectedMarketIdFromSession(): ?int

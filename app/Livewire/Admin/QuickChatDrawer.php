@@ -67,7 +67,7 @@ class QuickChatDrawer extends Component
     public array $pendingAiPageContext = [];
 
     /**
-     * @var list<array{id:string,user_name:string,body:string,is_own:bool,created_at:string,date_key:string,date_label:string,attachments:list<array<string,mixed>>,chips:list<array{label:string,url:string}>,suggestions:list<string>,pending_action:?array<string,mixed>}>
+     * @var list<array{id:string,user_name:string,body:string,body_html?:string,is_own:bool,created_at:string,date_key:string,date_label:string,attachments:list<array<string,mixed>>,chips:list<array{label:string,url:string}>,suggestions:list<string>,pending_action:?array<string,mixed>}>
      */
     public array $aiMessages = [];
 
@@ -1041,15 +1041,199 @@ class QuickChatDrawer extends Component
      */
     private function selectedMessages(): Collection
     {
-        if ($this->selectedType === 'ai') {
-            return collect($this->aiMessages);
+        $messages = match ($this->selectedType) {
+            'ai' => collect($this->aiMessages),
+            'staff' => $this->selectedStaffMessages(),
+            default => $this->selectedTicketMessages(),
+        };
+
+        return $messages->map(fn (array $message): array => $this->formatMessageLinks($message));
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     * @return array<string, mixed>
+     */
+    private function formatMessageLinks(array $message): array
+    {
+        $body = trim((string) ($message['body'] ?? ''));
+        $chips = $this->normalizeAiChips((array) ($message['chips'] ?? []));
+        $placeholders = [];
+
+        $body = preg_replace_callback(
+            '/\[(?<label>[^\]]{1,180})\]\((?<url>https?:\/\/[^\s)]+|\/admin\/[^\s)]+)\)/iu',
+            function (array $match) use (&$chips, &$placeholders): string {
+                $url = $this->trimMessageUrl((string) $match['url']);
+                $label = trim((string) $match['label']);
+                $chip = $this->messageChipFromUrl($url, $label);
+
+                if ($chip !== null) {
+                    $chips[] = $chip;
+
+                    return '';
+                }
+
+                $anchor = $this->messageAnchorHtml($url, $label);
+                if ($anchor === null) {
+                    return (string) $match[0];
+                }
+
+                $key = $this->messageLinkPlaceholder($placeholders);
+                $placeholders[$key] = $anchor;
+
+                return $key;
+            },
+            $body,
+        ) ?? $body;
+
+        $body = preg_replace_callback(
+            '/(?<url>https?:\/\/[^\s<>()]+|\/admin\/[^\s<>()]+)/iu',
+            function (array $match) use (&$chips, &$placeholders): string {
+                $url = $this->trimMessageUrl((string) $match['url']);
+                $chip = $this->messageChipFromUrl($url);
+
+                if ($chip !== null) {
+                    $chips[] = $chip;
+
+                    return '';
+                }
+
+                $anchor = $this->messageAnchorHtml($url);
+                if ($anchor === null) {
+                    return (string) $match[0];
+                }
+
+                $key = $this->messageLinkPlaceholder($placeholders);
+                $placeholders[$key] = $anchor;
+
+                return $key;
+            },
+            $body,
+        ) ?? $body;
+
+        $body = preg_replace('/[ \t]+/u', ' ', $body) ?? $body;
+        $body = preg_replace('/\n{3,}/u', "\n\n", $body) ?? $body;
+        $body = trim($body);
+
+        $bodyHtml = nl2br(e($body), false);
+        foreach ($placeholders as $key => $anchorHtml) {
+            $bodyHtml = str_replace($key, $anchorHtml, $bodyHtml);
         }
 
-        if ($this->selectedType === 'staff') {
-            return $this->selectedStaffMessages();
+        $message['body_html'] = $bodyHtml;
+        $message['chips'] = $this->normalizeAiChips($chips);
+
+        return $message;
+    }
+
+    /**
+     * @param array<string, string> $placeholders
+     */
+    private function messageLinkPlaceholder(array $placeholders): string
+    {
+        return 'QC_LINK_' . count($placeholders) . '_PLACEHOLDER';
+    }
+
+    private function trimMessageUrl(string $url): string
+    {
+        return trim($url, " \t\n\r\0\x0B.,;\"'`");
+    }
+
+    private function messageAnchorHtml(string $url, ?string $label = null): ?string
+    {
+        if (! preg_match('#^https?://#iu', $url)) {
+            return null;
         }
 
-        return $this->selectedTicketMessages();
+        $label = trim((string) $label);
+        $caption = $label !== '' ? $label : $url;
+
+        return '<a class="quick-chat__text-link" href="' . e($url) . '" target="_blank" rel="noopener noreferrer">' . e(Str::limit($caption, 180, '')) . '</a>';
+    }
+
+    /**
+     * @return array{label:string,url:string}|null
+     */
+    private function messageChipFromUrl(string $url, ?string $label = null): ?array
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+
+        if (! is_string($path) || ! str_starts_with($path, '/admin') || ! $this->messageUrlIsInternal($url)) {
+            return null;
+        }
+
+        $url = $this->normalizeMessageInternalUrl($url);
+        $path = (string) parse_url($url, PHP_URL_PATH);
+        $label = trim((string) $label);
+
+        return [
+            'label' => $this->messageChipLabel($path, $label),
+            'url' => $url,
+        ];
+    }
+
+    private function messageUrlIsInternal(string $url): bool
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if ($host === null || $host === false || trim((string) $host) === '') {
+            return str_starts_with($url, '/admin/');
+        }
+
+        $hosts = [];
+        $configuredHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        if (is_string($configuredHost) && $configuredHost !== '') {
+            $hosts[] = Str::lower($configuredHost);
+        }
+
+        $requestHost = request()->getHost();
+        if (is_string($requestHost) && $requestHost !== '') {
+            $hosts[] = Str::lower($requestHost);
+        }
+
+        return in_array(Str::lower((string) $host), array_values(array_unique($hosts)), true);
+    }
+
+    private function normalizeMessageInternalUrl(string $url): string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+        if (! is_string($path) || $path === '') {
+            return $url;
+        }
+
+        $normalizedPath = match (true) {
+            preg_match('#^/admin/tenants/view/(\d+)$#', $path, $match) === 1 => '/admin/tenants/' . $match[1] . '/edit',
+            preg_match('#^/admin/tenants/(\d+)/view$#', $path, $match) === 1 => '/admin/tenants/' . $match[1] . '/edit',
+            default => $path,
+        };
+
+        if ($normalizedPath === $path) {
+            return $url;
+        }
+
+        $query = parse_url($url, PHP_URL_QUERY);
+        if (str_starts_with($url, '/')) {
+            return $normalizedPath . ($query ? '?' . $query : '');
+        }
+
+        return preg_replace('#' . preg_quote($path, '#') . '#', $normalizedPath, $url, 1) ?? $url;
+    }
+
+    private function messageChipLabel(string $path, string $label): string
+    {
+        if ($label !== '' && ! str_contains($label, '://') && ! str_starts_with($label, '/admin')) {
+            return Str::limit($label, 120, '');
+        }
+
+        return match (true) {
+            preg_match('#^/admin/tenants/\d+(?:/(?:view|edit))?$#', $path) === 1 => 'Открыть арендатора',
+            preg_match('#^/admin/market-spaces/\d+(?:/(?:view|edit))?$#', $path) === 1 => 'Открыть место',
+            preg_match('#^/admin/tasks/\d+(?:/(?:view|edit))?$#', $path) === 1 => 'Открыть задачу',
+            str_starts_with($path, '/admin/requests') => 'Открыть обращение',
+            str_starts_with($path, '/admin/market-documents') => 'Открыть файл',
+            str_starts_with($path, '/admin/ai-agent-settings') => 'Настройки ИИ-агента',
+            default => 'Открыть страницу',
+        };
     }
 
     /**
@@ -1629,9 +1813,9 @@ class QuickChatDrawer extends Component
     {
         return collect($chips)
             ->filter(static fn (mixed $chip): bool => is_array($chip))
-            ->map(static fn (array $chip): array => [
+            ->map(fn (array $chip): array => [
                 'label' => Str::limit(trim((string) ($chip['label'] ?? '')), 120, ''),
-                'url' => trim((string) ($chip['url'] ?? '')),
+                'url' => $this->normalizeMessageInternalUrl(trim((string) ($chip['url'] ?? ''))),
             ])
             ->filter(static fn (array $chip): bool => $chip['label'] !== '' && $chip['url'] !== '')
             ->values()
