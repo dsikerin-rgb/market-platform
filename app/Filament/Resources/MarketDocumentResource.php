@@ -274,6 +274,7 @@ class MarketDocumentResource extends BaseResource
         return [
             'index' => Pages\ListMarketDocuments::route('/'),
             'create' => Pages\CreateMarketDocument::route('/create'),
+            'create-folder' => Pages\CreateMarketDocumentFolder::route('/folders/create'),
             'edit' => Pages\EditMarketDocument::route('/{record}/edit'),
         ];
     }

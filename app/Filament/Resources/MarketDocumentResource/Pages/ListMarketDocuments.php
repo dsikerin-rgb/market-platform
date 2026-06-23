@@ -5,14 +5,10 @@ declare(strict_types=1);
 namespace App\Filament\Resources\MarketDocumentResource\Pages;
 
 use App\Filament\Resources\MarketDocumentResource;
-use App\Models\Market;
 use App\Models\MarketDocument;
 use App\Models\MarketDocumentFolder;
 use Filament\Actions;
 use Filament\Facades\Filament;
-use Filament\Forms;
-use Filament\Notifications\Notification;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema as DbSchema;
@@ -108,33 +104,11 @@ class ListMarketDocuments extends ListRecords
             ->label('Создать папку')
             ->icon('heroicon-o-folder-plus')
             ->color('gray')
-            ->modalHeading('Новая папка')
-            ->form($this->folderActionForm())
-            ->action(function (array $data): void {
-                $user = Filament::auth()->user();
-
-                abort_unless($user, 403);
-
-                $visibility = MarketDocument::normalizeVisibility((string) ($data['visibility'] ?? MarketDocument::VISIBILITY_PERSONAL));
-                $marketId = $data['market_id'] ?? null;
-                $ownerUserId = $visibility === MarketDocument::VISIBILITY_PERSONAL
-                    ? ($data['owner_user_id'] ?? $user->id)
-                    : null;
-
-                MarketDocumentFolder::query()->create([
-                    'market_id' => $marketId ?: $user->market_id,
-                    'owner_user_id' => $ownerUserId,
-                    'parent_id' => $data['parent_id'] ?? null,
-                    'visibility' => $visibility,
-                    'name' => trim((string) ($data['name'] ?? '')),
-                    'sort_order' => max(0, (int) ($data['sort_order'] ?? 0)),
-                ]);
-
-                Notification::make()
-                    ->title('Папка создана')
-                    ->success()
-                    ->send();
-            });
+            ->url(fn (): string => MarketDocumentResource::getUrl(
+                'create-folder',
+                $this->selectedFolderId ? ['folder' => $this->selectedFolderId] : ['tab' => $this->activeTab],
+            ))
+            ->extraAttributes(['wire:navigate' => true]);
 
         $createAction = Actions\Action::make('createDocument')
             ->label('Добавить документ')
@@ -145,77 +119,6 @@ class ListMarketDocuments extends ListRecords
             ))
             ->extraAttributes(['wire:navigate' => true]);
         return [$folderAction, $createAction];
-    }
-
-    /**
-     * @return array<int, mixed>
-     */
-    protected function folderActionForm(): array
-    {
-        $user = Filament::auth()->user();
-        $selectedMarketId = $this->selectedMarketIdFromSession();
-        $isSuperAdmin = (bool) $user && $user->isSuperAdmin();
-        $selectedFolder = $this->selectedFolder();
-        $defaultVisibility = $selectedFolder?->visibility
-            ?: ($this->activeTab === MarketDocument::VISIBILITY_SHARED ? MarketDocument::VISIBILITY_SHARED : MarketDocument::VISIBILITY_PERSONAL);
-
-        $marketField = $isSuperAdmin && ! $selectedMarketId
-            ? Forms\Components\Select::make('market_id')
-                ->label('Рынок')
-                ->options(fn (): array => Market::query()->orderBy('name')->pluck('name', 'id')->all())
-                ->default($selectedFolder?->market_id)
-                ->required()
-                ->searchable()
-                ->preload()
-                ->reactive()
-            : Forms\Components\Hidden::make('market_id')
-                ->default($selectedFolder?->market_id ?: ($selectedMarketId ?: $user?->market_id))
-                ->dehydrated(true);
-
-        return [
-            $marketField,
-
-            Forms\Components\Select::make('visibility')
-                ->label('Раздел')
-                ->options(MarketDocument::visibilityOptions())
-                ->default($defaultVisibility)
-                ->required()
-                ->reactive(),
-
-            Forms\Components\Select::make('owner_user_id')
-                ->label('Владелец личного раздела')
-                ->options(fn (Get $get): array => MarketDocumentResource::ownerOptions($get('market_id') ? (int) $get('market_id') : null))
-                ->default($selectedFolder?->owner_user_id ?: $user?->id)
-                ->searchable()
-                ->preload()
-                ->required(fn (Get $get): bool => $get('visibility') === MarketDocument::VISIBILITY_PERSONAL)
-                ->visible(fn (Get $get): bool => $get('visibility') === MarketDocument::VISIBILITY_PERSONAL)
-                ->disabled(fn (): bool => ! MarketDocumentResource::canManageOtherOwners())
-                ->dehydrated(true),
-
-            Forms\Components\Select::make('parent_id')
-                ->label('Внутри папки')
-                ->options(fn (Get $get): array => MarketDocumentResource::folderOptions(
-                    $get('market_id') ? (int) $get('market_id') : null,
-                    (string) ($get('visibility') ?: MarketDocument::VISIBILITY_PERSONAL),
-                    $get('owner_user_id') ? (int) $get('owner_user_id') : null,
-                ))
-                ->placeholder('В корне раздела')
-                ->default($selectedFolder?->id)
-                ->searchable()
-                ->preload(),
-
-            Forms\Components\TextInput::make('name')
-                ->label('Название папки')
-                ->required()
-                ->maxLength(255),
-
-            Forms\Components\TextInput::make('sort_order')
-                ->label('Порядок')
-                ->numeric()
-                ->default(0)
-                ->minValue(0),
-        ];
     }
 
     protected static function resolveTabClass(): string
