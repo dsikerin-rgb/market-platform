@@ -22,7 +22,7 @@ class ListMarketDocuments extends ListRecords
 {
     protected static string $resource = MarketDocumentResource::class;
 
-    protected static ?string $title = 'Документы';
+    protected static ?string $title = 'Диск';
 
     protected array $queryString = [
         'activeTab' => ['as' => 'tab', 'except' => 'personal'],

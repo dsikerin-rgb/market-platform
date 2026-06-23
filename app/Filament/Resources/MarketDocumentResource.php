@@ -32,7 +32,7 @@ class MarketDocumentResource extends BaseResource
 
     protected static ?string $recordTitleAttribute = 'title';
 
-    protected static ?string $navigationLabel = 'Документы';
+    protected static ?string $navigationLabel = 'Диск';
     protected static ?string $modelLabel = 'документ';
     protected static ?string $pluralModelLabel = 'Документы';
     protected static \UnitEnum|string|null $navigationGroup = null;

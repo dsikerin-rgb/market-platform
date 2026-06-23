@@ -228,7 +228,7 @@
     <div class="mdw-explorer">
         <aside class="mdw-sidebar" aria-label="Папки документов">
             <div>
-                <p class="mdw-sidebar__title">Документы</p>
+                <p class="mdw-sidebar__title">Диск</p>
                 <p class="mdw-sidebar__hint">Выберите диск или папку слева. Содержимое откроется справа.</p>
             </div>
 
