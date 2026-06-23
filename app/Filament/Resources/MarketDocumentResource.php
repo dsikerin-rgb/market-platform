@@ -490,10 +490,10 @@ class MarketDocumentResource extends BaseResource
         $mime = strtolower(trim($mime));
 
         return match (true) {
-            $extension === 'pdf' => ['label' => 'PDF', 'kind' => 'pdf', 'mark' => 'PDF', 'background' => '#dc2626', 'foreground' => '#ffffff'],
-            in_array($extension, ['doc', 'docx', 'rtf', 'odt'], true) => ['label' => Str::upper($extension), 'kind' => 'document', 'mark' => 'W', 'background' => '#2563eb', 'foreground' => '#ffffff'],
-            in_array($extension, ['xls', 'xlsx', 'csv', 'ods'], true) => ['label' => Str::upper($extension), 'kind' => 'sheet', 'mark' => 'X', 'background' => '#16a34a', 'foreground' => '#ffffff'],
-            in_array($extension, ['ppt', 'pptx', 'odp'], true) => ['label' => Str::upper($extension), 'kind' => 'presentation', 'mark' => 'P', 'background' => '#ea580c', 'foreground' => '#ffffff'],
+            $extension === 'pdf' => ['label' => 'PDF', 'kind' => 'pdf', 'mark' => 'PDF', 'background' => '#e11d2e', 'foreground' => '#ffffff'],
+            in_array($extension, ['doc', 'docx', 'rtf', 'odt'], true) => ['label' => Str::upper($extension), 'kind' => 'document', 'mark' => 'W', 'background' => '#185abd', 'foreground' => '#ffffff'],
+            in_array($extension, ['xls', 'xlsx', 'csv', 'ods'], true) => ['label' => Str::upper($extension), 'kind' => 'sheet', 'mark' => 'X', 'background' => '#107c41', 'foreground' => '#ffffff'],
+            in_array($extension, ['ppt', 'pptx', 'odp'], true) => ['label' => Str::upper($extension), 'kind' => 'presentation', 'mark' => 'P', 'background' => '#c43e1c', 'foreground' => '#ffffff'],
             in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'], true) || str_starts_with($mime, 'image/') => ['label' => 'IMG', 'kind' => 'image', 'mark' => '', 'background' => '#9333ea', 'foreground' => '#ffffff'],
             in_array($extension, ['zip', 'rar', '7z', 'tar', 'gz'], true) => ['label' => 'ZIP', 'kind' => 'archive', 'mark' => 'ZIP', 'background' => '#64748b', 'foreground' => '#ffffff'],
             in_array($extension, ['txt', 'md', 'log'], true) || str_starts_with($mime, 'text/') => ['label' => 'TXT', 'kind' => 'text', 'mark' => 'T', 'background' => '#0284c7', 'foreground' => '#ffffff'],
