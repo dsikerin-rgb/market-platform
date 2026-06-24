@@ -282,6 +282,43 @@ class MarketDocumentResource extends BaseResource
 
     public static function canEdit($record): bool
     {
+        return static::canManageDocument($record);
+    }
+
+    public static function canManageDocument($record): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user || ! ($record instanceof MarketDocument)) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $user->market_id || (int) $record->market_id !== (int) $user->market_id) {
+            return false;
+        }
+
+        if ($user->isMarketAdmin()) {
+            return true;
+        }
+
+        if ($record->visibility === MarketDocument::VISIBILITY_PERSONAL) {
+            return (int) $record->owner_user_id === (int) $user->id;
+        }
+
+        if ($record->visibility === MarketDocument::VISIBILITY_SHARED) {
+            return (int) $record->uploaded_by_user_id > 0
+                && (int) $record->uploaded_by_user_id === (int) $user->id;
+        }
+
+        return false;
+    }
+
+    public static function canShareDocument($record): bool
+    {
         $user = Filament::auth()->user();
 
         if (! $user || ! ($record instanceof MarketDocument)) {
@@ -311,6 +348,11 @@ class MarketDocumentResource extends BaseResource
         $user = Filament::auth()->user();
 
         return (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin());
+    }
+
+    public static function canBulkManageDocuments(): bool
+    {
+        return static::canManageOtherOwners();
     }
 
     /**
@@ -547,7 +589,7 @@ class MarketDocumentResource extends BaseResource
             ->color('gray')
             ->modalHeading('Поделиться файлом')
             ->modalSubmitActionLabel('Отправить')
-            ->visible(fn (MarketDocument $record): bool => static::canEdit($record))
+            ->visible(fn (MarketDocument $record): bool => static::canShareDocument($record))
             ->form(static::shareForm('Напишите короткое сообщение к файлу, если нужно.'))
             ->action(fn (MarketDocument $record, array $data): mixed => static::shareDocument($record, $data));
 
@@ -557,7 +599,7 @@ class MarketDocumentResource extends BaseResource
             ->color('gray')
             ->modalHeading('Перенести файл')
             ->modalSubmitActionLabel('Перенести')
-            ->visible(fn (MarketDocument $record): bool => static::canEdit($record))
+            ->visible(fn (MarketDocument $record): bool => static::canManageDocument($record))
             ->form(fn (MarketDocument $record): array => static::moveForm($record))
             ->action(fn (MarketDocument $record, array $data): mixed => static::moveDocument($record, $data));
 
@@ -569,7 +611,7 @@ class MarketDocumentResource extends BaseResource
             ->modalHeading('Удалить файл?')
             ->modalDescription('Файл исчезнет из диска. При необходимости его можно будет восстановить через базу данных.')
             ->modalSubmitActionLabel('Удалить')
-            ->visible(fn (MarketDocument $record): bool => static::canEdit($record))
+            ->visible(fn (MarketDocument $record): bool => static::canManageDocument($record))
             ->action(fn (MarketDocument $record): mixed => static::archiveDocument($record));
 
         $actions[] = ActionGroup::make([$open, $download, $share, $move, $delete])
@@ -615,6 +657,7 @@ class MarketDocumentResource extends BaseResource
             ->modalHeading('Перенести выбранные файлы')
             ->modalSubmitActionLabel('Перенести')
             ->deselectRecordsAfterCompletion()
+            ->visible(fn (): bool => static::canBulkManageDocuments())
             ->form(static::moveForm())
             ->action(fn (array $data, EloquentCollection $records): mixed => static::moveDocuments($records, $data));
 
@@ -627,6 +670,7 @@ class MarketDocumentResource extends BaseResource
             ->modalDescription('Файлы исчезнут из диска. При необходимости их можно будет восстановить через базу данных.')
             ->modalSubmitActionLabel('Удалить')
             ->deselectRecordsAfterCompletion()
+            ->visible(fn (): bool => static::canBulkManageDocuments())
             ->action(fn (EloquentCollection $records): mixed => static::archiveDocuments($records));
 
         $actions = [$download, $share, $move, $delete];
@@ -924,7 +968,7 @@ class MarketDocumentResource extends BaseResource
         }
 
         foreach ($records as $record) {
-            if (! static::canEdit($record)) {
+            if (! static::canManageDocument($record)) {
                 abort(403);
             }
         }
@@ -996,7 +1040,7 @@ class MarketDocumentResource extends BaseResource
         }
 
         foreach ($records as $record) {
-            if (! static::canEdit($record)) {
+            if (! static::canManageDocument($record)) {
                 abort(403);
             }
         }
@@ -1020,7 +1064,7 @@ class MarketDocumentResource extends BaseResource
     {
         $author = Filament::auth()->user();
 
-        if (! $author || ! static::canEdit($record)) {
+        if (! $author || ! static::canShareDocument($record)) {
             abort(403);
         }
 
@@ -1118,7 +1162,7 @@ class MarketDocumentResource extends BaseResource
         }
 
         foreach ($records as $record) {
-            if (! static::canEdit($record)) {
+            if (! static::canShareDocument($record)) {
                 abort(403);
             }
         }
