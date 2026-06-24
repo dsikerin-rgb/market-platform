@@ -334,14 +334,14 @@
             white-space: nowrap;
         }
 
-        .mdw-table .fi-ta-actions .fi-btn {
+        .mdw-table .fi-ta-cell .fi-ta-actions .fi-btn {
             width: 30px;
             min-width: 30px;
             height: 30px;
             padding-inline: 0;
         }
 
-        .mdw-table .fi-ta-actions .fi-btn-label {
+        .mdw-table .fi-ta-cell .fi-ta-actions .fi-btn-label {
             display: none;
         }
 
