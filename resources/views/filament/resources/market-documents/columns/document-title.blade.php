@@ -52,7 +52,7 @@
         </svg>
     </span>
 
-    <span style="min-width:0;color:#0f172a;font-weight:650;line-height:1.2;overflow-wrap:anywhere;">
+    <span style="min-width:0;color:#1f2937;font-size:12.5px;font-weight:400;line-height:1.25;overflow-wrap:anywhere;">
         {{ $title }}
     </span>
 </span>
