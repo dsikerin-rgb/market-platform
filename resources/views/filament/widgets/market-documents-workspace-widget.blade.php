@@ -107,6 +107,9 @@
 
         .mdw-folder-list .mdw-node__label {
             display: -webkit-box;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.15;
             overflow-wrap: anywhere;
             text-overflow: clip;
             white-space: normal;
