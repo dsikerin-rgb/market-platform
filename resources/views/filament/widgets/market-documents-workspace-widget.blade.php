@@ -255,6 +255,67 @@
             background: #ffffff;
         }
 
+        .mdw-table .fi-ta-content {
+            overflow-x: hidden;
+        }
+
+        .mdw-table .fi-ta-table {
+            width: 100%;
+            min-width: 0;
+            table-layout: fixed;
+        }
+
+        .mdw-table .fi-ta-header-cell-title,
+        .mdw-table .fi-ta-cell-title {
+            width: auto;
+            min-width: 0;
+        }
+
+        .mdw-table .fi-ta-header-cell-file-size,
+        .mdw-table .fi-ta-cell-file-size {
+            width: 86px;
+        }
+
+        .mdw-table .fi-ta-header-cell-created-at,
+        .mdw-table .fi-ta-cell-created-at {
+            width: 132px;
+        }
+
+        .mdw-table .fi-ta-actions-header-cell,
+        .mdw-table .fi-ta-cell:has(> .fi-ta-actions) {
+            width: 152px;
+        }
+
+        .mdw-table .fi-ta-cell-title {
+            overflow: hidden;
+        }
+
+        .mdw-table .fi-ta-cell-title > * {
+            min-width: 0;
+        }
+
+        .mdw-table .fi-ta-cell-title .fi-ta-text,
+        .mdw-table .fi-ta-cell-title [class*="fi-ta-text"] {
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .mdw-table .fi-ta-cell-title .fi-ta-text-item,
+        .mdw-table .fi-ta-cell-title [class*="fi-ta-text-item"] {
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .mdw-table .fi-ta-actions {
+            justify-content: flex-end;
+            gap: 10px;
+            white-space: nowrap;
+        }
+
+        .mdw-table .fi-ta-pagination {
+            overflow: visible;
+        }
+
         @media (max-width: 900px) {
             .mdw-explorer {
                 grid-template-columns: 1fr;

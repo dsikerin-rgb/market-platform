@@ -177,6 +177,7 @@ class MarketDocumentResource extends BaseResource
                     ->view('filament.resources.market-documents.columns.document-title')
                     ->searchable()
                     ->sortable()
+                    ->grow()
                     ->wrap(),
 
                 TextColumn::make('uploadedBy.name')
@@ -188,12 +189,14 @@ class MarketDocumentResource extends BaseResource
                 TextColumn::make('file_size')
                     ->label('Размер')
                     ->formatStateUsing(fn ($state, MarketDocument $record): string => $record->fileSizeLabel())
-                    ->alignEnd(),
+                    ->alignEnd()
+                    ->width('86px'),
 
                 TextColumn::make('created_at')
                     ->label('Добавлен')
                     ->dateTime('d.m.Y H:i')
-                    ->sortable(),
+                    ->sortable()
+                    ->width('132px'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateIcon('heroicon-o-folder-open')
