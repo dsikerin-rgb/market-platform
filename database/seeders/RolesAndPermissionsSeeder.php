@@ -241,6 +241,8 @@ class RolesAndPermissionsSeeder extends Seeder
                 'market-holidays.view',
                 'market-holidays.create',
                 'market-holidays.update',
+                'staff.viewAny',
+                'staff.view',
             ],
             'market-advertising' => [
                 'markets.view',
@@ -255,6 +257,8 @@ class RolesAndPermissionsSeeder extends Seeder
                 'market-holidays.view',
                 'market-holidays.create',
                 'market-holidays.update',
+                'staff.viewAny',
+                'staff.view',
             ],
             'market-support' => [],
             'market-hr' => [],
