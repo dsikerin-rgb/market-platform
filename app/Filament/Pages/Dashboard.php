@@ -19,6 +19,7 @@ use App\Models\ContractDebt;
 use App\Models\Market;
 use App\Models\Task;
 use App\Models\TenantRequest;
+use App\Support\AdminCapabilities;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use App\Support\OneC\OneCDailyExchangeWarning;
 use Carbon\CarbonImmutable;
@@ -266,6 +267,7 @@ class Dashboard extends BaseDashboard
         $periodLabel = $this->formatWorkspaceMonthLabel($month, $tz);
         $marketName = trim((string) ($market?->name ?? ''));
         $marketSelected = $marketId > 0 && $marketName !== '';
+        $canViewFinance = AdminCapabilities::canViewFinance(Filament::auth()->user(), $marketId);
 
         $tenantsCount = 0;
         $totalSpaces = 0;
@@ -288,12 +290,17 @@ class Dashboard extends BaseDashboard
                 ],
             ],
         );
-        $accrualsUrl = $this->appendQueryString(
-            \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index'),
-            ['tab' => 'one_c'],
-        );
-        $accrualsMonth = $this->resolveLatestOneCAccrualMonth($marketId, $tz) ?? $month;
-        $accrualsPeriodLabel = $this->formatWorkspaceMonthLabel($accrualsMonth, $tz);
+        $accrualsUrl = null;
+        $accrualsPeriodLabel = null;
+
+        if ($canViewFinance) {
+            $accrualsUrl = $this->appendQueryString(
+                \App\Filament\Resources\TenantAccruals\TenantAccrualResource::getUrl('index'),
+                ['tab' => 'one_c'],
+            );
+            $accrualsMonth = $this->resolveLatestOneCAccrualMonth($marketId, $tz) ?? $month;
+            $accrualsPeriodLabel = $this->formatWorkspaceMonthLabel($accrualsMonth, $tz);
+        }
 
         if ($marketId > 0) {
             $tenantsCount = MarketSpaceDashboardMetrics::countCurrentTenants($marketId);
@@ -348,7 +355,7 @@ class Dashboard extends BaseDashboard
                     'url' => \App\Filament\Resources\TaskResource::getUrl('index'),
                 ],
             ],
-            'links' => [
+            'links' => array_values(array_filter([
                 [
                     'title' => 'Обращения',
                     'description' => 'Открыть обращения арендаторов и проверить срочные вопросы.',
@@ -373,6 +380,7 @@ class Dashboard extends BaseDashboard
                     'meta' => $accrualsPeriodLabel,
                     'url' => $accrualsUrl,
                     'icon' => 'heroicon-o-banknotes',
+                    'visible' => $canViewFinance,
                 ],
                 [
                     'title' => 'Торговые места',
@@ -381,7 +389,7 @@ class Dashboard extends BaseDashboard
                     'url' => \App\Filament\Resources\MarketSpaceResource::getUrl('index'),
                     'icon' => 'heroicon-o-home-modern',
                 ],
-            ],
+            ], static fn (array $link): bool => (bool) ($link['visible'] ?? true))),
         ];
     }
 

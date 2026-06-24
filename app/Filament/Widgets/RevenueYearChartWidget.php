@@ -35,12 +35,7 @@ class RevenueYearChartWidget extends ChartWidget
 
     public static function canView(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && (
-            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            || (bool) ($user->market_id ?? null)
-        );
+        return AdminCapabilities::canViewFinance(Filament::auth()->user());
     }
 
     public function getDescription(): ?string

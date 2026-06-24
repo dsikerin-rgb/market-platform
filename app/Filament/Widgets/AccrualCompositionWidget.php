@@ -6,6 +6,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
+use App\Support\AdminCapabilities;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
@@ -31,12 +32,7 @@ class AccrualCompositionWidget extends Widget
 
     public static function canView(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && (
-            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            || (bool) ($user->market_id ?? null)
-        );
+        return AdminCapabilities::canViewFinance(Filament::auth()->user());
     }
 
     protected function getViewData(): array

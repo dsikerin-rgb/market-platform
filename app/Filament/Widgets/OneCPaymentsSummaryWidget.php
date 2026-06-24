@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Widgets;
 
 use App\Models\Market;
+use App\Support\AdminCapabilities;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget;
@@ -90,12 +91,7 @@ class OneCPaymentsSummaryWidget extends StatsOverviewWidget
 
     public static function canView(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && (
-            (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-            || (bool) ($user->market_id ?? null)
-        );
+        return AdminCapabilities::canViewFinance(Filament::auth()->user());
     }
 
     /**
