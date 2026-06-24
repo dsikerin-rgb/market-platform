@@ -11,6 +11,7 @@ use App\Filament\Resources\TenantResource;
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\ContractDebt;
 use App\Models\Market;
+use App\Support\AdminCapabilities;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -42,6 +43,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
         $marketId = $this->resolveMarketIdForWidget($user);
+        $canViewFinance = AdminCapabilities::canViewFinance($user, $marketId);
 
         if ($marketId <= 0) {
             return $this->buildEmptyStats(
@@ -72,22 +74,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
         $leasedSpaces = $occupiedSpaces + $maintenanceSpaces;
         $leasedArea = $occupiedArea + $maintenanceArea;
         $rentableAreaWithService = $rentableArea + $maintenanceArea;
-        $averageRate = $spaceMetrics['average_rent_rate_per_sqm'];
-        $pricedArea = (float) ($spaceMetrics['priced_area_sqm'] ?? 0);
-
         $tenantsNow = MarketSpaceDashboardMetrics::countCurrentTenants($marketId);
-
-        // Финансовая/отчётная часть зависит от выбранного месяца.
-        [$monthYm, $monthStart, $monthEnd] = $this->resolveFinancialMonthRange($marketId, $tz);
-        $monthLabel = $this->formatMonthLabel($monthYm, $tz);
-
-        $financialSummary = $this->resolveFinancialSummaryForMonth($marketId, $monthYm, $monthStart, $monthEnd);
-        $reportRows = $financialSummary['rows'];
-        $hasReportData = is_int($reportRows) && $reportRows > 0;
-
-        $accrued = $financialSummary['accrued'];
-        $paid = $financialSummary['paid'];
-        $debt = $financialSummary['debt'];
 
         $tenantsUrl = TenantResource::getUrl('index');
         $spacesUrl = MarketSpaceResource::getUrl('index');
@@ -116,12 +103,6 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             );
         }
 
-        $reportDesc = $hasReportData
-            ? ($monthLabel . ' · ' . $financialSummary['source'])
-            : ($monthLabel . ' · нет данных 1С за выбранный месяц');
-        $accruedValue = $accrued ?? 0.0;
-        $paidValue = $paid ?? 0.0;
-        $debtValue = $debt ?? ($accruedValue - $paidValue);
         $marketScopeDesc = $isSuperAdmin ? 'На выбранном рынке' : 'На вашем рынке';
         $accountingScopeDesc = $marketScopeDesc . ' · ' . number_format($totalSpaces, 0, ',', ' ') . ' учётных мест';
         $occupancyRate = $rentableAreaWithService > 0
@@ -188,42 +169,62 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
             color: $leasedSpaces > 0 ? 'success' : 'gray',
             icon: 'heroicon-o-chart-bar',
         );
-        $stats[] = $this->makeStat(
-            label: 'Средняя ставка, ₽/м²',
-            value: is_numeric($averageRate) && $averageRate > 0
-                ? $this->formatMoney((float) $averageRate) . ' ₽'
-                : '—',
-            description: is_numeric($averageRate) && $averageRate > 0
-                ? 'Взвешено по ' . $this->formatArea($pricedArea) . ' с заданной ставкой'
-                : 'Нет данных по ставкам',
-            url: $spacesUrl,
-            color: is_numeric($averageRate) && $averageRate > 0 ? 'primary' : 'gray',
-            icon: 'heroicon-o-banknotes',
-        );
-        $stats[] = $this->makeStat(
-            label: 'Начислено за месяц',
-            value: $this->formatMoney($accruedValue) . ' ₽',
-            description: $reportDesc,
-            url: null,
-            color: 'primary',
-            icon: 'heroicon-o-banknotes',
-        );
-        $stats[] = $this->makeStat(
-            label: 'Оплачено за месяц',
-            value: $this->formatMoney($paidValue) . ' ₽',
-            description: $reportDesc,
-            url: null,
-            color: 'success',
-            icon: 'heroicon-o-arrow-down-circle',
-        );
-        $stats[] = $this->makeStat(
-            label: 'Долг на конец месяца',
-            value: $this->formatMoney($debtValue) . ' ₽',
-            description: $reportDesc,
-            url: null,
-            color: $debtValue > 0 ? 'danger' : 'success',
-            icon: 'heroicon-o-scale',
-        );
+        if ($canViewFinance) {
+            $averageRate = $spaceMetrics['average_rent_rate_per_sqm'];
+            $pricedArea = (float) ($spaceMetrics['priced_area_sqm'] ?? 0);
+
+            // Финансовая/отчётная часть зависит от выбранного месяца.
+            [$monthYm, $monthStart, $monthEnd] = $this->resolveFinancialMonthRange($marketId, $tz);
+            $monthLabel = $this->formatMonthLabel($monthYm, $tz);
+
+            $financialSummary = $this->resolveFinancialSummaryForMonth($marketId, $monthYm, $monthStart, $monthEnd);
+            $reportRows = $financialSummary['rows'];
+            $hasReportData = is_int($reportRows) && $reportRows > 0;
+
+            $accruedValue = $financialSummary['accrued'] ?? 0.0;
+            $paidValue = $financialSummary['paid'] ?? 0.0;
+            $debtValue = $financialSummary['debt'] ?? ($accruedValue - $paidValue);
+            $reportDesc = $hasReportData
+                ? ($monthLabel . ' · ' . $financialSummary['source'])
+                : ($monthLabel . ' · нет данных 1С за выбранный месяц');
+
+            $stats[] = $this->makeStat(
+                label: 'Средняя ставка, ₽/м²',
+                value: is_numeric($averageRate) && $averageRate > 0
+                    ? $this->formatMoney((float) $averageRate) . ' ₽'
+                    : '—',
+                description: is_numeric($averageRate) && $averageRate > 0
+                    ? 'Взвешено по ' . $this->formatArea($pricedArea) . ' с заданной ставкой'
+                    : 'Нет данных по ставкам',
+                url: $spacesUrl,
+                color: is_numeric($averageRate) && $averageRate > 0 ? 'primary' : 'gray',
+                icon: 'heroicon-o-banknotes',
+            );
+            $stats[] = $this->makeStat(
+                label: 'Начислено за месяц',
+                value: $this->formatMoney($accruedValue) . ' ₽',
+                description: $reportDesc,
+                url: null,
+                color: 'primary',
+                icon: 'heroicon-o-banknotes',
+            );
+            $stats[] = $this->makeStat(
+                label: 'Оплачено за месяц',
+                value: $this->formatMoney($paidValue) . ' ₽',
+                description: $reportDesc,
+                url: null,
+                color: 'success',
+                icon: 'heroicon-o-arrow-down-circle',
+            );
+            $stats[] = $this->makeStat(
+                label: 'Долг на конец месяца',
+                value: $this->formatMoney($debtValue) . ' ₽',
+                description: $reportDesc,
+                url: null,
+                color: $debtValue > 0 ? 'danger' : 'success',
+                icon: 'heroicon-o-scale',
+            );
+        }
 
         return $stats;
     }
