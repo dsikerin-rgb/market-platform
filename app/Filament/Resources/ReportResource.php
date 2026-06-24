@@ -225,7 +225,7 @@ class ReportResource extends BaseResource
         $query = parent::getEloquentQuery();
         $user = Filament::auth()->user();
 
-        if (! $user) {
+        if (! AdminCapabilities::canViewReports($user)) {
             return $query->whereRaw('1 = 0');
         }
 
