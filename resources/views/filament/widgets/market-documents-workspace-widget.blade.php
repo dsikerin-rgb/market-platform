@@ -274,6 +274,17 @@
             min-width: 0;
         }
 
+        .mdw-table .fi-ta-selection-cell {
+            width: 46px;
+            min-width: 46px;
+            padding-inline: 14px 8px;
+            text-align: center;
+        }
+
+        .mdw-table .fi-ta-selection-cell .fi-checkbox-input {
+            margin: 0;
+        }
+
         .mdw-table .fi-ta-header-cell-file-size,
         .mdw-table .fi-ta-cell-file-size {
             width: 86px;
