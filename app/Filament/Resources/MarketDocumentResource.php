@@ -26,6 +26,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -350,9 +351,36 @@ class MarketDocumentResource extends BaseResource
         return (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin());
     }
 
-    public static function canBulkManageDocuments(): bool
+    public static function canBulkManageDocuments(mixed $livewire = null): bool
     {
-        return static::canManageOtherOwners();
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin() || $user->isMarketAdmin()) {
+            return true;
+        }
+
+        if (! $user->market_id) {
+            return false;
+        }
+
+        return static::bulkDocumentContextTab($livewire) === MarketDocument::VISIBILITY_PERSONAL;
+    }
+
+    private static function bulkDocumentContextTab(mixed $livewire): ?string
+    {
+        if (is_object($livewire) && property_exists($livewire, 'activeTab')) {
+            $activeTab = $livewire->activeTab;
+
+            return is_string($activeTab) && $activeTab !== '' ? $activeTab : null;
+        }
+
+        $queryTab = request()->query('tab');
+
+        return is_string($queryTab) && $queryTab !== '' ? $queryTab : null;
     }
 
     /**
@@ -657,7 +685,7 @@ class MarketDocumentResource extends BaseResource
             ->modalHeading('Перенести выбранные файлы')
             ->modalSubmitActionLabel('Перенести')
             ->deselectRecordsAfterCompletion()
-            ->visible(fn (): bool => static::canBulkManageDocuments())
+            ->visible(fn (HasTable $livewire): bool => static::canBulkManageDocuments($livewire))
             ->form(static::moveForm())
             ->action(fn (array $data, EloquentCollection $records): mixed => static::moveDocuments($records, $data));
 
@@ -670,7 +698,7 @@ class MarketDocumentResource extends BaseResource
             ->modalDescription('Файлы исчезнут из диска. При необходимости их можно будет восстановить через базу данных.')
             ->modalSubmitActionLabel('Удалить')
             ->deselectRecordsAfterCompletion()
-            ->visible(fn (): bool => static::canBulkManageDocuments())
+            ->visible(fn (HasTable $livewire): bool => static::canBulkManageDocuments($livewire))
             ->action(fn (EloquentCollection $records): mixed => static::archiveDocuments($records));
 
         $actions = [$download, $share, $move, $delete];
