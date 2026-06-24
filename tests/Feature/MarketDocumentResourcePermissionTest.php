@@ -42,6 +42,22 @@ class MarketDocumentResourcePermissionTest extends TestCase
         self::assertTrue(MarketDocumentResource::canBulkManageDocuments());
     }
 
+    public function test_regular_staff_can_bulk_manage_only_personal_disk_context(): void
+    {
+        $this->actingAsTestUser(id: 1, marketId: 1);
+
+        self::assertTrue(MarketDocumentResource::canBulkManageDocuments(
+            new MarketDocumentBulkContext(MarketDocument::VISIBILITY_PERSONAL),
+        ));
+        self::assertFalse(MarketDocumentResource::canBulkManageDocuments(
+            new MarketDocumentBulkContext(MarketDocument::VISIBILITY_SHARED),
+        ));
+        self::assertFalse(MarketDocumentResource::canBulkManageDocuments(
+            new MarketDocumentBulkContext('shared-with-me'),
+        ));
+        self::assertFalse(MarketDocumentResource::canBulkManageDocuments());
+    }
+
     public function test_owner_can_manage_personal_document(): void
     {
         $document = $this->personalDocument(marketId: 1, ownerUserId: 1);
@@ -126,5 +142,12 @@ class MarketDocumentPermissionUser extends User
     public function isMarketAdmin(): bool
     {
         return $this->marketAdmin;
+    }
+}
+
+class MarketDocumentBulkContext
+{
+    public function __construct(public ?string $activeTab)
+    {
     }
 }
