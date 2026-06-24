@@ -10,6 +10,7 @@ use App\Models\MarketHoliday;
 use App\Models\MarketHolidayTaskLink;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
@@ -562,34 +563,12 @@ class MarketHolidayResource extends BaseResource
 
     public static function canViewAny(): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return (bool) $user->market_id
-            && $user->hasAnyRole(['market-admin', 'market-owner']);
+        return AdminCapabilities::canViewMarketEvents(Filament::auth()->user());
     }
 
     public static function canCreate(): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return (bool) $user->market_id
-            && $user->hasAnyRole(['market-admin', 'market-owner']);
+        return AdminCapabilities::canCreateMarketEvents(Filament::auth()->user());
     }
 
     public static function canEdit($record): bool
@@ -604,12 +583,12 @@ class MarketHolidayResource extends BaseResource
             return true;
         }
 
-        return $user->market_id
-            && (int) $record->market_id === (int) $user->market_id
-            && (
-                $user->hasRole('market-admin')
-                || ($user->hasRole('market-owner') && (int) $record->author_user_id === (int) $user->id)
-            );
+        if (! $user->market_id || (int) $record->market_id !== (int) $user->market_id) {
+            return false;
+        }
+
+        return AdminCapabilities::canUpdateMarketEvents($user, (int) $record->market_id)
+            || ($user->hasRole('market-owner') && (int) $record->author_user_id === (int) $user->id);
     }
 
     public static function canDelete($record): bool
@@ -624,9 +603,7 @@ class MarketHolidayResource extends BaseResource
             return true;
         }
 
-        return $user->market_id
-            && (int) $record->market_id === (int) $user->market_id
-            && $user->hasRole('market-admin');
+        return AdminCapabilities::canDeleteMarketEvents($user, (int) $record->market_id);
     }
 
     protected static function resolvePrefilledStartDate(): ?string
