@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\Staff\Pages\EditStaff;
 use App\Filament\Resources\Staff\StaffResource;
 use App\Models\Market;
 use App\Models\Tenant;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Support\SystemAgentService;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -138,6 +140,52 @@ class StaffResourceScopeTest extends TestCase
         $this
             ->get(StaffResource::getUrl('edit', ['record' => $sameMarketStaff]))
             ->assertOk();
+    }
+
+    public function test_staff_write_action_opens_quick_chat_drawer_without_custom_modal(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $role = Role::findOrCreate('market-marketing', 'web');
+        $role->givePermissionTo([
+            Permission::findOrCreate('staff.viewAny', 'web'),
+            Permission::findOrCreate('staff.view', 'web'),
+        ]);
+
+        $actor = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'marketing-staff-message@example.test',
+        ]);
+        $actor->assignRole($role);
+
+        $sameMarketStaff = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'same-market-message-peer@example.test',
+        ]);
+
+        $this->actingAs($actor);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        Livewire::actingAs($actor)
+            ->test(EditStaff::class, [
+                'record' => (string) $sameMarketStaff->getRouteKey(),
+            ])
+            ->assertActionVisible('write_to_staff')
+            ->callAction('write_to_staff')
+            ->assertDispatched(
+                'mp-open-quick-chat',
+                type: 'staff',
+                id: (int) $sameMarketStaff->id,
+                source: 'staff_card',
+            );
+
+        $this->assertDatabaseCount('staff_conversations', 0);
     }
 
     public function test_system_agent_is_hidden_for_market_admin_but_visible_for_super_admin(): void
