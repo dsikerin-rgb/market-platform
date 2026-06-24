@@ -302,8 +302,8 @@
 
         .mdw-table .fi-ta-cell-title .fi-ta-text-item,
         .mdw-table .fi-ta-cell-title [class*="fi-ta-text-item"] {
-            font-size: 14px;
-            font-weight: 500;
+            font-size: 13px;
+            font-weight: 400;
             line-height: 1.25;
             white-space: normal;
             overflow-wrap: anywhere;
@@ -311,7 +311,7 @@
 
         .mdw-table .fi-ta-cell-title .fi-ta-text-item-label,
         .mdw-table .fi-ta-cell-title [class*="fi-ta-text-item-label"] {
-            font-weight: 500;
+            font-weight: 400;
         }
 
         .mdw-table .fi-ta-actions {
