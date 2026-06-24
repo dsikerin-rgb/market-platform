@@ -6,9 +6,19 @@
     $mark = $type['mark'];
     $background = $type['background'];
     $foreground = $type['foreground'];
+    $openUrl = filled($record->file_path) ? route('filament.admin.market-documents.open', ['document' => $record]) : null;
 @endphp
 
-<span style="display:inline-flex;align-items:center;gap:10px;min-width:0;max-width:100%;">
+@if ($openUrl)
+    <a
+        href="{{ $openUrl }}"
+        target="_blank"
+        rel="noopener noreferrer"
+        style="display:inline-flex;align-items:center;gap:10px;min-width:0;max-width:100%;color:inherit;text-decoration:none;"
+    >
+@else
+    <span style="display:inline-flex;align-items:center;gap:10px;min-width:0;max-width:100%;color:inherit;text-decoration:none;">
+@endif
     <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 24px;" title="{{ $type['label'] }}">
         <svg aria-hidden="true" viewBox="0 0 32 32" width="24" height="24" style="display:block;width:24px;height:24px;overflow:hidden;flex:0 0 24px;">
             <path
@@ -55,4 +65,8 @@
     <span style="min-width:0;color:#1f2937;font-size:12.5px;font-weight:400;line-height:1.25;overflow-wrap:anywhere;">
         {{ $title }}
     </span>
-</span>
+@if ($openUrl)
+    </a>
+@else
+    </span>
+@endif

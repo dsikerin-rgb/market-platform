@@ -521,8 +521,9 @@ class MarketDocumentResource extends BaseResource
                 ->tooltip('Скачать')
                 ->iconButton()
                 ->icon('heroicon-o-arrow-down-tray')
-                ->url(fn (MarketDocument $record): ?string => $record->temporaryDownloadUrl())
-                ->openUrlInNewTab()
+                ->url(fn (MarketDocument $record): ?string => filled($record->file_path)
+                    ? route('filament.admin.market-documents.download', ['document' => $record])
+                    : null)
                 ->visible(fn (MarketDocument $record): bool => filled($record->file_path));
 
             $actions[] = $download;
