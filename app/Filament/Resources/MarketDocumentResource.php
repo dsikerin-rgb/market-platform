@@ -518,6 +518,8 @@ class MarketDocumentResource extends BaseResource
         if ($download) {
             $download
                 ->label('Скачать')
+                ->tooltip('Скачать')
+                ->iconButton()
                 ->icon('heroicon-o-arrow-down-tray')
                 ->url(fn (MarketDocument $record): ?string => $record->temporaryDownloadUrl())
                 ->openUrlInNewTab()
@@ -533,6 +535,8 @@ class MarketDocumentResource extends BaseResource
         if ($share) {
             $share
                 ->label('Поделиться')
+                ->tooltip('Поделиться')
+                ->iconButton()
                 ->icon('heroicon-o-share')
                 ->color('gray')
                 ->modalHeading('Поделиться файлом')

@@ -283,7 +283,7 @@
 
         .mdw-table .fi-ta-actions-header-cell,
         .mdw-table .fi-ta-cell:has(> .fi-ta-actions) {
-            width: 152px;
+            width: 76px;
         }
 
         .mdw-table .fi-ta-cell-title {
@@ -302,14 +302,33 @@
 
         .mdw-table .fi-ta-cell-title .fi-ta-text-item,
         .mdw-table .fi-ta-cell-title [class*="fi-ta-text-item"] {
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.25;
             white-space: normal;
             overflow-wrap: anywhere;
         }
 
+        .mdw-table .fi-ta-cell-title .fi-ta-text-item-label,
+        .mdw-table .fi-ta-cell-title [class*="fi-ta-text-item-label"] {
+            font-weight: 500;
+        }
+
         .mdw-table .fi-ta-actions {
             justify-content: flex-end;
-            gap: 10px;
+            gap: 4px;
             white-space: nowrap;
+        }
+
+        .mdw-table .fi-ta-actions .fi-btn {
+            width: 30px;
+            min-width: 30px;
+            height: 30px;
+            padding-inline: 0;
+        }
+
+        .mdw-table .fi-ta-actions .fi-btn-label {
+            display: none;
         }
 
         .mdw-table .fi-ta-pagination {
