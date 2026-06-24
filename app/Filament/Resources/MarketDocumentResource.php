@@ -16,6 +16,7 @@ use App\Models\TenantRequest;
 use App\Models\User;
 use App\Notifications\MarketDocumentSharedNotification;
 use App\Support\StaffConversationService;
+use Filament\Actions\BulkAction;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
@@ -24,6 +25,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -207,6 +209,12 @@ class MarketDocumentResource extends BaseResource
 
         if ($actions !== []) {
             $table = $table->actions($actions);
+        }
+
+        $toolbarActions = static::tableToolbarActions();
+
+        if ($toolbarActions !== []) {
+            $table = $table->toolbarActions($toolbarActions);
         }
 
         return $table;
@@ -573,6 +581,49 @@ class MarketDocumentResource extends BaseResource
     }
 
     /**
+     * @return array<int, mixed>
+     */
+    protected static function tableToolbarActions(): array
+    {
+        if (! class_exists(BulkAction::class)) {
+            return [];
+        }
+
+        $share = BulkAction::make('share_selected')
+            ->label('Поделиться')
+            ->icon('heroicon-o-share')
+            ->color('gray')
+            ->button()
+            ->modalHeading('Поделиться выбранными файлами')
+            ->modalSubmitActionLabel('Отправить')
+            ->deselectRecordsAfterCompletion()
+            ->form([
+                Forms\Components\Select::make('recipient_id')
+                    ->label('Получатель')
+                    ->options(fn (): array => static::shareRecipientOptions())
+                    ->searchable()
+                    ->preload()
+                    ->required()
+                    ->reactive(),
+                Forms\Components\CheckboxList::make('channels')
+                    ->label('Как отправить')
+                    ->options(fn (Get $get): array => static::shareChannelOptions($get('recipient_id') ? (int) $get('recipient_id') : null))
+                    ->default(['dialog'])
+                    ->required()
+                    ->columns(1)
+                    ->helperText('Telegram появится в списке только если он подключен у получателя.'),
+                Forms\Components\Textarea::make('message')
+                    ->label('Сообщение')
+                    ->rows(3)
+                    ->maxLength(1000)
+                    ->placeholder('Напишите короткое сообщение к файлам, если нужно.'),
+            ])
+            ->action(fn (array $data, EloquentCollection $records): mixed => static::shareDocuments($records, $data));
+
+        return [$share];
+    }
+
+    /**
      * @return array<int, string>
      */
     protected static function shareRecipientOptions(): array
@@ -708,10 +759,136 @@ class MarketDocumentResource extends BaseResource
         return null;
     }
 
+    /**
+     * @param EloquentCollection<int, MarketDocument> $records
+     * @param array<string, mixed> $data
+     */
+    protected static function shareDocuments(EloquentCollection $records, array $data): mixed
+    {
+        $author = Filament::auth()->user();
+        $records = $records
+            ->filter(fn ($record): bool => $record instanceof MarketDocument)
+            ->values();
+
+        if (! $author || $records->isEmpty()) {
+            abort(403);
+        }
+
+        if (! DbSchema::hasTable('market_document_shares')) {
+            throw ValidationException::withMessages([
+                'recipient_id' => 'Доступ к файлам еще не подготовлен. Обновите базу данных.',
+            ]);
+        }
+
+        foreach ($records as $record) {
+            if (! static::canEdit($record)) {
+                abort(403);
+            }
+        }
+
+        $recipientId = (int) ($data['recipient_id'] ?? 0);
+        $recipient = User::query()
+            ->whereKey($recipientId)
+            ->whereNotNull('market_id')
+            ->first();
+
+        if (! $recipient instanceof User || (int) $recipient->id === (int) $author->id) {
+            throw ValidationException::withMessages([
+                'recipient_id' => 'Выберите сотрудника, которому нужно открыть доступ.',
+            ]);
+        }
+
+        if (! $author->isSuperAdmin() && (int) $recipient->market_id !== (int) $author->market_id) {
+            abort(403);
+        }
+
+        $channels = array_values(array_intersect(
+            array_map('strval', (array) ($data['channels'] ?? [])),
+            array_keys(static::shareChannelOptions((int) $recipient->id)),
+        ));
+
+        if ($channels === []) {
+            throw ValidationException::withMessages([
+                'channels' => 'Выберите хотя бы один способ отправки.',
+            ]);
+        }
+
+        foreach ($records as $record) {
+            MarketDocumentShare::query()->updateOrCreate(
+                [
+                    'market_document_id' => (int) $record->id,
+                    'shared_with_user_id' => (int) $recipient->id,
+                ],
+                [
+                    'shared_by_user_id' => (int) $author->id,
+                    'access_level' => MarketDocumentShare::ACCESS_VIEW,
+                    'revoked_at' => null,
+                ],
+            );
+        }
+
+        $message = trim((string) ($data['message'] ?? ''));
+        $body = static::shareDocumentsMessageText($records, $author, $message);
+
+        if (in_array('dialog', $channels, true)) {
+            app(StaffConversationService::class)->startConversation(
+                $author,
+                $recipient,
+                'Файлы: ' . $records->count(),
+                $body,
+                $records
+                    ->map(fn (MarketDocument $record): array => static::shareAttachmentPayload($record))
+                    ->values()
+                    ->all(),
+            );
+        }
+
+        $notificationChannels = array_values(array_intersect($channels, ['mail', 'telegram']));
+        if ($notificationChannels !== []) {
+            foreach ($records as $record) {
+                $recipient->notify(new MarketDocumentSharedNotification($record, $author, $message, $notificationChannels));
+            }
+        }
+
+        \Filament\Notifications\Notification::make()
+            ->title('Доступ открыт')
+            ->body('Файлы появятся у получателя в разделе «Со мной поделились».')
+            ->success()
+            ->send();
+
+        return null;
+    }
+
     protected static function shareMessageText(MarketDocument $record, User $author, string $message): string
     {
         $authorName = trim((string) ($author->name ?: $author->email));
         $text = ($authorName !== '' ? $authorName : 'Сотрудник') . ' поделился с вами файлом: ' . $record->resolvedFileName();
+
+        if ($message !== '') {
+            $text .= PHP_EOL . $message;
+        }
+
+        return $text;
+    }
+
+    /**
+     * @param EloquentCollection<int, MarketDocument> $records
+     */
+    protected static function shareDocumentsMessageText(EloquentCollection $records, User $author, string $message): string
+    {
+        $authorName = trim((string) ($author->name ?: $author->email));
+        $sender = $authorName !== '' ? $authorName : 'Сотрудник';
+        $fileList = $records
+            ->take(8)
+            ->map(fn (MarketDocument $record): string => '- ' . $record->resolvedFileName())
+            ->implode(PHP_EOL);
+
+        $text = $sender . ' поделился с вами файлами:' . PHP_EOL . $fileList;
+        $extraCount = max(0, $records->count() - 8);
+
+        if ($extraCount > 0) {
+            $text .= PHP_EOL . 'И еще файлов: ' . $extraCount;
+        }
 
         if ($message !== '') {
             $text .= PHP_EOL . $message;
