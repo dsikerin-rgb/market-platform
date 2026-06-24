@@ -38,6 +38,8 @@ use ZipArchive;
 
 class MarketDocumentResource extends BaseResource
 {
+    public const TAB_TRASH = 'trash';
+
     protected static ?string $model = MarketDocument::class;
 
     protected static ?string $recordTitleAttribute = 'title';
@@ -236,8 +238,7 @@ class MarketDocumentResource extends BaseResource
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery()
-            ->with(['market', 'owner', 'uploadedBy', 'folder.parent', 'related'])
-            ->whereNull('archived_at');
+            ->with(['market', 'owner', 'uploadedBy', 'folder.parent', 'related']);
 
         $user = Filament::auth()->user();
 
@@ -368,6 +369,26 @@ class MarketDocumentResource extends BaseResource
         }
 
         return static::bulkDocumentContextTab($livewire) === MarketDocument::VISIBILITY_PERSONAL;
+    }
+
+    public static function canBulkManageTrash(mixed $livewire = null): bool
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin() || $user->isMarketAdmin()) {
+            return static::isTrashContext($livewire);
+        }
+
+        return (int) $user->market_id > 0 && static::isTrashContext($livewire);
+    }
+
+    public static function isTrashContext(mixed $livewire = null): bool
+    {
+        return static::bulkDocumentContextTab($livewire) === self::TAB_TRASH;
     }
 
     private static function bulkDocumentContextTab(mixed $livewire): ?string
@@ -601,7 +622,7 @@ class MarketDocumentResource extends BaseResource
                 ? route('filament.admin.market-documents.open', ['document' => $record])
                 : null)
             ->openUrlInNewTab()
-            ->visible(fn (MarketDocument $record): bool => filled($record->file_path));
+            ->visible(fn (MarketDocument $record): bool => filled($record->file_path) && blank($record->archived_at));
 
         $download = Action::make('download')
             ->label('Скачать')
@@ -609,7 +630,7 @@ class MarketDocumentResource extends BaseResource
             ->url(fn (MarketDocument $record): ?string => filled($record->file_path)
                 ? route('filament.admin.market-documents.download', ['document' => $record])
                 : null)
-            ->visible(fn (MarketDocument $record): bool => filled($record->file_path));
+            ->visible(fn (MarketDocument $record): bool => filled($record->file_path) && blank($record->archived_at));
 
         $share = Action::make('share')
             ->label('Поделиться')
@@ -617,7 +638,7 @@ class MarketDocumentResource extends BaseResource
             ->color('gray')
             ->modalHeading('Поделиться файлом')
             ->modalSubmitActionLabel('Отправить')
-            ->visible(fn (MarketDocument $record): bool => static::canShareDocument($record))
+            ->visible(fn (MarketDocument $record): bool => blank($record->archived_at) && static::canShareDocument($record))
             ->form(static::shareForm('Напишите короткое сообщение к файлу, если нужно.'))
             ->action(fn (MarketDocument $record, array $data): mixed => static::shareDocument($record, $data));
 
@@ -627,22 +648,40 @@ class MarketDocumentResource extends BaseResource
             ->color('gray')
             ->modalHeading('Перенести файл')
             ->modalSubmitActionLabel('Перенести')
-            ->visible(fn (MarketDocument $record): bool => static::canManageDocument($record))
+            ->visible(fn (MarketDocument $record): bool => blank($record->archived_at) && static::canManageDocument($record))
             ->form(fn (MarketDocument $record): array => static::moveForm($record))
             ->action(fn (MarketDocument $record, array $data): mixed => static::moveDocument($record, $data));
 
         $delete = Action::make('archive')
-            ->label('Удалить')
+            ->label('В корзину')
             ->icon('heroicon-o-trash')
             ->color('danger')
             ->requiresConfirmation()
-            ->modalHeading('Удалить файл?')
-            ->modalDescription('Файл исчезнет из диска. При необходимости его можно будет восстановить через базу данных.')
-            ->modalSubmitActionLabel('Удалить')
-            ->visible(fn (MarketDocument $record): bool => static::canManageDocument($record))
+            ->modalHeading('Переместить файл в корзину?')
+            ->modalDescription('Файл исчезнет из диска, но его можно будет восстановить из корзины до автоматической очистки.')
+            ->modalSubmitActionLabel('В корзину')
+            ->visible(fn (MarketDocument $record): bool => blank($record->archived_at) && static::canManageDocument($record))
             ->action(fn (MarketDocument $record): mixed => static::archiveDocument($record));
 
-        $actions[] = ActionGroup::make([$open, $download, $share, $move, $delete])
+        $restore = Action::make('restore')
+            ->label('Восстановить')
+            ->icon('heroicon-o-arrow-uturn-left')
+            ->color('success')
+            ->visible(fn (MarketDocument $record): bool => filled($record->archived_at) && static::canManageDocument($record))
+            ->action(fn (MarketDocument $record): mixed => static::restoreDocument($record));
+
+        $destroy = Action::make('destroy')
+            ->label('Удалить окончательно')
+            ->icon('heroicon-o-x-circle')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Удалить файл окончательно?')
+            ->modalDescription('Файл будет удалён из хранилища без возможности восстановления.')
+            ->modalSubmitActionLabel('Удалить окончательно')
+            ->visible(fn (MarketDocument $record): bool => filled($record->archived_at) && static::canManageDocument($record))
+            ->action(fn (MarketDocument $record): mixed => static::destroyDocument($record));
+
+        $actions[] = ActionGroup::make([$open, $download, $share, $move, $delete, $restore, $destroy])
             ->label('Действия')
             ->icon('heroicon-o-ellipsis-vertical')
             ->iconButton()
@@ -666,6 +705,7 @@ class MarketDocumentResource extends BaseResource
             ->icon('heroicon-o-arrow-down-tray')
             ->color('gray')
             ->deselectRecordsAfterCompletion()
+            ->visible(fn (HasTable $livewire): bool => ! static::isTrashContext($livewire))
             ->action(fn (EloquentCollection $records): mixed => static::downloadDocuments($records));
 
         $share = BulkAction::make('share_selected')
@@ -675,6 +715,7 @@ class MarketDocumentResource extends BaseResource
             ->modalHeading('Поделиться выбранными файлами')
             ->modalSubmitActionLabel('Отправить')
             ->deselectRecordsAfterCompletion()
+            ->visible(fn (HasTable $livewire): bool => ! static::isTrashContext($livewire))
             ->form(static::shareForm('Напишите короткое сообщение к файлам, если нужно.'))
             ->action(fn (array $data, EloquentCollection $records): mixed => static::shareDocuments($records, $data));
 
@@ -690,18 +731,38 @@ class MarketDocumentResource extends BaseResource
             ->action(fn (array $data, EloquentCollection $records): mixed => static::moveDocuments($records, $data));
 
         $delete = BulkAction::make('archive_selected')
-            ->label('Удалить')
+            ->label('В корзину')
             ->icon('heroicon-o-trash')
             ->color('danger')
             ->requiresConfirmation()
-            ->modalHeading('Удалить выбранные файлы?')
-            ->modalDescription('Файлы исчезнут из диска. При необходимости их можно будет восстановить через базу данных.')
-            ->modalSubmitActionLabel('Удалить')
+            ->modalHeading('Переместить выбранные файлы в корзину?')
+            ->modalDescription('Файлы исчезнут из диска, но их можно будет восстановить из корзины до автоматической очистки.')
+            ->modalSubmitActionLabel('В корзину')
             ->deselectRecordsAfterCompletion()
             ->visible(fn (HasTable $livewire): bool => static::canBulkManageDocuments($livewire))
             ->action(fn (EloquentCollection $records): mixed => static::archiveDocuments($records));
 
-        $actions = [$download, $share, $move, $delete];
+        $restore = BulkAction::make('restore_selected')
+            ->label('Восстановить')
+            ->icon('heroicon-o-arrow-uturn-left')
+            ->color('success')
+            ->deselectRecordsAfterCompletion()
+            ->visible(fn (HasTable $livewire): bool => static::canBulkManageTrash($livewire))
+            ->action(fn (EloquentCollection $records): mixed => static::restoreDocuments($records));
+
+        $destroy = BulkAction::make('destroy_selected')
+            ->label('Удалить окончательно')
+            ->icon('heroicon-o-x-circle')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Удалить выбранные файлы окончательно?')
+            ->modalDescription('Файлы будут удалены из хранилища без возможности восстановления.')
+            ->modalSubmitActionLabel('Удалить окончательно')
+            ->deselectRecordsAfterCompletion()
+            ->visible(fn (HasTable $livewire): bool => static::canBulkManageTrash($livewire))
+            ->action(fn (EloquentCollection $records): mixed => static::destroyDocuments($records));
+
+        $actions = [$download, $share, $move, $delete, $restore, $destroy];
 
         return class_exists(BulkActionGroup::class)
             ? [
@@ -1078,11 +1139,104 @@ class MarketDocumentResource extends BaseResource
         }
 
         \Filament\Notifications\Notification::make()
-            ->title($records->count() === 1 ? 'Файл удален' : 'Файлы удалены')
+            ->title($records->count() === 1 ? 'Файл перемещён в корзину' : 'Файлы перемещены в корзину')
             ->success()
             ->send();
 
         return null;
+    }
+
+    protected static function restoreDocument(MarketDocument $record): mixed
+    {
+        return static::restoreDocuments(new EloquentCollection([$record]));
+    }
+
+    /**
+     * @param EloquentCollection<int, MarketDocument> $records
+     */
+    protected static function restoreDocuments(EloquentCollection $records): mixed
+    {
+        $records = $records
+            ->filter(fn ($record): bool => $record instanceof MarketDocument)
+            ->values();
+
+        if ($records->isEmpty()) {
+            abort(403);
+        }
+
+        foreach ($records as $record) {
+            if (! static::canManageDocument($record)) {
+                abort(403);
+            }
+        }
+
+        foreach ($records as $record) {
+            $record->forceFill(['archived_at' => null])->save();
+        }
+
+        \Filament\Notifications\Notification::make()
+            ->title($records->count() === 1 ? 'Файл восстановлен' : 'Файлы восстановлены')
+            ->success()
+            ->send();
+
+        return null;
+    }
+
+    protected static function destroyDocument(MarketDocument $record): mixed
+    {
+        return static::destroyDocuments(new EloquentCollection([$record]));
+    }
+
+    /**
+     * @param EloquentCollection<int, MarketDocument> $records
+     */
+    protected static function destroyDocuments(EloquentCollection $records): mixed
+    {
+        $records = $records
+            ->filter(fn ($record): bool => $record instanceof MarketDocument)
+            ->values();
+
+        if ($records->isEmpty()) {
+            abort(403);
+        }
+
+        foreach ($records as $record) {
+            if (! static::canManageDocument($record)) {
+                abort(403);
+            }
+        }
+
+        foreach ($records as $record) {
+            static::deleteStoredFile($record);
+            $record->delete();
+        }
+
+        \Filament\Notifications\Notification::make()
+            ->title($records->count() === 1 ? 'Файл удалён окончательно' : 'Файлы удалены окончательно')
+            ->success()
+            ->send();
+
+        return null;
+    }
+
+    protected static function deleteStoredFile(MarketDocument $record): void
+    {
+        if (blank($record->file_path)) {
+            return;
+        }
+
+        $storage = Storage::disk(MarketDocument::storageDisk());
+        $path = (string) $record->file_path;
+
+        try {
+            if ($storage->exists($path)) {
+                $storage->delete($path);
+            }
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                'records' => 'Не удалось удалить файл из хранилища. Попробуйте позже или обратитесь к администратору.',
+            ]);
+        }
     }
 
     /**

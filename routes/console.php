@@ -29,6 +29,9 @@ Schedule::command('marketplace:repair-demo-asset-permissions')->dailyAt('03:25')
 Schedule::command('ops:postgres-backup --rotate')
     ->dailyAt('03:30')
     ->withoutOverlapping();
+Schedule::command('market-documents:purge-trash')
+    ->dailyAt('03:45')
+    ->withoutOverlapping();
 
 Schedule::command('notifications:health-check --hours=1 --notify')
     ->everyThirtyMinutes()
