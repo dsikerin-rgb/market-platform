@@ -77,6 +77,63 @@ class StaffResourceScopeTest extends TestCase
         $this->assertNotContains((int) $merchantUser->id, $visibleStaffIds);
     }
 
+    public function test_marketing_role_can_view_staff_without_managing_staff(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Test Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $otherMarket = Market::query()->create([
+            'name' => 'Other Market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $role = Role::findOrCreate('market-marketing', 'web');
+        $role->givePermissionTo([
+            Permission::findOrCreate('staff.viewAny', 'web'),
+            Permission::findOrCreate('staff.view', 'web'),
+        ]);
+
+        $actor = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'marketing-staff-view@example.test',
+        ]);
+        $actor->assignRole($role);
+
+        $sameMarketStaff = User::factory()->create([
+            'market_id' => (int) $market->id,
+            'tenant_id' => null,
+            'email' => 'same-market-staff@example.test',
+        ]);
+
+        $otherMarketStaff = User::factory()->create([
+            'market_id' => (int) $otherMarket->id,
+            'tenant_id' => null,
+            'email' => 'other-market-staff@example.test',
+        ]);
+
+        $this->actingAs($actor);
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+
+        $visibleStaffIds = StaffResource::getEloquentQuery()
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        $this->assertTrue(StaffResource::shouldRegisterNavigation());
+        $this->assertTrue(StaffResource::canViewAny());
+        $this->assertFalse(StaffResource::canCreate());
+        $this->assertFalse(StaffResource::canEdit($sameMarketStaff));
+        $this->assertFalse(StaffResource::canDelete($sameMarketStaff));
+        $this->assertContains((int) $sameMarketStaff->id, $visibleStaffIds);
+        $this->assertContains((int) $actor->id, $visibleStaffIds);
+        $this->assertNotContains((int) $otherMarketStaff->id, $visibleStaffIds);
+    }
+
     public function test_system_agent_is_hidden_for_market_admin_but_visible_for_super_admin(): void
     {
         $market = Market::query()->create([
