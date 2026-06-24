@@ -30,8 +30,10 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Schema as DbSchema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use ZipArchive;
 
 class MarketDocumentResource extends BaseResource
 {
@@ -589,6 +591,13 @@ class MarketDocumentResource extends BaseResource
             return [];
         }
 
+        $download = BulkAction::make('download_selected')
+            ->label('Скачать')
+            ->icon('heroicon-o-arrow-down-tray')
+            ->color('gray')
+            ->deselectRecordsAfterCompletion()
+            ->action(fn (EloquentCollection $records): mixed => static::downloadDocuments($records));
+
         $share = BulkAction::make('share_selected')
             ->label('Поделиться')
             ->icon('heroicon-o-share')
@@ -620,7 +629,7 @@ class MarketDocumentResource extends BaseResource
             ->deselectRecordsAfterCompletion()
             ->action(fn (EloquentCollection $records): mixed => static::archiveDocuments($records));
 
-        $actions = [$share, $move, $delete];
+        $actions = [$download, $share, $move, $delete];
 
         return class_exists(BulkActionGroup::class)
             ? [
@@ -791,6 +800,112 @@ class MarketDocumentResource extends BaseResource
     protected static function moveDocument(MarketDocument $record, array $data): mixed
     {
         return static::moveDocuments(new EloquentCollection([$record]), $data);
+    }
+
+    /**
+     * @param EloquentCollection<int, MarketDocument> $records
+     */
+    protected static function downloadDocuments(EloquentCollection $records): mixed
+    {
+        $records = $records
+            ->filter(fn ($record): bool => $record instanceof MarketDocument && filled($record->file_path))
+            ->values();
+
+        if ($records->isEmpty()) {
+            throw ValidationException::withMessages([
+                'records' => 'В выбранных записях нет файлов для скачивания.',
+            ]);
+        }
+
+        if (! class_exists(ZipArchive::class)) {
+            throw ValidationException::withMessages([
+                'records' => 'На сервере недоступна сборка архива. Сообщите администратору.',
+            ]);
+        }
+
+        $disk = Storage::disk(MarketDocument::storageDisk());
+        $directory = storage_path('app/market-document-downloads');
+
+        if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
+            throw ValidationException::withMessages([
+                'records' => 'Не удалось подготовить архив для скачивания.',
+            ]);
+        }
+
+        $zipPath = $directory . DIRECTORY_SEPARATOR . 'documents-' . now()->format('Ymd-His') . '-' . Str::lower(Str::random(8)) . '.zip';
+        $zip = new ZipArchive();
+
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            throw ValidationException::withMessages([
+                'records' => 'Не удалось создать архив для скачивания.',
+            ]);
+        }
+
+        $usedNames = [];
+        $added = 0;
+
+        foreach ($records as $record) {
+            $path = (string) $record->file_path;
+
+            try {
+                if (! $disk->exists($path)) {
+                    continue;
+                }
+
+                $archiveName = static::uniqueArchiveFileName($record->resolvedFileName(), $usedNames);
+                $absolutePath = method_exists($disk, 'path') ? $disk->path($path) : null;
+
+                if ($absolutePath && is_file($absolutePath)) {
+                    $zip->addFile($absolutePath, $archiveName);
+                } else {
+                    $zip->addFromString($archiveName, $disk->get($path));
+                }
+
+                $added++;
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        $zip->close();
+
+        if ($added === 0) {
+            @unlink($zipPath);
+
+            throw ValidationException::withMessages([
+                'records' => 'Не удалось найти выбранные файлы в хранилище.',
+            ]);
+        }
+
+        return response()
+            ->download($zipPath, 'documents-' . now()->format('Y-m-d-His') . '.zip')
+            ->deleteFileAfterSend(true);
+    }
+
+    /**
+     * @param array<string, bool> $usedNames
+     */
+    protected static function uniqueArchiveFileName(string $name, array &$usedNames): string
+    {
+        $name = trim(str_replace(["\0", '/', '\\'], [' ', '-', '-'], $name));
+        $name = preg_replace('/\s+/u', ' ', $name) ?: '';
+        $name = $name !== '' ? $name : 'document';
+
+        $base = pathinfo($name, PATHINFO_FILENAME);
+        $extension = pathinfo($name, PATHINFO_EXTENSION);
+        $base = trim($base) !== '' ? trim($base) : 'document';
+        $suffix = $extension !== '' ? '.' . $extension : '';
+        $candidate = $base . $suffix;
+        $index = 2;
+
+        while (isset($usedNames[Str::lower($candidate)])) {
+            $candidate = $base . ' (' . $index . ')' . $suffix;
+            $index++;
+        }
+
+        $usedNames[Str::lower($candidate)] = true;
+
+        return $candidate;
     }
 
     /**
