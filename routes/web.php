@@ -331,6 +331,75 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->with('status', 'Документ добавлен.');
     })->name('filament.admin.market-documents.upload');
 
+    $serveMarketDocument = static function (MarketDocument $document, string $contentDisposition) {
+        $user = Filament::auth()->user();
+        abort_unless($user, 403);
+        abort_unless(
+            Schema::hasTable('market_documents')
+                && ! $document->archived_at
+                && MarketDocument::query()
+                    ->visibleFor($user)
+                    ->whereKey((int) $document->id)
+                    ->exists(),
+            403,
+        );
+
+        $path = trim((string) $document->file_path);
+        abort_if($path === '', 404);
+
+        $disk = Storage::disk(MarketDocument::storageDisk());
+        abort_unless($disk->exists($path), 404);
+
+        $fileName = str_replace(["\r", "\n", '"'], '', $document->resolvedFileName());
+        $fileName = $fileName !== '' ? $fileName : 'document';
+        $asciiFileName = preg_replace('/[^A-Za-z0-9._-]+/', '_', $fileName) ?: 'document';
+        $mimeType = trim((string) ($document->mime_type ?: $disk->mimeType($path))) ?: 'application/octet-stream';
+        $disposition = $contentDisposition . '; filename="' . $asciiFileName . '"; filename*=UTF-8\'\'' . rawurlencode($fileName);
+
+        if (method_exists($disk, 'temporaryUrl')) {
+            try {
+                return redirect()->away($disk->temporaryUrl(
+                    $path,
+                    now()->addMinutes(10),
+                    [
+                        'ResponseContentDisposition' => $disposition,
+                        'ResponseContentType' => $mimeType,
+                    ],
+                ));
+            } catch (\Throwable) {
+                // Fall back to local streaming below.
+            }
+        }
+
+        if (method_exists($disk, 'path')) {
+            try {
+                $absolutePath = $disk->path($path);
+
+                if (is_file($absolutePath)) {
+                    return response()->file($absolutePath, [
+                        'Content-Type' => $mimeType,
+                        'Content-Disposition' => $disposition,
+                    ]);
+                }
+            } catch (\Throwable) {
+                // Fall back to reading from the disk below.
+            }
+        }
+
+        return response($disk->get($path), 200, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => $disposition,
+        ]);
+    };
+
+    Route::get('/admin/market-documents/{document}/open', function (MarketDocument $document) use ($serveMarketDocument) {
+        return $serveMarketDocument($document, 'inline');
+    })->name('filament.admin.market-documents.open');
+
+    Route::get('/admin/market-documents/{document}/download', function (MarketDocument $document) use ($serveMarketDocument) {
+        return $serveMarketDocument($document, 'attachment');
+    })->name('filament.admin.market-documents.download');
+
     Route::post('/admin/requests/start', function (Request $request) {
         $user = Filament::auth()->user();
         abort_unless($user, 403);
