@@ -19,6 +19,7 @@ use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\HtmlString;
 use Spatie\Permission\Models\Role;
@@ -26,6 +27,20 @@ use Spatie\Permission\Models\Role;
 class EditStaff extends BaseEditRecord
 {
     protected static string $resource = StaffResource::class;
+
+    protected function authorizeAccess(): void
+    {
+        abort_unless(
+            StaffResource::canEdit($this->record) || StaffResource::canView($this->record),
+            403,
+        );
+    }
+
+    public function form(Schema $schema): Schema
+    {
+        return parent::form($schema)
+            ->disabled(fn (): bool => $this->isReadOnly());
+    }
 
     public function getBreadcrumbs(): array
     {
@@ -54,6 +69,10 @@ class EditStaff extends BaseEditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        if ($this->isReadOnly()) {
+            abort(403);
+        }
+
         $user = Filament::auth()->user();
 
         if (! $user) {
@@ -95,6 +114,13 @@ class EditStaff extends BaseEditRecord
         $user = Filament::auth()->user();
 
         return [
+            Action::make('readonly_hint')
+                ->label('Только просмотр')
+                ->color('gray')
+                ->disabled()
+                ->visible(fn (): bool => $this->isReadOnly())
+                ->action(fn () => null),
+
             Action::make('write_to_staff')
                 ->label('Написать')
                 ->icon('heroicon-o-chat-bubble-left-right')
@@ -149,7 +175,7 @@ class EditStaff extends BaseEditRecord
                 ])
                 ->modalHeading('Смена пароля')
                 ->modalSubmitActionLabel('Сохранить')
-                ->visible(fn (): bool => $this->canManagePasswordFields())
+                ->visible(fn (): bool => ! $this->isReadOnly() && $this->canManagePasswordFields())
                 ->fillForm(fn (): array => [
                     'password' => null,
                     'password_confirmation' => null,
@@ -211,7 +237,9 @@ class EditStaff extends BaseEditRecord
                 ->modalHeading('Настройки уведомлений')
                 ->modalSubmitActionLabel('Сохранить')
                 ->modalWidth('3xl')
-                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()))
+                ->visible(fn (): bool => ! $this->isReadOnly()
+                    && (bool) $user
+                    && ($user->isSuperAdmin() || $user->isMarketAdmin()))
                 ->fillForm(fn (): array => $this->notificationPreferencesFormState())
                 ->form([
                     Section::make('Личные настройки')
@@ -268,6 +296,7 @@ class EditStaff extends BaseEditRecord
                 ->modalHeading('Telegram')
                 ->modalSubmitActionLabel('Сохранить')
                 ->modalWidth('3xl')
+                ->visible(fn (): bool => ! $this->isReadOnly())
                 ->fillForm(fn (): array => [
                     'telegram_chat_id' => $this->record->telegram_chat_id,
                 ])
@@ -538,8 +567,22 @@ class EditStaff extends BaseEditRecord
                 ->extraAttributes([
                     'class' => 'staff-card-action staff-card-action--danger',
                 ])
-                ->visible(fn (): bool => StaffResource::canDelete($this->record)),
+                ->visible(fn (): bool => ! $this->isReadOnly() && StaffResource::canDelete($this->record)),
         ];
+    }
+
+    protected function getFormActions(): array
+    {
+        if ($this->isReadOnly()) {
+            return [];
+        }
+
+        return parent::getFormActions();
+    }
+
+    protected function isReadOnly(): bool
+    {
+        return ! StaffResource::canEdit($this->record);
     }
 
     /**
