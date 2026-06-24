@@ -176,6 +176,52 @@ class StaffResource extends BaseResource
         return (bool) $user && $user->can('staff.create');
     }
 
+    public static function canView($record): bool
+    {
+        /** @var \App\Models\User|null $user */
+        $user = Filament::auth()->user();
+
+        if (! $user || ! $record instanceof User) {
+            return false;
+        }
+
+        if (! $user->can('staff.view')) {
+            return false;
+        }
+
+        if (
+            ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            && static::isSystemAgentRecord($record)
+        ) {
+            return false;
+        }
+
+        if (
+            ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            && method_exists($record, 'hasRole')
+            && $record->hasRole('super-admin')
+        ) {
+            return false;
+        }
+
+        if (
+            method_exists($record, 'hasRole')
+            && $record->hasRole('merchant')
+        ) {
+            return false;
+        }
+
+        if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+            return true;
+        }
+
+        if (! $user->market_id) {
+            return false;
+        }
+
+        return (int) $record->market_id === (int) $user->market_id;
+    }
+
     public static function canEdit($record): bool
     {
         /** @var \App\Models\User|null $user */

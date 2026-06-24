@@ -126,12 +126,18 @@ class StaffResourceScopeTest extends TestCase
 
         $this->assertTrue(StaffResource::shouldRegisterNavigation());
         $this->assertTrue(StaffResource::canViewAny());
+        $this->assertTrue(StaffResource::canView($sameMarketStaff));
+        $this->assertFalse(StaffResource::canView($otherMarketStaff));
         $this->assertFalse(StaffResource::canCreate());
         $this->assertFalse(StaffResource::canEdit($sameMarketStaff));
         $this->assertFalse(StaffResource::canDelete($sameMarketStaff));
         $this->assertContains((int) $sameMarketStaff->id, $visibleStaffIds);
         $this->assertContains((int) $actor->id, $visibleStaffIds);
         $this->assertNotContains((int) $otherMarketStaff->id, $visibleStaffIds);
+
+        $this
+            ->get(StaffResource::getUrl('edit', ['record' => $sameMarketStaff]))
+            ->assertOk();
     }
 
     public function test_system_agent_is_hidden_for_market_admin_but_visible_for_super_admin(): void
