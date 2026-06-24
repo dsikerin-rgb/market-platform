@@ -627,10 +627,8 @@ class MarketDocumentResource extends BaseResource
                 BulkActionGroup::make($actions)
                     ->label('Действия')
                     ->icon('heroicon-o-ellipsis-horizontal')
-                    ->iconButton()
                     ->color('gray')
-                    ->tooltip('Действия')
-                    ->labeledFrom(null),
+                    ->tooltip('Действия'),
             ]
             : $actions;
     }
