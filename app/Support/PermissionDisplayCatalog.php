@@ -18,6 +18,27 @@ class PermissionDisplayCatalog
             'label' => 'Изменение настроек рынка',
             'group' => 'Настройки рынка',
         ],
+        'market-holidays.viewAny' => [
+            'label' => 'Просмотр календаря событий',
+            'group' => 'Календарь и события',
+        ],
+        'market-holidays.view' => [
+            'label' => 'Просмотр события',
+            'group' => 'Календарь и события',
+        ],
+        'market-holidays.create' => [
+            'label' => 'Создание события',
+            'group' => 'Календарь и события',
+        ],
+        'market-holidays.update' => [
+            'label' => 'Изменение события',
+            'group' => 'Календарь и события',
+        ],
+        'market-holidays.delete' => [
+            'label' => 'Удаление события',
+            'group' => 'Календарь и события',
+            'description' => 'Опасное право. Позволяет удалять события рынка.',
+        ],
         'marketplace.settings.view' => [
             'label' => 'Просмотр настроек маркетплейса',
             'group' => 'Маркетплейс',
@@ -81,6 +102,69 @@ class PermissionDisplayCatalog
             'label' => 'Просмотр начислений',
             'group' => 'Финансы 1С',
         ],
+        'market-locations.viewAny' => [
+            'label' => 'Просмотр списка локаций',
+            'group' => 'Места',
+        ],
+        'market-locations.view' => [
+            'label' => 'Просмотр локации',
+            'group' => 'Места',
+        ],
+        'market-locations.create' => [
+            'label' => 'Создание локации',
+            'group' => 'Места',
+        ],
+        'market-locations.update' => [
+            'label' => 'Изменение локации',
+            'group' => 'Места',
+        ],
+        'market-locations.delete' => [
+            'label' => 'Удаление локации',
+            'group' => 'Места',
+            'description' => 'Опасное право. Позволяет удалять локации рынка.',
+        ],
+        'market-location-types.viewAny' => [
+            'label' => 'Просмотр типов локаций',
+            'group' => 'Места',
+        ],
+        'market-location-types.view' => [
+            'label' => 'Просмотр типа локации',
+            'group' => 'Места',
+        ],
+        'market-location-types.create' => [
+            'label' => 'Создание типа локации',
+            'group' => 'Места',
+        ],
+        'market-location-types.update' => [
+            'label' => 'Изменение типа локации',
+            'group' => 'Места',
+        ],
+        'market-location-types.delete' => [
+            'label' => 'Удаление типа локации',
+            'group' => 'Места',
+            'description' => 'Опасное право. Позволяет удалять типы локаций.',
+        ],
+        'reports.viewAny' => [
+            'label' => 'Просмотр списка отчётов',
+            'group' => 'Отчеты',
+        ],
+        'reports.view' => [
+            'label' => 'Просмотр отчёта',
+            'group' => 'Отчеты',
+        ],
+        'reports.create' => [
+            'label' => 'Создание отчёта',
+            'group' => 'Отчеты',
+        ],
+        'reports.update' => [
+            'label' => 'Изменение отчёта',
+            'group' => 'Отчеты',
+        ],
+        'reports.delete' => [
+            'label' => 'Удаление отчёта',
+            'group' => 'Отчеты',
+            'description' => 'Опасное право. Позволяет удалять отчёты.',
+        ],
         'staff.viewAny' => [
             'label' => 'Просмотр списка сотрудников',
             'group' => 'Сотрудники',
@@ -110,6 +194,7 @@ class PermissionDisplayCatalog
     private const GROUP_ORDER = [
         'Рынок',
         'Настройки рынка',
+        'Календарь и события',
         'Места',
         'Арендаторы',
         'Финансы 1С',
@@ -128,6 +213,9 @@ class PermissionDisplayCatalog
         'market-settings' => 'настройки рынка',
         'marketplace' => 'маркетплейс',
         'markets' => 'рынки',
+        'market-holidays' => 'события',
+        'market-locations' => 'локации',
+        'market-location-types' => 'типы локаций',
         'market-spaces' => 'торговые места',
         'market_space_types' => 'типы мест',
         'market-space-types' => 'типы мест',
@@ -178,6 +266,8 @@ class PermissionDisplayCatalog
             'contracts' => 'Договоры',
             'finance', 'tenant-accruals', 'tenant-payments' => 'Финансы 1С',
             'market-settings', 'markets' => 'Рынок',
+            'market-holidays' => 'Календарь и события',
+            'market-locations', 'market-location-types' => 'Места',
             'market-spaces', 'market_space_types', 'market-space-types' => 'Места',
             'tenants' => 'Арендаторы',
             'reports' => 'Отчеты',
@@ -198,6 +288,10 @@ class PermissionDisplayCatalog
             'markets.viewAny',
             'markets.update',
             'markets.delete',
+            'market-holidays.delete',
+            'market-locations.delete',
+            'market-location-types.delete',
+            'reports.delete',
             'staff.delete',
         ], true);
     }

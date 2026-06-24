@@ -32,15 +32,11 @@ class SettingsHub extends Page
     {
         $user = Filament::auth()->user();
 
-        if (! AdminCapabilities::canViewFinance($user) && ! MarketSettings::canAccess()) {
-            return false;
-        }
-
         return MarketSettings::canAccess()
             || AiAgentSettingsPage::canAccess()
             || MailDiagnostics::canAccess()
             || MarketplaceSettings::canAccess()
-            || ReportResource::canViewAny()
+            || (AdminCapabilities::canViewFinance($user) && ReportResource::canViewAny())
             || MarketplaceSlideResource::canViewAny()
             || RoleResource::canViewAny();
     }

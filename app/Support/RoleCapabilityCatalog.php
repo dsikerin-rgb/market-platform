@@ -47,6 +47,17 @@ class RoleCapabilityCatalog
         'market-admin',
     ];
 
+    private const MARKET_EVENT_VIEWER_ROLES = [
+        'market-owner',
+        'market-owner-director',
+        'market-admin',
+    ];
+
+    private const MARKET_EVENT_MANAGER_ROLES = [
+        'market-owner-director',
+        'market-admin',
+    ];
+
     private const TENANT_CONTRACT_VIEWER_ROLES = [
         'market-owner',
         'market-owner-director',
@@ -93,6 +104,18 @@ class RoleCapabilityCatalog
 
         if (self::canViewFinance($role, $permissions)) {
             $summary[] = 'Финансы 1С';
+        }
+
+        if (self::canManageMarketEvents($role, $permissions)) {
+            $summary[] = 'Календарь событий: управление';
+        } elseif (self::canViewMarketEvents($role, $permissions)) {
+            $summary[] = 'Календарь событий: просмотр';
+        }
+
+        if (self::canManageReports($role, $permissions)) {
+            $summary[] = 'Отчеты: управление';
+        } elseif (self::canViewReports($role, $permissions)) {
+            $summary[] = 'Отчеты: просмотр';
         }
 
         if (self::canUpdateMarketSettings($role, $permissions)) {
@@ -226,6 +249,60 @@ class RoleCapabilityCatalog
             || in_array('contracts.update', $permissions, true);
     }
 
+    public static function canViewMarketEvents(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::MARKET_EVENT_VIEWER_ROLES, true)
+            || self::hasAnyPermission($permissions, [
+                'market-holidays.viewAny',
+                'market-holidays.view',
+                'market-holidays.create',
+                'market-holidays.update',
+                'market-holidays.delete',
+            ]);
+    }
+
+    public static function canManageMarketEvents(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::MARKET_EVENT_MANAGER_ROLES, true)
+            || self::hasAnyPermission($permissions, [
+                'market-holidays.create',
+                'market-holidays.update',
+                'market-holidays.delete',
+            ]);
+    }
+
+    public static function canViewReports(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || self::hasAnyPermission($permissions, [
+                'reports.viewAny',
+                'reports.view',
+                'reports.create',
+                'reports.update',
+                'reports.delete',
+            ]);
+    }
+
+    public static function canManageReports(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || self::hasAnyPermission($permissions, [
+                'reports.create',
+                'reports.update',
+                'reports.delete',
+            ]);
+    }
+
     public static function canManageTenantContracts(string $role, iterable $permissions = []): bool
     {
         $permissions = self::normalizePermissions($permissions);
@@ -242,7 +319,6 @@ class RoleCapabilityCatalog
         return $role === 'super-admin'
             || in_array($role, self::TENANT_FULL_VIEWER_ROLES, true)
             || in_array('markets.viewAny', $permissions, true)
-            || in_array('markets.view', $permissions, true)
             || in_array('markets.update', $permissions, true);
     }
 
@@ -288,6 +364,21 @@ class RoleCapabilityCatalog
     {
         foreach (self::normalizePermissions($permissions) as $permission) {
             if (str_starts_with($permission, 'staff.')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<string> $permissions
+     * @param list<string> $expected
+     */
+    private static function hasAnyPermission(array $permissions, array $expected): bool
+    {
+        foreach ($expected as $permission) {
+            if (in_array($permission, $permissions, true)) {
                 return true;
             }
         }

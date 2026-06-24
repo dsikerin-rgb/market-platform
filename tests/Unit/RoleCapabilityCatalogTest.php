@@ -64,6 +64,7 @@ class RoleCapabilityCatalogTest extends TestCase
             'Места: просмотр',
             'Арендаторы: просмотр',
             'Финансы 1С',
+            'Календарь событий: просмотр',
             'Договоры: просмотр',
         ], RoleCapabilityCatalog::summaryForRole('market-owner'));
 

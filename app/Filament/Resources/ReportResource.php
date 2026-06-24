@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ReportResource\Pages;
 use App\Models\Report;
+use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -245,45 +246,29 @@ class ReportResource extends BaseResource
 
     public static function canViewAny(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canViewReports(Filament::auth()->user());
     }
 
     public static function canCreate(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canManageReports(Filament::auth()->user());
     }
 
     public static function canEdit($record): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
+        if (! $record?->market_id) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->market_id && $record->market_id === $user->market_id;
+        return AdminCapabilities::canManageReports(Filament::auth()->user(), (int) $record->market_id);
     }
 
     public static function canDelete($record): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
+        if (! $record?->market_id) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return $user->market_id && $record->market_id === $user->market_id;
+        return AdminCapabilities::canManageReports(Filament::auth()->user(), (int) $record->market_id);
     }
 }

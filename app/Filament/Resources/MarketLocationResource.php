@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\MarketLocationResource\Pages;
 use App\Models\MarketLocation;
 use App\Models\MarketLocationType;
+use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -284,49 +285,29 @@ class MarketLocationResource extends BaseResource
 
     public static function canViewAny(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canViewMarketLocations(Filament::auth()->user());
     }
 
     public static function canCreate(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canManageMarketLocations(Filament::auth()->user());
     }
 
     public static function canEdit($record): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
+        if (! $record?->market_id) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return (bool) $user->market_id
-            && (bool) $record?->market_id
-            && (int) $record->market_id === (int) $user->market_id;
+        return AdminCapabilities::canManageMarketLocations(Filament::auth()->user(), (int) $record->market_id);
     }
 
     public static function canDelete($record): bool
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
+        if (! $record?->market_id) {
             return false;
         }
 
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        return (bool) $user->market_id
-            && (bool) $record?->market_id
-            && (int) $record->market_id === (int) $user->market_id;
+        return AdminCapabilities::canManageMarketLocations(Filament::auth()->user(), (int) $record->market_id);
     }
 }

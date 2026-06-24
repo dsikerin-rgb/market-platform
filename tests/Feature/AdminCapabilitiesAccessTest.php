@@ -6,20 +6,28 @@ namespace Tests\Feature;
 
 use App\Filament\Pages\AiAgentSettingsPage;
 use App\Filament\Pages\MarketSettings;
+use App\Filament\Pages\MarketplaceSettings;
 use App\Filament\Pages\OneCDebtDecisionPreview;
 use App\Filament\Pages\OneCReconciliation;
 use App\Filament\Pages\OneCSettlements;
 use App\Filament\Pages\ReportsHub;
+use App\Filament\Pages\SettingsHub;
 use App\Filament\Resources\MarketHolidayResource;
+use App\Filament\Resources\MarketLocationResource;
+use App\Filament\Resources\MarketLocationTypeResource;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\MarketSpaceTypeResource;
+use App\Filament\Resources\ReportResource;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Models\Market;
 use App\Models\MarketHoliday;
+use App\Models\MarketLocation;
+use App\Models\MarketLocationType;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceType;
+use App\Models\Report;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
@@ -187,6 +195,98 @@ class AdminCapabilitiesAccessTest extends TestCase
     }
 
     /**
+     * @dataProvider marketingEventRoles
+     */
+    public function test_marketing_roles_can_manage_market_events_without_finance(string $roleName): void
+    {
+        $market = $this->createMarket();
+        $user = $this->createMarketUser($market, $roleName);
+        $otherAuthor = $this->createMarketUser($market, 'market-owner');
+
+        $this->grantRolePermissions($roleName, [
+            'markets.view',
+            'market-holidays.viewAny',
+            'market-holidays.view',
+            'market-holidays.create',
+            'market-holidays.update',
+        ]);
+
+        $user = $user->fresh();
+
+        $event = MarketHoliday::query()->create([
+            'market_id' => (int) $market->id,
+            'author_user_id' => (int) $otherAuthor->id,
+            'title' => 'Promo event',
+            'starts_at' => now()->addDays(3)->toDateString(),
+            'source' => 'market_event',
+        ]);
+
+        $this->actingAsFilamentUser($user);
+
+        self::assertTrue(MarketHolidayResource::canViewAny());
+        self::assertTrue(MarketHolidayResource::canCreate());
+        self::assertTrue(MarketHolidayResource::canEdit($event));
+        self::assertFalse(MarketHolidayResource::canDelete($event));
+        self::assertFalse(AdminCapabilities::canViewFinance($user));
+    }
+
+    public function test_marketplace_only_role_can_open_settings_hub(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->createMarketUser($market, 'market-marketing');
+
+        $this->grantRolePermissions('market-marketing', [
+            'marketplace.settings.view',
+        ]);
+
+        $user = $user->fresh();
+
+        $this->actingAsFilamentUser($user);
+
+        self::assertFalse(AdminCapabilities::canViewFinance($user));
+        self::assertTrue(MarketplaceSettings::canAccess());
+        self::assertTrue(SettingsHub::canAccess());
+    }
+
+    public function test_legacy_report_access_does_not_open_settings_hub_for_non_finance_role(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->createMarketUser($market, 'market-operator');
+
+        $this->actingAsFilamentUser($user);
+
+        self::assertTrue(ReportResource::canViewAny());
+        self::assertFalse(AdminCapabilities::canViewFinance($user));
+        self::assertFalse(SettingsHub::canAccess());
+    }
+
+    public function test_legacy_market_scoped_access_to_location_references_and_reports_is_preserved(): void
+    {
+        $market = $this->createMarket();
+        $user = $this->createMarketUser($market, 'market-operator');
+        $locationType = $this->createMarketLocationType($market);
+        $location = $this->createMarketLocation($market);
+        $report = $this->createReport($market, $user);
+
+        $this->actingAsFilamentUser($user);
+
+        self::assertTrue(MarketLocationTypeResource::canViewAny());
+        self::assertTrue(MarketLocationTypeResource::canCreate());
+        self::assertTrue(MarketLocationTypeResource::canEdit($locationType));
+        self::assertTrue(MarketLocationTypeResource::canDelete($locationType));
+
+        self::assertTrue(MarketLocationResource::canViewAny());
+        self::assertTrue(MarketLocationResource::canCreate());
+        self::assertTrue(MarketLocationResource::canEdit($location));
+        self::assertTrue(MarketLocationResource::canDelete($location));
+
+        self::assertTrue(ReportResource::canViewAny());
+        self::assertTrue(ReportResource::canCreate());
+        self::assertTrue(ReportResource::canEdit($report));
+        self::assertTrue(ReportResource::canDelete($report));
+    }
+
+    /**
      * @dataProvider tenantContractManagerRoles
      */
     public function test_contract_manager_roles_can_open_and_manage_contract_cards(string $roleName): void
@@ -300,6 +400,14 @@ class AdminCapabilitiesAccessTest extends TestCase
         ];
     }
 
+    public static function marketingEventRoles(): array
+    {
+        return [
+            'market-marketing' => ['market-marketing'],
+            'market-advertising' => ['market-advertising'],
+        ];
+    }
+
     public static function serviceTenantViewerRoles(): array
     {
         return [
@@ -394,6 +502,35 @@ class AdminCapabilitiesAccessTest extends TestCase
         ]);
     }
 
+    private function createMarketLocationType(Market $market): MarketLocationType
+    {
+        return MarketLocationType::query()->create([
+            'market_id' => (int) $market->id,
+            'name_ru' => 'Location type',
+            'code' => 'location-type-' . uniqid(),
+            'is_active' => true,
+        ]);
+    }
+
+    private function createMarketLocation(Market $market): MarketLocation
+    {
+        return MarketLocation::query()->create([
+            'market_id' => (int) $market->id,
+            'name' => 'Location',
+            'is_active' => true,
+        ]);
+    }
+
+    private function createReport(Market $market, User $author): Report
+    {
+        return Report::query()->create([
+            'market_id' => (int) $market->id,
+            'type' => 'occupancy',
+            'created_by' => (int) $author->id,
+            'is_active' => true,
+        ]);
+    }
+
     private function createTenantAccrual(Market $market): TenantAccrual
     {
         return TenantAccrual::query()->create([
@@ -416,5 +553,20 @@ class AdminCapabilitiesAccessTest extends TestCase
             'starts_at' => '2026-01-01',
             'is_active' => true,
         ]);
+    }
+
+    /**
+     * @param list<string> $permissionNames
+     */
+    private function grantRolePermissions(string $roleName, array $permissionNames): void
+    {
+        $role = Role::findOrCreate($roleName, 'web');
+
+        foreach ($permissionNames as $permissionName) {
+            Permission::findOrCreate($permissionName, 'web');
+        }
+
+        $role->givePermissionTo($permissionNames);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }
