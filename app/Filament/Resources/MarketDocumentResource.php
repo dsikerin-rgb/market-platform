@@ -571,9 +571,10 @@ class MarketDocumentResource extends BaseResource
             ->action(fn (MarketDocument $record): mixed => static::archiveDocument($record));
 
         $actions[] = ActionGroup::make([$open, $download, $share, $move, $delete])
-            ->label('')
-            ->icon('heroicon-o-ellipsis-horizontal')
+            ->label('Действия')
+            ->icon('heroicon-o-ellipsis-vertical')
             ->iconButton()
+            ->color('gray')
             ->tooltip('Действия');
 
         return $actions;
@@ -622,7 +623,15 @@ class MarketDocumentResource extends BaseResource
         $actions = [$share, $move, $delete];
 
         return class_exists(BulkActionGroup::class)
-            ? [BulkActionGroup::make($actions)->label('Действия')]
+            ? [
+                BulkActionGroup::make($actions)
+                    ->label('Действия')
+                    ->icon('heroicon-o-ellipsis-horizontal')
+                    ->iconButton()
+                    ->color('gray')
+                    ->tooltip('Действия')
+                    ->labeledFrom(null),
+            ]
             : $actions;
     }
 
