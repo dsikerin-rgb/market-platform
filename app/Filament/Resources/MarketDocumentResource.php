@@ -16,7 +16,10 @@ use App\Models\TenantRequest;
 use App\Models\User;
 use App\Notifications\MarketDocumentSharedNotification;
 use App\Support\StaffConversationService;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
@@ -519,63 +522,59 @@ class MarketDocumentResource extends BaseResource
     {
         $actions = [];
 
-        $download = class_exists(\Filament\Actions\Action::class)
-            ? \Filament\Actions\Action::make('download')
-            : (class_exists(\Filament\Tables\Actions\Action::class) ? \Filament\Tables\Actions\Action::make('download') : null);
+        $open = Action::make('open')
+            ->label('Открыть')
+            ->icon('heroicon-o-eye')
+            ->url(fn (MarketDocument $record): ?string => filled($record->file_path)
+                ? route('filament.admin.market-documents.open', ['document' => $record])
+                : null)
+            ->openUrlInNewTab()
+            ->visible(fn (MarketDocument $record): bool => filled($record->file_path));
 
-        if ($download) {
-            $download
-                ->label('Скачать')
-                ->tooltip('Скачать')
-                ->iconButton()
-                ->icon('heroicon-o-arrow-down-tray')
-                ->url(fn (MarketDocument $record): ?string => filled($record->file_path)
-                    ? route('filament.admin.market-documents.download', ['document' => $record])
-                    : null)
-                ->visible(fn (MarketDocument $record): bool => filled($record->file_path));
+        $download = Action::make('download')
+            ->label('Скачать')
+            ->icon('heroicon-o-arrow-down-tray')
+            ->url(fn (MarketDocument $record): ?string => filled($record->file_path)
+                ? route('filament.admin.market-documents.download', ['document' => $record])
+                : null)
+            ->visible(fn (MarketDocument $record): bool => filled($record->file_path));
 
-            $actions[] = $download;
-        }
+        $share = Action::make('share')
+            ->label('Поделиться')
+            ->icon('heroicon-o-share')
+            ->color('gray')
+            ->modalHeading('Поделиться файлом')
+            ->modalSubmitActionLabel('Отправить')
+            ->visible(fn (MarketDocument $record): bool => static::canEdit($record))
+            ->form(static::shareForm('Напишите короткое сообщение к файлу, если нужно.'))
+            ->action(fn (MarketDocument $record, array $data): mixed => static::shareDocument($record, $data));
 
-        $share = class_exists(\Filament\Actions\Action::class)
-            ? \Filament\Actions\Action::make('share')
-            : (class_exists(\Filament\Tables\Actions\Action::class) ? \Filament\Tables\Actions\Action::make('share') : null);
+        $move = Action::make('move')
+            ->label('Перенести')
+            ->icon('heroicon-o-folder-arrow-down')
+            ->color('gray')
+            ->modalHeading('Перенести файл')
+            ->modalSubmitActionLabel('Перенести')
+            ->visible(fn (MarketDocument $record): bool => static::canEdit($record))
+            ->form(fn (MarketDocument $record): array => static::moveForm($record))
+            ->action(fn (MarketDocument $record, array $data): mixed => static::moveDocument($record, $data));
 
-        if ($share) {
-            $share
-                ->label('Поделиться')
-                ->tooltip('Поделиться')
-                ->iconButton()
-                ->icon('heroicon-o-share')
-                ->color('gray')
-                ->modalHeading('Поделиться файлом')
-                ->modalSubmitActionLabel('Отправить')
-                ->visible(fn (MarketDocument $record): bool => static::canEdit($record))
-                ->form([
-                    Forms\Components\Select::make('recipient_id')
-                        ->label('Получатель')
-                        ->options(fn (): array => static::shareRecipientOptions())
-                        ->searchable()
-                        ->preload()
-                        ->required()
-                        ->reactive(),
-                    Forms\Components\CheckboxList::make('channels')
-                        ->label('Как отправить')
-                        ->options(fn (Get $get): array => static::shareChannelOptions($get('recipient_id') ? (int) $get('recipient_id') : null))
-                        ->default(['dialog'])
-                        ->required()
-                        ->columns(1)
-                        ->helperText('Telegram появится в списке только если он подключен у получателя.'),
-                    Forms\Components\Textarea::make('message')
-                        ->label('Сообщение')
-                        ->rows(3)
-                        ->maxLength(1000)
-                        ->placeholder('Напишите короткое сообщение к файлу, если нужно.'),
-                ])
-                ->action(fn (MarketDocument $record, array $data): mixed => static::shareDocument($record, $data));
+        $delete = Action::make('archive')
+            ->label('Удалить')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Удалить файл?')
+            ->modalDescription('Файл исчезнет из диска. При необходимости его можно будет восстановить через базу данных.')
+            ->modalSubmitActionLabel('Удалить')
+            ->visible(fn (MarketDocument $record): bool => static::canEdit($record))
+            ->action(fn (MarketDocument $record): mixed => static::archiveDocument($record));
 
-            $actions[] = $share;
-        }
+        $actions[] = ActionGroup::make([$open, $download, $share, $move, $delete])
+            ->label('')
+            ->icon('heroicon-o-ellipsis-horizontal')
+            ->iconButton()
+            ->tooltip('Действия');
 
         return $actions;
     }
@@ -593,34 +592,96 @@ class MarketDocumentResource extends BaseResource
             ->label('Поделиться')
             ->icon('heroicon-o-share')
             ->color('gray')
-            ->button()
             ->modalHeading('Поделиться выбранными файлами')
             ->modalSubmitActionLabel('Отправить')
             ->deselectRecordsAfterCompletion()
-            ->form([
-                Forms\Components\Select::make('recipient_id')
-                    ->label('Получатель')
-                    ->options(fn (): array => static::shareRecipientOptions())
-                    ->searchable()
-                    ->preload()
-                    ->required()
-                    ->reactive(),
-                Forms\Components\CheckboxList::make('channels')
-                    ->label('Как отправить')
-                    ->options(fn (Get $get): array => static::shareChannelOptions($get('recipient_id') ? (int) $get('recipient_id') : null))
-                    ->default(['dialog'])
-                    ->required()
-                    ->columns(1)
-                    ->helperText('Telegram появится в списке только если он подключен у получателя.'),
-                Forms\Components\Textarea::make('message')
-                    ->label('Сообщение')
-                    ->rows(3)
-                    ->maxLength(1000)
-                    ->placeholder('Напишите короткое сообщение к файлам, если нужно.'),
-            ])
+            ->form(static::shareForm('Напишите короткое сообщение к файлам, если нужно.'))
             ->action(fn (array $data, EloquentCollection $records): mixed => static::shareDocuments($records, $data));
 
-        return [$share];
+        $move = BulkAction::make('move_selected')
+            ->label('Перенести')
+            ->icon('heroicon-o-folder-arrow-down')
+            ->color('gray')
+            ->modalHeading('Перенести выбранные файлы')
+            ->modalSubmitActionLabel('Перенести')
+            ->deselectRecordsAfterCompletion()
+            ->form(static::moveForm())
+            ->action(fn (array $data, EloquentCollection $records): mixed => static::moveDocuments($records, $data));
+
+        $delete = BulkAction::make('archive_selected')
+            ->label('Удалить')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Удалить выбранные файлы?')
+            ->modalDescription('Файлы исчезнут из диска. При необходимости их можно будет восстановить через базу данных.')
+            ->modalSubmitActionLabel('Удалить')
+            ->deselectRecordsAfterCompletion()
+            ->action(fn (EloquentCollection $records): mixed => static::archiveDocuments($records));
+
+        $actions = [$share, $move, $delete];
+
+        return class_exists(BulkActionGroup::class)
+            ? [BulkActionGroup::make($actions)->label('Действия')]
+            : $actions;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    protected static function shareForm(string $messagePlaceholder): array
+    {
+        return [
+            Forms\Components\Select::make('recipient_id')
+                ->label('Получатель')
+                ->options(fn (): array => static::shareRecipientOptions())
+                ->searchable()
+                ->preload()
+                ->required()
+                ->reactive(),
+            Forms\Components\CheckboxList::make('channels')
+                ->label('Как отправить')
+                ->options(fn (Get $get): array => static::shareChannelOptions($get('recipient_id') ? (int) $get('recipient_id') : null))
+                ->default(['dialog'])
+                ->required()
+                ->columns(1)
+                ->helperText('Telegram появится в списке только если он подключен у получателя.'),
+            Forms\Components\Textarea::make('message')
+                ->label('Сообщение')
+                ->rows(3)
+                ->maxLength(1000)
+                ->placeholder($messagePlaceholder),
+        ];
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    protected static function moveForm(?MarketDocument $record = null): array
+    {
+        $defaultVisibility = $record?->visibility ?: MarketDocument::VISIBILITY_PERSONAL;
+
+        return [
+            Forms\Components\Select::make('visibility')
+                ->label('Куда перенести')
+                ->options([
+                    MarketDocument::VISIBILITY_PERSONAL => 'Мой диск',
+                    MarketDocument::VISIBILITY_SHARED => 'Общий диск',
+                ])
+                ->default($defaultVisibility)
+                ->required()
+                ->reactive(),
+            Forms\Components\Select::make('folder_id')
+                ->label('Папка')
+                ->options(fn (Get $get): array => static::moveFolderOptions(
+                    $record,
+                    (string) ($get('visibility') ?: $defaultVisibility),
+                ))
+                ->default('0')
+                ->searchable()
+                ->preload()
+                ->required(),
+        ];
     }
 
     /**
@@ -674,6 +735,160 @@ class MarketDocumentResource extends BaseResource
         }
 
         return $options;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function moveFolderOptions(?MarketDocument $record, string $visibility): array
+    {
+        if (! DbSchema::hasTable('market_document_folders')) {
+            return ['0' => 'В корень'];
+        }
+
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return ['0' => 'В корень'];
+        }
+
+        $visibility = MarketDocument::normalizeVisibility($visibility);
+        $marketId = $record?->market_id
+            ?: static::selectedMarketIdFromSession()
+            ?: ($user->market_id ? (int) $user->market_id : null);
+        $ownerUserId = $visibility === MarketDocument::VISIBILITY_PERSONAL ? (int) $user->id : null;
+
+        $folders = MarketDocumentFolder::query()
+            ->visibleFor($user)
+            ->whereNull('archived_at')
+            ->where('visibility', $visibility)
+            ->when($marketId, fn (Builder $query): Builder => $query->where('market_id', (int) $marketId))
+            ->when(
+                $visibility === MarketDocument::VISIBILITY_PERSONAL,
+                fn (Builder $query): Builder => $query->where('owner_user_id', $ownerUserId),
+            )
+            ->with('parent')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->limit(200)
+            ->get()
+            ->mapWithKeys(fn (MarketDocumentFolder $folder): array => [(string) $folder->id => $folder->displayName()])
+            ->all();
+
+        return ['0' => 'В корень'] + $folders;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    protected static function moveDocument(MarketDocument $record, array $data): mixed
+    {
+        return static::moveDocuments(new EloquentCollection([$record]), $data);
+    }
+
+    /**
+     * @param EloquentCollection<int, MarketDocument> $records
+     * @param array<string, mixed> $data
+     */
+    protected static function moveDocuments(EloquentCollection $records, array $data): mixed
+    {
+        $user = Filament::auth()->user();
+        $records = $records
+            ->filter(fn ($record): bool => $record instanceof MarketDocument)
+            ->values();
+
+        if (! $user || $records->isEmpty()) {
+            abort(403);
+        }
+
+        foreach ($records as $record) {
+            if (! static::canEdit($record)) {
+                abort(403);
+            }
+        }
+
+        $visibility = MarketDocument::normalizeVisibility((string) ($data['visibility'] ?? MarketDocument::VISIBILITY_PERSONAL));
+        $folderId = (int) ($data['folder_id'] ?? 0);
+        $folder = null;
+
+        if ($folderId > 0) {
+            $folder = MarketDocumentFolder::query()
+                ->visibleFor($user)
+                ->whereNull('archived_at')
+                ->whereKey($folderId)
+                ->first();
+
+            if (! $folder instanceof MarketDocumentFolder) {
+                throw ValidationException::withMessages([
+                    'folder_id' => 'Выберите папку, к которой у вас есть доступ.',
+                ]);
+            }
+
+            $visibility = $folder->visibility;
+        }
+
+        foreach ($records as $record) {
+            if ($folder) {
+                $record->folder_id = (int) $folder->id;
+                $record->market_id = (int) $folder->market_id;
+                $record->visibility = $folder->visibility;
+                $record->owner_user_id = $folder->owner_user_id;
+            } else {
+                $record->folder_id = null;
+                $record->visibility = $visibility;
+                $record->market_id = $record->market_id
+                    ?: static::selectedMarketIdFromSession()
+                    ?: ($user->market_id ? (int) $user->market_id : null);
+                $record->owner_user_id = $visibility === MarketDocument::VISIBILITY_PERSONAL
+                    ? (int) $user->id
+                    : null;
+            }
+
+            $record->save();
+        }
+
+        \Filament\Notifications\Notification::make()
+            ->title($records->count() === 1 ? 'Файл перенесен' : 'Файлы перенесены')
+            ->success()
+            ->send();
+
+        return null;
+    }
+
+    protected static function archiveDocument(MarketDocument $record): mixed
+    {
+        return static::archiveDocuments(new EloquentCollection([$record]));
+    }
+
+    /**
+     * @param EloquentCollection<int, MarketDocument> $records
+     */
+    protected static function archiveDocuments(EloquentCollection $records): mixed
+    {
+        $records = $records
+            ->filter(fn ($record): bool => $record instanceof MarketDocument)
+            ->values();
+
+        if ($records->isEmpty()) {
+            abort(403);
+        }
+
+        foreach ($records as $record) {
+            if (! static::canEdit($record)) {
+                abort(403);
+            }
+        }
+
+        foreach ($records as $record) {
+            $record->forceFill(['archived_at' => now()])->save();
+        }
+
+        \Filament\Notifications\Notification::make()
+            ->title($records->count() === 1 ? 'Файл удален' : 'Файлы удалены')
+            ->success()
+            ->send();
+
+        return null;
     }
 
     /**
