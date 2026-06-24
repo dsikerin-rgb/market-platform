@@ -58,6 +58,22 @@ class MarketDocumentResourcePermissionTest extends TestCase
         self::assertFalse(MarketDocumentResource::canBulkManageDocuments());
     }
 
+    public function test_regular_staff_can_bulk_manage_trash_only_in_trash_context(): void
+    {
+        $this->actingAsTestUser(id: 1, marketId: 1);
+
+        self::assertTrue(MarketDocumentResource::canBulkManageTrash(
+            new MarketDocumentBulkContext(MarketDocumentResource::TAB_TRASH),
+        ));
+        self::assertFalse(MarketDocumentResource::canBulkManageTrash(
+            new MarketDocumentBulkContext(MarketDocument::VISIBILITY_PERSONAL),
+        ));
+        self::assertFalse(MarketDocumentResource::canBulkManageTrash(
+            new MarketDocumentBulkContext(MarketDocument::VISIBILITY_SHARED),
+        ));
+        self::assertFalse(MarketDocumentResource::canBulkManageTrash());
+    }
+
     public function test_owner_can_manage_personal_document(): void
     {
         $document = $this->personalDocument(marketId: 1, ownerUserId: 1);

@@ -52,13 +52,17 @@ class ListMarketDocuments extends ListRecords
             $this->activeTab = (string) $legacyTab;
         }
 
-        if (! in_array($this->activeTab, ['personal', 'shared', 'shared-with-me', 'all'], true)) {
+        if (! in_array($this->activeTab, ['personal', 'shared', 'shared-with-me', 'all', MarketDocumentResource::TAB_TRASH], true)) {
             $this->activeTab = 'personal';
         }
 
         $this->selectedFolderId = $this->selectedFolder()?->id;
 
-        if ($this->selectedFolderId && $this->activeTab !== 'all') {
+        if ($this->activeTab === MarketDocumentResource::TAB_TRASH) {
+            $this->selectedFolderId = null;
+        }
+
+        if ($this->selectedFolderId && ! in_array($this->activeTab, ['all', MarketDocumentResource::TAB_TRASH], true)) {
             $folder = $this->selectedFolder();
 
             if ($folder) {
@@ -93,20 +97,32 @@ class ListMarketDocuments extends ListRecords
                 $tabClass,
                 'Личный диск',
                 fn (Builder $query): Builder => $query
+                    ->whereNull('archived_at')
                     ->where('visibility', MarketDocument::VISIBILITY_PERSONAL)
                     ->when($userId > 0 && ! ($user?->isSuperAdmin() ?? false), fn (Builder $inner): Builder => $inner->where('owner_user_id', $userId))
             ),
             'shared' => $this->makeTab(
                 $tabClass,
                 'Общий',
-                fn (Builder $query): Builder => $query->where('visibility', MarketDocument::VISIBILITY_SHARED)
+                fn (Builder $query): Builder => $query
+                    ->whereNull('archived_at')
+                    ->where('visibility', MarketDocument::VISIBILITY_SHARED)
             ),
             'shared-with-me' => $this->makeTab(
                 $tabClass,
                 'Со мной поделились',
-                fn (Builder $query): Builder => $this->scopeSharedWithMe($query)
+                fn (Builder $query): Builder => $this->scopeSharedWithMe($query)->whereNull('archived_at')
             ),
-            'all' => $tabClass::make('Все документы'),
+            'all' => $this->makeTab(
+                $tabClass,
+                'Все документы',
+                fn (Builder $query): Builder => $query->whereNull('archived_at')
+            ),
+            MarketDocumentResource::TAB_TRASH => $this->makeTab(
+                $tabClass,
+                'Корзина',
+                fn (Builder $query): Builder => $this->scopeTrash($query)
+            ),
         ];
     }
 
@@ -269,15 +285,21 @@ class ListMarketDocuments extends ListRecords
     {
         $query = parent::getTableQuery();
 
+        if ($this->activeTab === MarketDocumentResource::TAB_TRASH) {
+            return $this->scopeTrash($query);
+        }
+
         if ($this->selectedFolderId) {
-            return $query->where('folder_id', $this->selectedFolderId);
+            return $query
+                ->whereNull('archived_at')
+                ->where('folder_id', $this->selectedFolderId);
         }
 
         if ($this->activeTab === 'shared-with-me') {
-            return $this->scopeSharedWithMe($query);
+            return $this->scopeSharedWithMe($query)->whereNull('archived_at');
         }
 
-        return $query;
+        return $query->whereNull('archived_at');
     }
 
     /**
@@ -285,7 +307,7 @@ class ListMarketDocuments extends ListRecords
      */
     public function documentWorkspaceData(): array
     {
-        $activeTab = in_array($this->activeTab, ['personal', 'shared', 'shared-with-me', 'all'], true)
+        $activeTab = in_array($this->activeTab, ['personal', 'shared', 'shared-with-me', 'all', MarketDocumentResource::TAB_TRASH], true)
             ? (string) $this->activeTab
             : 'personal';
 
@@ -334,6 +356,16 @@ class ListMarketDocuments extends ListRecords
                 'url' => $this->workspaceUrl('shared-with-me'),
                 'isActive' => $activeTab === 'shared-with-me' && ! $this->selectedFolderId,
                 'documents' => $this->documentsCount('shared-with-me'),
+                'folders' => 0,
+            ],
+            [
+                'key' => MarketDocumentResource::TAB_TRASH,
+                'label' => 'Корзина',
+                'description' => 'Удалённые файлы',
+                'icon' => 'heroicon-o-trash',
+                'url' => $this->workspaceUrl(MarketDocumentResource::TAB_TRASH),
+                'isActive' => $activeTab === MarketDocumentResource::TAB_TRASH,
+                'documents' => $this->documentsCount(MarketDocumentResource::TAB_TRASH),
                 'folders' => 0,
             ],
             [
@@ -427,6 +459,10 @@ class ListMarketDocuments extends ListRecords
             return 0;
         }
 
+        if ($section === MarketDocumentResource::TAB_TRASH) {
+            return (int) $this->scopeTrash($this->documentBaseQuery())->count();
+        }
+
         $query = $this->documentBaseQuery()->whereNull('archived_at');
 
         if ($section === 'personal') {
@@ -434,10 +470,49 @@ class ListMarketDocuments extends ListRecords
         } elseif ($section === 'shared') {
             $query->where('visibility', MarketDocument::VISIBILITY_SHARED);
         } elseif ($section === 'shared-with-me') {
-            return 0;
+            $this->scopeSharedWithMe($query);
         }
 
         return (int) $query->count();
+    }
+
+    private function scopeTrash(Builder $query): Builder
+    {
+        $user = Filament::auth()->user();
+
+        if (! $user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $query->whereNotNull('archived_at');
+
+        if ($user->isSuperAdmin()) {
+            return $query;
+        }
+
+        if (! $user->market_id) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->isMarketAdmin()) {
+            return $query->where('market_id', (int) $user->market_id);
+        }
+
+        return $query
+            ->where('market_id', (int) $user->market_id)
+            ->where(function (Builder $inner) use ($user): void {
+                $inner
+                    ->where(function (Builder $personal) use ($user): void {
+                        $personal
+                            ->where('visibility', MarketDocument::VISIBILITY_PERSONAL)
+                            ->where('owner_user_id', (int) $user->id);
+                    })
+                    ->orWhere(function (Builder $shared) use ($user): void {
+                        $shared
+                            ->where('visibility', MarketDocument::VISIBILITY_SHARED)
+                            ->where('uploaded_by_user_id', (int) $user->id);
+                    });
+            });
     }
 
     private function scopeSharedWithMe(Builder $query): Builder
@@ -577,6 +652,10 @@ class ListMarketDocuments extends ListRecords
 
     private function selectedFolder(): ?MarketDocumentFolder
     {
+        if ($this->activeTab === MarketDocumentResource::TAB_TRASH) {
+            return null;
+        }
+
         if (! $this->selectedFolderId || ! DbSchema::hasTable('market_document_folders')) {
             return null;
         }

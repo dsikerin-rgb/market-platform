@@ -454,6 +454,19 @@
                     </a>
                 @endif
 
+                @php($trashSection = collect($sections)->firstWhere('key', 'trash'))
+                @if ($trashSection)
+                    <a href="{{ $trashSection['url'] }}" class="mdw-node {{ $trashSection['isActive'] ? 'is-active' : '' }}">
+                        <span class="mdw-node__icon">
+                            <x-filament::icon icon="heroicon-o-trash" class="h-5 w-5" />
+                        </span>
+                        <span class="mdw-node__body">
+                            <span class="mdw-node__label">Корзина</span>
+                            <span class="mdw-node__meta">{{ $trashSection['documents'] }} файлов</span>
+                        </span>
+                    </a>
+                @endif
+
                 @php($allSection = collect($sections)->firstWhere('key', 'all'))
                 @if ($allSection)
                     <a href="{{ $allSection['url'] }}" class="mdw-node {{ $allSection['isActive'] ? 'is-active' : '' }}">
@@ -470,7 +483,7 @@
         </aside>
 
         <section class="mdw-content">
-            @if (($activeSection['key'] ?? '') !== 'shared-with-me')
+            @if (! in_array(($activeSection['key'] ?? ''), ['shared-with-me', 'trash'], true))
             <header class="mdw-content__head">
                 <div class="mdw-content__actions">
                     <button type="button" class="mdw-action-button" x-on:click="$dispatch('mdw-open-create-folder')">
