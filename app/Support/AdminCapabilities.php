@@ -391,7 +391,7 @@ class AdminCapabilities
             || self::can($user, 'reports.create')
             || self::can($user, 'reports.update')
             || self::can($user, 'reports.delete')
-            || (bool) $user->market_id;
+            || self::canViewFinance($user, $marketId);
     }
 
     public static function canManageReports(?User $user, ?int $marketId = null): bool
@@ -410,8 +410,7 @@ class AdminCapabilities
 
         return self::can($user, 'reports.create')
             || self::can($user, 'reports.update')
-            || self::can($user, 'reports.delete')
-            || (bool) $user->market_id;
+            || self::can($user, 'reports.delete');
     }
 
     private static function isSuperAdmin(User $user): bool

@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ReportRunResource\Pages;
 use App\Models\ReportRun;
+use App\Support\AdminCapabilities;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -62,7 +63,7 @@ class ReportRunResource extends BaseResource
             Forms\Components\Select::make('report_id')
                 ->label('Отчёт')
                 ->relationship('report', 'type', function (Builder $query) use ($user, $selectedMarketId) {
-                    if (! $user) {
+                    if (! AdminCapabilities::canViewReports($user)) {
                         return $query->whereRaw('1 = 0');
                     }
 
@@ -184,7 +185,7 @@ class ReportRunResource extends BaseResource
         $query = parent::getEloquentQuery();
         $user = Filament::auth()->user();
 
-        if (! $user) {
+        if (! AdminCapabilities::canViewReports($user)) {
             return $query->whereRaw('1 = 0');
         }
 
@@ -207,9 +208,7 @@ class ReportRunResource extends BaseResource
 
     public static function canViewAny(): bool
     {
-        $user = Filament::auth()->user();
-
-        return (bool) $user && ($user->isSuperAdmin() || (bool) $user->market_id);
+        return AdminCapabilities::canViewReports(Filament::auth()->user());
     }
 
     public static function canCreate(): bool

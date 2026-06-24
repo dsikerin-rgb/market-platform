@@ -17,6 +17,7 @@ use App\Filament\Resources\MarketLocationResource;
 use App\Filament\Resources\MarketLocationTypeResource;
 use App\Filament\Resources\MarketSpaceResource;
 use App\Filament\Resources\MarketSpaceTypeResource;
+use App\Filament\Resources\ReportRunResource;
 use App\Filament\Resources\ReportResource;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Filament\Resources\TenantContractResource;
@@ -129,6 +130,8 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertTrue(OneCSettlements::canAccess());
         self::assertTrue(OneCDebtDecisionPreview::canAccess());
         self::assertTrue(ReportsHub::canAccess());
+        self::assertTrue(ReportResource::canViewAny());
+        self::assertTrue(ReportRunResource::canViewAny());
         self::assertTrue(TenantAccrualResource::canViewAny());
         self::assertTrue(TenantAccrualResource::canEdit($accrual));
     }
@@ -248,19 +251,22 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertTrue(SettingsHub::canAccess());
     }
 
-    public function test_legacy_report_access_does_not_open_settings_hub_for_non_finance_role(): void
+    public function test_market_scoped_user_without_report_permissions_cannot_open_reports(): void
     {
         $market = $this->createMarket();
         $user = $this->createMarketUser($market, 'market-operator');
 
         $this->actingAsFilamentUser($user);
 
-        self::assertTrue(ReportResource::canViewAny());
         self::assertFalse(AdminCapabilities::canViewFinance($user));
+        self::assertFalse(AdminCapabilities::canViewReports($user));
+        self::assertFalse(AdminCapabilities::canManageReports($user));
+        self::assertFalse(ReportResource::canViewAny());
+        self::assertFalse(ReportRunResource::canViewAny());
         self::assertFalse(SettingsHub::canAccess());
     }
 
-    public function test_legacy_market_scoped_access_to_location_references_and_reports_is_preserved(): void
+    public function test_legacy_market_scoped_access_to_location_references_is_preserved_without_reports(): void
     {
         $market = $this->createMarket();
         $user = $this->createMarketUser($market, 'market-operator');
@@ -280,10 +286,32 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertTrue(MarketLocationResource::canEdit($location));
         self::assertTrue(MarketLocationResource::canDelete($location));
 
-        self::assertTrue(ReportResource::canViewAny());
-        self::assertTrue(ReportResource::canCreate());
-        self::assertTrue(ReportResource::canEdit($report));
-        self::assertTrue(ReportResource::canDelete($report));
+        self::assertFalse(ReportResource::canViewAny());
+        self::assertFalse(ReportResource::canCreate());
+        self::assertFalse(ReportResource::canEdit($report));
+        self::assertFalse(ReportResource::canDelete($report));
+    }
+
+    /**
+     * @dataProvider marketingEventRoles
+     */
+    public function test_marketing_roles_cannot_open_technical_reports(string $roleName): void
+    {
+        $market = $this->createMarket();
+        $user = $this->createMarketUser($market, $roleName);
+        $report = $this->createReport($market, $user);
+
+        $this->actingAsFilamentUser($user);
+
+        self::assertFalse(AdminCapabilities::canViewFinance($user));
+        self::assertFalse(AdminCapabilities::canViewReports($user));
+        self::assertFalse(AdminCapabilities::canManageReports($user));
+        self::assertFalse(ReportsHub::canAccess());
+        self::assertFalse(ReportResource::canViewAny());
+        self::assertFalse(ReportResource::canCreate());
+        self::assertFalse(ReportResource::canEdit($report));
+        self::assertFalse(ReportResource::canDelete($report));
+        self::assertFalse(ReportRunResource::canViewAny());
     }
 
     /**
@@ -318,6 +346,8 @@ class AdminCapabilitiesAccessTest extends TestCase
         self::assertFalse(OneCSettlements::canAccess());
         self::assertFalse(OneCDebtDecisionPreview::canAccess());
         self::assertFalse(ReportsHub::canAccess());
+        self::assertFalse(ReportResource::canViewAny());
+        self::assertFalse(ReportRunResource::canViewAny());
         self::assertFalse(TenantAccrualResource::canViewAny());
         self::assertFalse(TenantAccrualResource::canEdit($accrual));
     }
@@ -396,6 +426,7 @@ class AdminCapabilitiesAccessTest extends TestCase
             'market-operator' => ['market-operator'],
             'market-support' => ['market-support'],
             'market-marketing' => ['market-marketing'],
+            'market-advertising' => ['market-advertising'],
             'staff' => ['staff'],
         ];
     }
@@ -424,6 +455,7 @@ class AdminCapabilitiesAccessTest extends TestCase
     {
         return [
             'market-marketing' => ['market-marketing'],
+            'market-advertising' => ['market-advertising'],
             'staff' => ['staff'],
         ];
     }
