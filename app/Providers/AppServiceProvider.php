@@ -13,6 +13,8 @@ use App\Listeners\NotifySuperAdminsAboutUserLogin;
 use App\Livewire\Admin\OnlineStaffRail;
 use App\Livewire\Admin\StaffLiveFeed;
 use App\Models\IntegrationExchange;
+use App\Models\MarketplaceChat;
+use App\Models\MarketplaceProduct;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceTenantBinding;
 use App\Models\Operation;
@@ -21,6 +23,8 @@ use App\Observers\IntegrationExchangeObserver;
 use App\Observers\MarketSpaceGroupSharedUseObserver;
 use App\Observers\MarketSpaceTenantBindingSharedUseObserver;
 use App\Policies\TaskPolicy;
+use App\Policies\MarketplaceChatPolicy;
+use App\Policies\MarketplaceProductPolicy;
 use App\Support\MarketContext;
 use App\Support\Search\LooseSearch;
 use Carbon\CarbonImmutable;
@@ -63,6 +67,8 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Gate::policy(Task::class, TaskPolicy::class);
+        Gate::policy(MarketplaceProduct::class, MarketplaceProductPolicy::class);
+        Gate::policy(MarketplaceChat::class, MarketplaceChatPolicy::class);
         IntegrationExchange::observe(IntegrationExchangeObserver::class);
         MarketSpace::observe(MarketSpaceGroupSharedUseObserver::class);
         MarketSpaceTenantBinding::observe(MarketSpaceTenantBindingSharedUseObserver::class);

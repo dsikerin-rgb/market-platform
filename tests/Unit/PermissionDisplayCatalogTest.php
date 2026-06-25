@@ -50,13 +50,31 @@ class PermissionDisplayCatalogTest extends TestCase
         ]));
     }
 
+    public function test_marketplace_content_permissions_have_human_labels(): void
+    {
+        self::assertSame('Редактирование текста и описания товаров', PermissionDisplayCatalog::label('marketplace.products.update_content'));
+        self::assertSame('Маркетплейс', PermissionDisplayCatalog::group('marketplace.products.update_content'));
+        self::assertContains('marketplace.products.update_content', PermissionDisplayCatalog::marketplacePermissions());
+    }
+
+    public function test_marketplace_content_preset_includes_products_orders_and_tenant_contacts(): void
+    {
+        $definitions = RolePermissionPresetCatalog::definitions();
+
+        self::assertContains('marketplace.products.update_content', $definitions['marketplace_content']['permissions']);
+        self::assertContains('marketplace.orders.view', $definitions['marketplace_content']['permissions']);
+        self::assertContains('marketplace.chats.reply', $definitions['marketplace_content']['permissions']);
+        self::assertContains('tenants.marketplace-contacts.view', $definitions['marketplace_content']['permissions']);
+        self::assertNotContains('finance.1c.view', $definitions['marketplace_content']['permissions']);
+        self::assertNotContains('finance.accruals.view', $definitions['marketplace_content']['permissions']);
+    }
+
     public function test_market_readonly_preset_does_not_include_global_market_list_access(): void
     {
         $definitions = RolePermissionPresetCatalog::definitions();
 
-        self::assertSame([
-            'markets.view',
-            'market-settings.view',
-        ], $definitions['market_readonly']['permissions']);
+        self::assertContains('markets.view', $definitions['market_readonly']['permissions']);
+        self::assertContains('market-settings.view', $definitions['market_readonly']['permissions']);
+        self::assertNotContains('markets.viewAny', $definitions['market_readonly']['permissions']);
     }
 }

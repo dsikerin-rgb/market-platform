@@ -67,6 +67,54 @@ class PermissionDisplayCatalog
             'label' => 'Удаление слайдов маркетплейса',
             'group' => 'Маркетплейс',
         ],
+        'marketplace.storefronts.view' => [
+            'label' => 'Просмотр витрин арендаторов',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.storefronts.update_content' => [
+            'label' => 'Редактирование текстов и фото витрин',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.products.viewAny' => [
+            'label' => 'Просмотр списка товаров',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.products.view' => [
+            'label' => 'Просмотр товара',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.products.update_content' => [
+            'label' => 'Редактирование текста и описания товаров',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.products.update_media' => [
+            'label' => 'Редактирование фото товаров',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.products.publish' => [
+            'label' => 'Публикация товаров',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.orders.view' => [
+            'label' => 'Просмотр заказов маркетплейса',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.orders.update_status' => [
+            'label' => 'Изменение статуса заказов маркетплейса',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.chats.view' => [
+            'label' => 'Просмотр обращений покупателей',
+            'group' => 'Маркетплейс',
+        ],
+        'marketplace.chats.reply' => [
+            'label' => 'Ответы на обращения покупателей',
+            'group' => 'Маркетплейс',
+        ],
+        'tenants.marketplace-contacts.view' => [
+            'label' => 'Просмотр контактов арендаторов для маркетплейса',
+            'group' => 'Арендаторы',
+        ],
         'markets.viewAny' => [
             'label' => 'Просмотр списка рынков',
             'group' => 'Рынок',
@@ -367,10 +415,9 @@ class PermissionDisplayCatalog
     {
         return array_values(array_filter(
             array_keys(self::MAP),
-            fn (string $permission): bool => self::group($permission) === 'Маркетплейс',
+            fn (string $permission): bool => str_starts_with($permission, 'marketplace.'),
         ));
     }
-
     private static function groupPosition(string $group): int
     {
         $index = array_search($group, self::GROUP_ORDER, true);

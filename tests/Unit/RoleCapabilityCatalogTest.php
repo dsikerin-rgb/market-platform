@@ -91,6 +91,20 @@ class RoleCapabilityCatalogTest extends TestCase
         self::assertTrue(RoleCapabilityCatalog::canManageTenantContracts('market-owner-director'));
     }
 
+    public function test_marketing_and_advertising_manage_marketplace_content_without_finance(): void
+    {
+        foreach (['market-marketing', 'market-advertising'] as $role) {
+            self::assertTrue(RoleCapabilityCatalog::canManageMarketplaceContent($role));
+            self::assertTrue(RoleCapabilityCatalog::canManageMarketplaceOrders($role));
+            self::assertFalse(RoleCapabilityCatalog::canViewFinance($role));
+            self::assertFalse(RoleCapabilityCatalog::canViewTenantContracts($role));
+
+            $summary = RoleCapabilityCatalog::summaryForRole($role);
+            self::assertContains('Маркетплейс: витрины и товары', $summary);
+            self::assertContains('Маркетплейс: обращения и заказы', $summary);
+        }
+    }
+
     public function test_permission_names_are_resolved_from_form_state(): void
     {
         self::assertSame([

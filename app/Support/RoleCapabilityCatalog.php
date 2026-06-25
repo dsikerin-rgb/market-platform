@@ -58,6 +58,20 @@ class RoleCapabilityCatalog
         'market-admin',
     ];
 
+    private const MARKETPLACE_CONTENT_MANAGER_ROLES = [
+        'market-owner-director',
+        'market-admin',
+        'market-marketing',
+        'market-advertising',
+    ];
+
+    private const MARKETPLACE_ORDER_MANAGER_ROLES = [
+        'market-owner-director',
+        'market-admin',
+        'market-marketing',
+        'market-advertising',
+    ];
+
     private const TENANT_CONTRACT_VIEWER_ROLES = [
         'market-owner',
         'market-owner-director',
@@ -124,7 +138,19 @@ class RoleCapabilityCatalog
             $summary[] = 'Настройки рынка: просмотр';
         }
 
-        if (self::hasMarketplaceAccess($permissions)) {
+        if (self::canManageMarketplaceContent($role, $permissions)) {
+            $summary[] = 'Маркетплейс: витрины и товары';
+        } elseif (self::canViewMarketplaceContent($role, $permissions)) {
+            $summary[] = 'Маркетплейс: просмотр контента';
+        }
+
+        if (self::canManageMarketplaceOrders($role, $permissions)) {
+            $summary[] = 'Маркетплейс: обращения и заказы';
+        } elseif (self::canViewMarketplaceOrders($role, $permissions)) {
+            $summary[] = 'Маркетплейс: просмотр обращений и заказов';
+        }
+
+        if (self::hasMarketplaceAccess($permissions) && ! self::canViewMarketplaceContent($role, $permissions) && ! self::canViewMarketplaceOrders($role, $permissions)) {
             $summary[] = 'Маркетплейс';
         }
 
@@ -300,6 +326,74 @@ class RoleCapabilityCatalog
                 'reports.create',
                 'reports.update',
                 'reports.delete',
+            ]);
+    }
+
+    public static function canViewMarketplaceContent(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::MARKETPLACE_CONTENT_MANAGER_ROLES, true)
+            || self::hasAnyPermission($permissions, [
+                'marketplace.settings.view',
+                'marketplace.settings.update',
+                'marketplace.slides.viewAny',
+                'marketplace.slides.view',
+                'marketplace.slides.create',
+                'marketplace.slides.update',
+                'marketplace.slides.delete',
+                'marketplace.storefronts.view',
+                'marketplace.storefronts.update_content',
+                'marketplace.products.viewAny',
+                'marketplace.products.view',
+                'marketplace.products.update_content',
+                'marketplace.products.update_media',
+                'marketplace.products.publish',
+            ]);
+    }
+
+    public static function canManageMarketplaceContent(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::MARKETPLACE_CONTENT_MANAGER_ROLES, true)
+            || self::hasAnyPermission($permissions, [
+                'marketplace.settings.update',
+                'marketplace.slides.create',
+                'marketplace.slides.update',
+                'marketplace.slides.delete',
+                'marketplace.storefronts.update_content',
+                'marketplace.products.update_content',
+                'marketplace.products.update_media',
+                'marketplace.products.publish',
+            ]);
+    }
+
+    public static function canViewMarketplaceOrders(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::MARKETPLACE_ORDER_MANAGER_ROLES, true)
+            || self::hasAnyPermission($permissions, [
+                'marketplace.orders.view',
+                'marketplace.orders.update_status',
+                'marketplace.chats.view',
+                'marketplace.chats.reply',
+            ]);
+    }
+
+    public static function canManageMarketplaceOrders(string $role, iterable $permissions = []): bool
+    {
+        $permissions = self::normalizePermissions($permissions);
+
+        return $role === 'super-admin'
+            || in_array($role, self::MARKETPLACE_ORDER_MANAGER_ROLES, true)
+            || self::hasAnyPermission($permissions, [
+                'marketplace.orders.update_status',
+                'marketplace.chats.reply',
             ]);
     }
 
