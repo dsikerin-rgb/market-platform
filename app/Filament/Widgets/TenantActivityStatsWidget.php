@@ -9,6 +9,8 @@ use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
 use App\Models\TenantContract;
 use App\Models\TenantRequest;
+use App\Models\User;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
@@ -55,9 +57,7 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
 
-        $marketId = $isSuperAdmin
-            ? (int) (session('dashboard_market_id') ?: 0)
-            : (int) ($user->market_id ?: 0);
+        $marketId = (int) ($this->resolveMarketIdForWidget($user) ?? 0);
 
         if ($marketId <= 0) {
             return $this->zeroStats($isSuperAdmin ? 'Рынок не выбран' : 'Нет привязки к рынку');
@@ -105,6 +105,11 @@ class TenantActivityStatsWidget extends StatsOverviewWidget
         }
 
         return $stats;
+    }
+
+    private function resolveMarketIdForWidget($user): ?int
+    {
+        return app(MarketContext::class)->currentMarketId($user instanceof User ? $user : null);
     }
 
     private function resolveTimezone(?string $marketTimezone): string
