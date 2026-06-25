@@ -14,6 +14,7 @@ use App\Models\Operation;
 use App\Models\Tenant;
 use App\Services\Ai\AiReviewService;
 use App\Services\MarketMap\MapReviewResultsService;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
@@ -722,14 +723,7 @@ class MapReviewResults extends Page
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        $value = session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id');
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     protected function marketId(): ?int
