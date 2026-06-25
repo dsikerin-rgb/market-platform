@@ -137,6 +137,11 @@ class MarketDocument extends Model
         return $this->hasMany(MarketDocumentShare::class);
     }
 
+    public function activityEvents(): HasMany
+    {
+        return $this->hasMany(MarketDocumentActivityEvent::class, 'market_document_id');
+    }
+
     public function scopeVisibleFor(Builder $query, ?User $user): Builder
     {
         if (! $user) {

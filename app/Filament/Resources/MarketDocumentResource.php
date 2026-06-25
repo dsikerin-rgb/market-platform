@@ -6,6 +6,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MarketDocumentResource\Pages;
 use App\Models\MarketDocument;
+use App\Models\MarketDocumentActivityEvent;
 use App\Models\MarketDocumentFolder;
 use App\Models\MarketDocumentShare;
 use App\Models\MarketSpace;
@@ -15,6 +16,7 @@ use App\Models\TenantContract;
 use App\Models\TenantRequest;
 use App\Models\User;
 use App\Notifications\MarketDocumentSharedNotification;
+use App\Support\MarketDocuments\MarketDocumentActivityLogger;
 use App\Support\StaffConversationService;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -311,11 +313,6 @@ class MarketDocumentResource extends BaseResource
             return (int) $record->owner_user_id === (int) $user->id;
         }
 
-        if ($record->visibility === MarketDocument::VISIBILITY_SHARED) {
-            return (int) $record->uploaded_by_user_id > 0
-                && (int) $record->uploaded_by_user_id === (int) $user->id;
-        }
-
         return false;
     }
 
@@ -369,6 +366,20 @@ class MarketDocumentResource extends BaseResource
         }
 
         return static::bulkDocumentContextTab($livewire) === MarketDocument::VISIBILITY_PERSONAL;
+    }
+
+    public static function canViewActivityLog(): bool
+    {
+        $user = Filament::auth()->user();
+
+        return (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin());
+    }
+
+    public static function activityLogUrl(): ?string
+    {
+        return static::canViewActivityLog()
+            ? MarketDocumentActivityEventResource::getUrl('index')
+            : null;
     }
 
     public static function canBulkManageTrash(mixed $livewire = null): bool
@@ -1083,6 +1094,8 @@ class MarketDocumentResource extends BaseResource
         }
 
         foreach ($records as $record) {
+            $before = static::documentMoveSnapshot($record);
+
             if ($folder) {
                 $record->folder_id = (int) $folder->id;
                 $record->market_id = (int) $folder->market_id;
@@ -1100,6 +1113,16 @@ class MarketDocumentResource extends BaseResource
             }
 
             $record->save();
+            app(MarketDocumentActivityLogger::class)->log(
+                $record,
+                MarketDocumentActivityEvent::ACTION_MOVED,
+                $user,
+                null,
+                [
+                    'from' => $before,
+                    'to' => static::documentMoveSnapshot($record),
+                ],
+            );
         }
 
         \Filament\Notifications\Notification::make()
@@ -1136,6 +1159,11 @@ class MarketDocumentResource extends BaseResource
 
         foreach ($records as $record) {
             $record->forceFill(['archived_at' => now()])->save();
+            app(MarketDocumentActivityLogger::class)->log(
+                $record,
+                MarketDocumentActivityEvent::ACTION_TRASHED,
+                Filament::auth()->user(),
+            );
         }
 
         \Filament\Notifications\Notification::make()
@@ -1172,6 +1200,11 @@ class MarketDocumentResource extends BaseResource
 
         foreach ($records as $record) {
             $record->forceFill(['archived_at' => null])->save();
+            app(MarketDocumentActivityLogger::class)->log(
+                $record,
+                MarketDocumentActivityEvent::ACTION_RESTORED,
+                Filament::auth()->user(),
+            );
         }
 
         \Filament\Notifications\Notification::make()
@@ -1208,6 +1241,11 @@ class MarketDocumentResource extends BaseResource
 
         foreach ($records as $record) {
             static::deleteStoredFile($record);
+            app(MarketDocumentActivityLogger::class)->log(
+                $record,
+                MarketDocumentActivityEvent::ACTION_DELETED_PERMANENTLY,
+                Filament::auth()->user(),
+            );
             $record->delete();
         }
 
@@ -1292,6 +1330,16 @@ class MarketDocumentResource extends BaseResource
                 'shared_by_user_id' => (int) $author->id,
                 'access_level' => MarketDocumentShare::ACCESS_VIEW,
                 'revoked_at' => null,
+            ],
+        );
+
+        app(MarketDocumentActivityLogger::class)->log(
+            $record,
+            MarketDocumentActivityEvent::ACTION_SHARED,
+            $author,
+            $recipient,
+            [
+                'channels' => $channels,
             ],
         );
 
@@ -1388,6 +1436,17 @@ class MarketDocumentResource extends BaseResource
                     'revoked_at' => null,
                 ],
             );
+
+            app(MarketDocumentActivityLogger::class)->log(
+                $record,
+                MarketDocumentActivityEvent::ACTION_SHARED,
+                $author,
+                $recipient,
+                [
+                    'channels' => $channels,
+                    'batch_count' => $records->count(),
+                ],
+            );
         }
 
         $message = trim((string) ($data['message'] ?? ''));
@@ -1473,6 +1532,19 @@ class MarketDocumentResource extends BaseResource
             'mime' => $mime !== '' ? $mime : 'application/octet-stream',
             'size' => (int) ($record->file_size ?? 0),
             'is_image' => str_starts_with($mime, 'image/'),
+        ];
+    }
+
+    /**
+     * @return array<string, int|string|null>
+     */
+    protected static function documentMoveSnapshot(MarketDocument $record): array
+    {
+        return [
+            'market_id' => $record->market_id ? (int) $record->market_id : null,
+            'visibility' => filled($record->visibility) ? (string) $record->visibility : null,
+            'folder_id' => $record->folder_id ? (int) $record->folder_id : null,
+            'owner_user_id' => $record->owner_user_id ? (int) $record->owner_user_id : null,
         ];
     }
 

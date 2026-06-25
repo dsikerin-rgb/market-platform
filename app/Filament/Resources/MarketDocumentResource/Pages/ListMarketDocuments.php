@@ -7,7 +7,9 @@ namespace App\Filament\Resources\MarketDocumentResource\Pages;
 use App\Filament\Resources\MarketDocumentResource;
 use App\Models\Market;
 use App\Models\MarketDocument;
+use App\Models\MarketDocumentActivityEvent;
 use App\Models\MarketDocumentFolder;
+use App\Support\MarketDocuments\MarketDocumentActivityLogger;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
@@ -233,7 +235,7 @@ class ListMarketDocuments extends ListRecords
 
         $originalName = trim($file->getClientOriginalName());
 
-        MarketDocument::query()->create([
+        $document = MarketDocument::query()->create([
             'market_id' => $marketId ?: $user->market_id,
             'owner_user_id' => $ownerUserId,
             'uploaded_by_user_id' => (int) $user->id,
@@ -246,6 +248,14 @@ class ListMarketDocuments extends ListRecords
             'mime_type' => $file->getMimeType(),
             'file_size' => $file->getSize(),
         ]);
+
+        app(MarketDocumentActivityLogger::class)->log(
+            $document,
+            MarketDocumentActivityEvent::ACTION_UPLOADED,
+            $user,
+            null,
+            ['source' => 'workspace_upload'],
+        );
 
         $this->documentUpload = null;
 
@@ -303,7 +313,7 @@ class ListMarketDocuments extends ListRecords
     }
 
     /**
-     * @return array{activeTab:string,sections:array<int, array<string, mixed>>,folderGroups:array<string, list<array{id:int,name:string,section:string,url:string,isActive:bool,documents:int}>>,activeFolder:?array{id:int,name:string,section:string,url:string,isActive:bool,documents:int}}
+     * @return array{activeTab:string,sections:array<int, array<string, mixed>>,folderGroups:array<string, list<array{id:int,name:string,section:string,url:string,isActive:bool,documents:int}>>,activeFolder:?array{id:int,name:string,section:string,url:string,isActive:bool,documents:int},canViewActivityLog:bool,activityLogUrl:?string}
      */
     public function documentWorkspaceData(): array
     {
@@ -319,6 +329,8 @@ class ListMarketDocuments extends ListRecords
                 'shared' => $this->foldersForSection('shared'),
             ],
             'activeFolder' => $this->activeFolderData(),
+            'canViewActivityLog' => MarketDocumentResource::canViewActivityLog(),
+            'activityLogUrl' => MarketDocumentResource::activityLogUrl(),
         ];
     }
 

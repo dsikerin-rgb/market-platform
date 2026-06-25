@@ -9,6 +9,8 @@
             'sections' => $workspace['sections'],
             'folderGroups' => $workspace['folderGroups'],
             'activeFolder' => $workspace['activeFolder'],
+            'canViewActivityLog' => $workspace['canViewActivityLog'],
+            'activityLogUrl' => $workspace['activityLogUrl'],
         ])
             {{ $this->table }}
         @endcomponent

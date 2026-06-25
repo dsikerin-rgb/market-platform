@@ -35,6 +35,7 @@ use App\Domain\Operations\OperationType;
 use App\Domain\Operations\SpaceReviewDecision;
 use App\Models\Market;
 use App\Models\MarketDocument;
+use App\Models\MarketDocumentActivityEvent;
 use App\Models\MarketDocumentFolder;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceGroupEpisode;
@@ -58,6 +59,7 @@ use App\Services\MarketMap\SpaceReviewActionService;
 use App\Services\Marketplace\MarketplaceContextService;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use App\Support\MarketSpaces\MarketSpaceShapePolicy;
+use App\Support\MarketDocuments\MarketDocumentActivityLogger;
 use App\Support\AdminCapabilities;
 use App\Support\OneC\OneCDailyExchangeWarning;
 use Filament\Facades\Filament;
@@ -309,7 +311,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $originalName = trim((string) $file->getClientOriginalName());
 
-        MarketDocument::query()->create([
+        $document = MarketDocument::query()->create([
             'market_id' => $marketId,
             'owner_user_id' => $ownerUserId,
             'uploaded_by_user_id' => (int) $user->id,
@@ -322,6 +324,14 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             'mime_type' => $file->getMimeType(),
             'file_size' => (int) ($file->getSize() ?: 0),
         ]);
+
+        app(MarketDocumentActivityLogger::class)->log(
+            $document,
+            MarketDocumentActivityEvent::ACTION_UPLOADED,
+            $user,
+            null,
+            ['source' => 'route_upload'],
+        );
 
         return redirect()
             ->to(url('/admin/market-documents?' . http_build_query(array_filter([

@@ -479,6 +479,18 @@
                         </span>
                     </a>
                 @endif
+
+                @if (($canViewActivityLog ?? false) && filled($activityLogUrl ?? null))
+                    <a href="{{ $activityLogUrl }}" class="mdw-node">
+                        <span class="mdw-node__icon">
+                            <x-filament::icon icon="heroicon-o-clock" class="h-5 w-5" />
+                        </span>
+                        <span class="mdw-node__body">
+                            <span class="mdw-node__label">Журнал диска</span>
+                            <span class="mdw-node__meta">Действия с файлами</span>
+                        </span>
+                    </a>
+                @endif
             </nav>
         </aside>
 
