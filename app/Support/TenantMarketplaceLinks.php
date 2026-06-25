@@ -15,7 +15,7 @@ class TenantMarketplaceLinks
             return false;
         }
 
-        if (trim((string) ($tenant->slug ?? '')) === '') {
+        if ((int) ($tenant->id ?? 0) <= 0) {
             return false;
         }
 
@@ -28,8 +28,13 @@ class TenantMarketplaceLinks
             return null;
         }
 
-        $tenantSlug = trim((string) ($tenant->slug ?? ''));
-        if ($tenantSlug === '') {
+        $tenantRouteKey = trim((string) ($tenant->slug ?? ''));
+        if ($tenantRouteKey === '') {
+            $tenantId = (int) ($tenant->id ?? 0);
+            $tenantRouteKey = $tenantId > 0 ? (string) $tenantId : '';
+        }
+
+        if ($tenantRouteKey === '') {
             return null;
         }
 
@@ -38,10 +43,10 @@ class TenantMarketplaceLinks
         if ($marketSlug !== '') {
             return route('marketplace.store.show', [
                 'marketSlug' => $marketSlug,
-                'tenantSlug' => $tenantSlug,
+                'tenantSlug' => $tenantRouteKey,
             ]);
         }
 
-        return route('cabinet.showcase.public', ['tenantSlug' => $tenantSlug]);
+        return route('cabinet.showcase.public', ['tenantSlug' => $tenantRouteKey]);
     }
 }

@@ -32,10 +32,27 @@ class TenantMarketplaceLinksTest extends TestCase
         self::assertFalse(TenantMarketplaceLinks::canOpenStore($user, $tenant));
     }
 
-    public function test_storefront_link_is_hidden_without_tenant_slug(): void
+    public function test_storefront_link_falls_back_to_tenant_id_without_tenant_slug(): void
     {
         $user = $this->user(['market-marketing'], marketId: 1);
         $tenant = $this->tenant(marketId: 1, tenantSlug: '', marketSlug: 'market-a');
+
+        self::assertTrue(TenantMarketplaceLinks::canOpenStore($user, $tenant));
+        self::assertSame(
+            route('marketplace.store.show', ['marketSlug' => 'market-a', 'tenantSlug' => '10']),
+            TenantMarketplaceLinks::storeUrl($tenant),
+        );
+    }
+
+    public function test_storefront_link_is_hidden_without_tenant_identity(): void
+    {
+        $user = $this->user(['market-marketing'], marketId: 1);
+        $tenant = $this->tenant(marketId: 1, tenantSlug: '', marketSlug: 'market-a');
+        $tenant->setRawAttributes([
+            'id' => null,
+            'market_id' => 1,
+            'slug' => '',
+        ], true);
 
         self::assertFalse(TenantMarketplaceLinks::canOpenStore($user, $tenant));
         self::assertNull(TenantMarketplaceLinks::storeUrl($tenant));
