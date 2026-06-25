@@ -9,7 +9,7 @@ use App\Notifications\TaskAssignedNotification;
 use App\Notifications\TaskCommentAddedNotification;
 use App\Notifications\TaskStatusChangedNotification;
 use App\Notifications\TaskUpdatedNotification;
-use App\Support\StaffHierarchy;
+use App\Support\TaskAssignmentRules;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -120,7 +120,11 @@ class Task extends Model
 
         static::saving(function (self $task): void {
             if (auth()->check() && $task->isDirty('assignee_id') && filled($task->assignee_id)) {
-                StaffHierarchy::assertCanAssignTaskToUserIds(auth()->user(), [(int) $task->assignee_id], 'assignee_id');
+                app(TaskAssignmentRules::class)->assertCanAssignWorkToUserIds(
+                    auth()->user(),
+                    [(int) $task->assignee_id],
+                    'assignee_id',
+                );
             }
 
             // completed_at ставим только для completed, иначе очищаем

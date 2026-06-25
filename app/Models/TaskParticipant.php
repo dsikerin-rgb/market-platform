@@ -4,7 +4,7 @@
 namespace App\Models;
 
 use App\Notifications\TaskParticipantAssignedNotification;
-use App\Support\StaffHierarchy;
+use App\Support\TaskAssignmentRules;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,12 +25,24 @@ class TaskParticipant extends Model
     protected static function booted(): void
     {
         static::saving(function (self $participant): void {
-            if (
-                auth()->check()
-                && (string) $participant->role === Task::PARTICIPANT_ROLE_COEXECUTOR
-                && filled($participant->user_id)
-            ) {
-                StaffHierarchy::assertCanAssignTaskToUserIds(auth()->user(), [(int) $participant->user_id], 'coexecutor_user_ids');
+            if (! auth()->check() || blank($participant->user_id)) {
+                return;
+            }
+
+            if (blank($participant->role)) {
+                $participant->role = Task::PARTICIPANT_ROLE_OBSERVER;
+            }
+
+            $rules = app(TaskAssignmentRules::class);
+
+            if ((string) $participant->role === Task::PARTICIPANT_ROLE_COEXECUTOR) {
+                $rules->assertCanAssignWorkToUserIds(auth()->user(), [(int) $participant->user_id], 'coexecutor_user_ids');
+
+                return;
+            }
+
+            if ((string) $participant->role === Task::PARTICIPANT_ROLE_OBSERVER) {
+                $rules->assertCanObserveUserIds(auth()->user(), [(int) $participant->user_id], 'observer_user_ids');
             }
         });
 

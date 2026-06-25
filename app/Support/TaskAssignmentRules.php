@@ -7,6 +7,7 @@ namespace App\Support;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class TaskAssignmentRules
 {
@@ -53,6 +54,34 @@ class TaskAssignmentRules
         }
 
         return $this->sameMarket($actor, $target);
+    }
+
+    /**
+     * @param  list<int>  $targetIds
+     */
+    public function assertCanAssignWorkToUserIds(?User $actor, array $targetIds, string $field): void
+    {
+        $this->assertAllowedUserIds(
+            actor: $actor,
+            targetIds: $targetIds,
+            field: $field,
+            allowed: fn (User $target): bool => $this->canAssignWork($actor, $target),
+            message: 'Этого сотрудника нельзя назначить исполнителем или соисполнителем, потому что он выше в структуре или управляет задачами. Добавьте его в наблюдатели.',
+        );
+    }
+
+    /**
+     * @param  list<int>  $targetIds
+     */
+    public function assertCanObserveUserIds(?User $actor, array $targetIds, string $field): void
+    {
+        $this->assertAllowedUserIds(
+            actor: $actor,
+            targetIds: $targetIds,
+            field: $field,
+            allowed: fn (User $target): bool => $this->canObserve($actor, $target),
+            message: 'Этого сотрудника нельзя добавить наблюдателем для этой задачи.',
+        );
     }
 
     public function applyAssignableScope(Builder $query, ?User $actor): Builder
@@ -204,5 +233,44 @@ class TaskAssignmentRules
         return $level >= self::MIN_ORGANIZATION_LEVEL && $level <= self::MAX_ORGANIZATION_LEVEL
             ? $level
             : null;
+    }
+
+    /**
+     * @param  list<int>  $targetIds
+     */
+    private function assertAllowedUserIds(?User $actor, array $targetIds, string $field, \Closure $allowed, string $message): void
+    {
+        if (! $actor || $targetIds === []) {
+            return;
+        }
+
+        $targetIds = array_values(array_unique(array_filter(
+            array_map(static fn ($id): int => (int) $id, $targetIds),
+            static fn (int $id): bool => $id > 0,
+        )));
+
+        if ($targetIds === []) {
+            return;
+        }
+
+        $targets = User::query()
+            ->whereIn('id', $targetIds)
+            ->get(['id', 'name', 'email', 'market_id', 'tenant_id', 'manager_id', 'organization_level']);
+
+        $blocked = [];
+
+        foreach ($targets as $target) {
+            if (! $allowed($target)) {
+                $blocked[] = (string) ($target->name ?: $target->email ?: ('#'.$target->id));
+            }
+        }
+
+        if ($blocked === []) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            $field => $message.' '.implode(', ', $blocked).'.',
+        ]);
     }
 }
