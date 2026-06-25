@@ -80,6 +80,7 @@ return [
             'status' => 'in_progress',
             'summary' => 'Перевод ключевых экранов и фоновых сценариев на единый market context.',
             'items' => [
+                ['title' => 'Support helpers используют единый context: TestingModeNoticeSettings переведён', 'status' => 'done'],
                 ['title' => 'Filament resources используют единый context', 'status' => 'pending'],
                 ['title' => 'Dashboard/widgets используют единый context: 17 widget + Dashboard page переведены', 'status' => 'in_progress'],
                 ['title' => 'Карта рынка использует тот же market_id', 'status' => 'pending'],

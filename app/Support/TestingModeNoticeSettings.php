@@ -6,7 +6,6 @@ namespace App\Support;
 
 use App\Models\Market;
 use App\Models\User;
-use Filament\Facades\Filament;
 
 final class TestingModeNoticeSettings
 {
@@ -59,17 +58,6 @@ final class TestingModeNoticeSettings
 
     private function selectedMarketIdFromSession(): ?int
     {
-        $value = session('dashboard_market_id');
-
-        if (! filled($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament.{$panelId}.selected_market_id");
-        }
-
-        if (! filled($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 }
