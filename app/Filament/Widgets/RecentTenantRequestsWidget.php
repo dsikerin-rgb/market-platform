@@ -8,6 +8,8 @@ namespace App\Filament\Widgets;
 use App\Filament\Pages\Requests;
 use App\Models\Market;
 use App\Models\TenantRequest;
+use App\Models\User;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
@@ -66,9 +68,7 @@ class RecentTenantRequestsWidget extends BaseTableWidget
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
 
-        $marketId = $isSuperAdmin
-            ? $this->resolveSelectedMarketId()
-            : (int) ($user->market_id ?: 0);
+        $marketId = (int) ($this->resolveMarketIdForWidget($user) ?? 0);
 
         if ($marketId <= 0) {
             $this->emptyStateNote = $isSuperAdmin ? 'Выбери рынок' : 'Нет привязки к рынку';
@@ -184,20 +184,9 @@ class RecentTenantRequestsWidget extends BaseTableWidget
         return $this->emptyStateNote;
     }
 
-    private function resolveSelectedMarketId(): int
+    private function resolveMarketIdForWidget($user): ?int
     {
-        $value = session('dashboard_market_id');
-
-        if (blank($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament_{$panelId}_market_id");
-        }
-
-        if (blank($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        return (int) ($value ?: 0);
+        return app(MarketContext::class)->currentMarketId($user instanceof User ? $user : null);
     }
 
     private function resolveTimezone(?string $marketTimezone): string
