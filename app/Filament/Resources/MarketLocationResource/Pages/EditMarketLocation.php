@@ -3,8 +3,9 @@
 namespace App\Filament\Resources\MarketLocationResource\Pages;
 
 use App\Filament\Resources\MarketLocationResource;
-use Filament\Facades\Filament;
 use App\Filament\Resources\Pages\BaseEditRecord;
+use App\Support\MarketContext;
+use Filament\Facades\Filament;
 
 class EditMarketLocation extends BaseEditRecord
 {
@@ -33,7 +34,7 @@ class EditMarketLocation extends BaseEditRecord
         }
 
         // Super-admin: если выбран рынок через переключатель — фиксируем market_id
-        $selectedMarketId = session('filament.admin.selected_market_id');
+        $selectedMarketId = app(MarketContext::class)->selectedMarketIdFromSession();
         if (filled($selectedMarketId)) {
             $data['market_id'] = (int) $selectedMarketId;
         } else {

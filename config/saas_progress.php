@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Продолжить перевод read-only dashboard widgets на единый MarketContext без включения tenant scope.',
-    'next_step' => 'Выбрать следующий малорисковый widget/list и заменить локальное определение market_id на MarketContext.',
+    'current_focus' => 'Продолжить перевод Filament resources/pages на единый MarketContext без включения tenant scope.',
+    'next_step' => 'Выбрать следующий малорисковый resource/page и заменить локальное определение market_id на MarketContext.',
     'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
         [
@@ -81,7 +81,7 @@ return [
             'summary' => 'Перевод ключевых экранов и фоновых сценариев на единый market context.',
             'items' => [
                 ['title' => 'Support helpers используют единый context: TestingModeNoticeSettings + MarketFeature + TaskCalendarFilters переведены', 'status' => 'done'],
-                ['title' => 'Filament resources используют единый context: ReportResource + ReportRunResource + MarketLocationTypeResource + MarketSpaceTypeResource + TaskCommentResource + TaskWatcherResource + MarketHolidayResource + MarketplaceSlideResource + StaffResource + StaffInvitationResource + StaffInvitationForm + MarketLocationResource + MarketSpaceGroupEpisodeResource переведены', 'status' => 'in_progress'],
+                ['title' => 'Filament resources используют единый context: ReportResource + ReportRunResource + MarketLocationTypeResource + MarketSpaceTypeResource + TaskCommentResource + TaskWatcherResource + MarketHolidayResource + MarketplaceSlideResource + StaffResource + StaffInvitationResource + StaffInvitationForm + MarketLocationResource + MarketSpaceGroupEpisodeResource + CreateMarketLocation + EditMarketLocation переведены', 'status' => 'in_progress'],
                 ['title' => 'Dashboard/widgets используют единый context: 17 widget + Dashboard page переведены', 'status' => 'in_progress'],
                 ['title' => 'Карта рынка использует тот же market_id', 'status' => 'pending'],
                 ['title' => '1C API выставляет context из integration token', 'status' => 'pending'],
