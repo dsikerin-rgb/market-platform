@@ -43,6 +43,7 @@ class CreateStaff extends BaseCreateRecord
 
         if (! StaffResource::canManageStaffAccess($user)) {
             unset($data['roles']);
+            unset($data['manager_id'], $data['organization_level']);
         }
 
         // Рыночные роли всегда создают сотрудника только в своем рынке

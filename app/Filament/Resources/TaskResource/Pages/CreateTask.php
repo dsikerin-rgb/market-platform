@@ -28,6 +28,8 @@ class CreateTask extends BaseCreateRecord
     // Если "Статус" скрыт на create — всё равно гарантируем дефолт
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        TaskResource::validateTaskAssigneeForCurrentUser($data['assignee_id'] ?? null);
+
         if (! array_key_exists('status', $data) || blank($data['status'])) {
             $data['status'] = $this->resolveDefaultStatusValue();
         }

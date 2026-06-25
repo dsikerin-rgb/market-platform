@@ -16,6 +16,7 @@ use App\Models\Task;
 use App\Models\TaskParticipant;
 use App\Models\User;
 use App\Support\Search\LooseSearch;
+use App\Support\StaffHierarchy;
 use App\Support\SystemAgentService;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -500,9 +501,9 @@ $creatorDisplay = $readonlyText(
             Forms\Components\Select::make('observer_user_ids')
                 ->label('Наблюдатели')
                 ->placeholder('Добавить наблюдателей')
-                ->options(fn () => static::getAssignableUserOptions($user))
+                ->options(fn () => static::getObservableUserOptions($user))
                 ->searchable()
-                ->getSearchResultsUsing(fn (string $search): array => static::getAssignableUserOptions($user, $search))
+                ->getSearchResultsUsing(fn (string $search): array => static::getObservableUserOptions($user, $search))
                 ->multiple()
                 ->preload()
                 ->native(false)
@@ -1287,7 +1288,41 @@ $assigneeColumn = TextColumn::make('assignee.name')
             });
         }
 
-        return $query;
+        return StaffHierarchy::limitTaskAssignableUsers($query, $user);
+    }
+
+    public static function limitObservableUsersToMarket(Builder $query, ?User $user): Builder
+    {
+        $query = static::limitUsersToMarket($query, $user);
+
+        return $query
+            ->where(function (Builder $staffOnly): void {
+                $staffOnly
+                    ->whereNull('tenant_id')
+                    ->orWhere('tenant_id', 0);
+            })
+            ->where(function (Builder $systemAgentSafe): void {
+                $systemAgentSafe
+                    ->whereNull('email')
+                    ->orWhereRaw('LOWER(email) NOT LIKE ?', ['%@' . SystemAgentService::EMAIL_DOMAIN]);
+            })
+            ->whereDoesntHave('roles', function (Builder $roleQuery): void {
+                $roleQuery->where('name', 'merchant');
+            });
+    }
+
+    public static function validateTaskAssigneeForCurrentUser(mixed $assigneeId, string $field = 'assignee_id'): void
+    {
+        if (! is_numeric($assigneeId) || (int) $assigneeId <= 0) {
+            return;
+        }
+
+        StaffHierarchy::assertCanAssignTaskToUserIds(auth()->user(), [(int) $assigneeId], $field);
+    }
+
+    public static function validateTaskCoexecutorsForCurrentUser(array $coexecutorIds, string $field = 'coexecutor_user_ids'): void
+    {
+        StaffHierarchy::assertCanAssignTaskToUserIds(auth()->user(), static::normalizeIds($coexecutorIds), $field);
     }
 
     protected static function canAssignMarketAdmins(?User $user): bool
@@ -1346,6 +1381,8 @@ $assigneeColumn = TextColumn::make('assignee.name')
         $coexecutorIds = static::normalizeIds($coexecutorIds);
 
         if ($coexecutorIds) {
+            static::validateTaskCoexecutorsForCurrentUser($coexecutorIds);
+
             $observerIds = array_values(array_diff($observerIds, $coexecutorIds));
         }
 
@@ -1471,6 +1508,25 @@ $assigneeColumn = TextColumn::make('assignee.name')
             ->orderBy('name');
 
         $query = static::limitAssignableUsersToMarket($query, $user);
+
+        $search = trim((string) $search);
+        if ($search !== '') {
+            LooseSearch::applySearchToColumns($query, $search, ['name']);
+        }
+
+        return $query
+            ->limit($limit)
+            ->pluck('name', 'id')
+            ->toArray();
+    }
+
+    protected static function getObservableUserOptions(?User $user, ?string $search = null, int $limit = 50): array
+    {
+        $query = User::query()
+            ->select(['id', 'name'])
+            ->orderBy('name');
+
+        $query = static::limitObservableUsersToMarket($query, $user);
 
         $search = trim((string) $search);
         if ($search !== '') {

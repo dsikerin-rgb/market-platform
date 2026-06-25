@@ -80,6 +80,7 @@ class EditStaff extends BaseEditRecord
 
         if (! StaffResource::canManageStaffAccess($user)) {
             unset($data['roles']);
+            unset($data['manager_id'], $data['organization_level']);
         }
 
         // Market-level roles must not change employee market assignment.

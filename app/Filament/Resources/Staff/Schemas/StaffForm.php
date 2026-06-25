@@ -42,6 +42,32 @@ class StaffForm
             ->visible(fn () => ! ((bool) $user && $user->isSuperAdmin()))
             ->dehydrated(true);
 
+        $staffManagerOptions = function (?User $record = null) use ($user): array {
+            $marketId = $record?->market_id
+                ?: ($user?->isSuperAdmin() ? session('filament.admin.selected_market_id') : $user?->market_id);
+
+            $query = User::query()
+                ->select(['id', 'name'])
+                ->where(function ($staffOnly): void {
+                    $staffOnly
+                        ->whereNull('tenant_id')
+                        ->orWhere('tenant_id', 0);
+                })
+                ->orderBy('name');
+
+            if (filled($marketId)) {
+                $query->where('market_id', (int) $marketId);
+            } elseif (! ($user?->isSuperAdmin() ?? false)) {
+                $query->whereRaw('1 = 0');
+            }
+
+            if ($record?->exists) {
+                $query->whereKeyNot((int) $record->id);
+            }
+
+            return $query->pluck('name', 'id')->toArray();
+        };
+
         $passwordPair = [
             Grid::make(2)->schema([
                 Forms\Components\TextInput::make('password')
@@ -120,6 +146,26 @@ class StaffForm
                         ->nullable()
                         ->placeholder('Администрация, финансы, маркетинг')
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
+
+                    Forms\Components\Select::make('manager_id')
+                        ->label('Руководитель')
+                        ->options(fn (?User $record = null): array => $staffManagerOptions($record))
+                        ->searchable()
+                        ->preload()
+                        ->nullable()
+                        ->native(false)
+                        ->visible(fn (): bool => StaffResource::canManageStaffAccess($user))
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
+
+                    Forms\Components\TextInput::make('organization_level')
+                        ->label('Уровень в структуре')
+                        ->numeric()
+                        ->minValue(1)
+                        ->maxValue(999)
+                        ->nullable()
+                        ->helperText('1 - высший уровень. Большее число - ниже уровень.')
+                        ->visible(fn (): bool => StaffResource::canManageStaffAccess($user))
                         ->columnSpan(['default' => 12, 'lg' => 3]),
 
                     Forms\Components\DatePicker::make('birth_date')
