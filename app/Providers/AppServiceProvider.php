@@ -21,6 +21,7 @@ use App\Observers\IntegrationExchangeObserver;
 use App\Observers\MarketSpaceGroupSharedUseObserver;
 use App\Observers\MarketSpaceTenantBindingSharedUseObserver;
 use App\Policies\TaskPolicy;
+use App\Support\MarketContext;
 use App\Support\Search\LooseSearch;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -42,7 +43,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->singleton(MarketContext::class);
     }
 
     public function boot(): void
