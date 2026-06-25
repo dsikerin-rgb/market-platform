@@ -63,7 +63,7 @@ return [
             'key' => 'market_scope',
             'title' => '2. MarketScope',
             'weight' => 14,
-            'status' => 'in_progress',
+            'status' => 'done',
             'summary' => 'Framework-level scope за feature flag, чтобы изоляция не зависела от ручных фильтров.',
             'items' => [
                 ['title' => 'BelongsToMarket trait', 'status' => 'done'],
