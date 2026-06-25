@@ -117,7 +117,8 @@ class AdminCapabilities
     public static function canViewTenantDirectory(?User $user, ?int $marketId = null): bool
     {
         return self::canViewFullTenantProfile($user, $marketId)
-            || self::canViewTenantServiceContext($user, $marketId);
+            || self::canViewTenantServiceContext($user, $marketId)
+            || self::canViewTenantMarketplaceContacts($user, $marketId);
     }
 
     public static function canViewFullTenantProfile(?User $user, ?int $marketId = null): bool
