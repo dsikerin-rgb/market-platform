@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Filament\Widgets\MarketRevenueYearChartWidget;
+use App\Filament\Widgets\OneCPaymentsSummaryWidget;
 use App\Models\Market;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -14,7 +14,7 @@ use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
-class MarketRevenueYearChartWidgetTest extends TestCase
+class OneCPaymentsSummaryWidgetTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -62,10 +62,10 @@ class MarketRevenueYearChartWidgetTest extends TestCase
 
     private function resolvedMarketId(User $user): ?int
     {
-        $method = new ReflectionMethod(MarketRevenueYearChartWidget::class, 'resolveMarketIdForWidget');
+        $method = new ReflectionMethod(OneCPaymentsSummaryWidget::class, 'resolveMarketIdForWidget');
         $method->setAccessible(true);
 
-        return $method->invoke(new MarketRevenueYearChartWidget, $user);
+        return $method->invoke(new OneCPaymentsSummaryWidget, $user);
     }
 
     private function createMarket(string $name): Market
