@@ -86,6 +86,24 @@ class StaffTable
                     ->searchable()
                     ->toggleable(),
 
+                Tables\Columns\TextColumn::make('department')
+                    ->label('Отдел')
+                    ->placeholder('Не указан')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                Tables\Columns\TextColumn::make('manager.name')
+                    ->label('Руководитель')
+                    ->placeholder('Не указан')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                Tables\Columns\TextColumn::make('organization_level')
+                    ->label('Уровень')
+                    ->placeholder('Не указан')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 Tables\Columns\TextColumn::make('market.name')
                     ->label('Рынок')
                     ->sortable()

@@ -159,18 +159,24 @@ class EditTenant extends BaseEditRecord
                 ->url(fn (): ?string => $this->marketplaceStoreUrl())
                 ->openUrlInNewTab();
         $actions[] = Actions\Action::make('cabinet_impersonate')
-                ->label('Войти в кабинет')
+                ->label(fn (): string => $this->isMarketplaceHelper() ? 'Помочь с витриной' : 'Войти в кабинет')
                 ->icon('heroicon-o-arrow-right-on-rectangle')
                 ->color('gray')
                 ->size('lg')
                 ->outlined()
                 ->extraAttributes([
                     'class' => 'tenant-card-action tenant-card-action--primary',
-                    'data-subtitle' => 'Откроется кабинет арендатора',
+                    'data-subtitle' => $this->isMarketplaceHelper()
+                        ? 'Без финансов и договоров'
+                        : 'Откроется кабинет арендатора',
                 ])
                 ->requiresConfirmation()
-                ->modalHeading('Открыть кабинет арендатора в новой вкладке?')
-                ->modalDescription('Кабинет арендатора откроется в новой вкладке. Текущая страница админки останется открытой.')
+                ->modalHeading(fn (): string => $this->isMarketplaceHelper()
+                    ? 'Открыть помощь с витриной в новой вкладке?'
+                    : 'Открыть кабинет арендатора в новой вкладке?')
+                ->modalDescription(fn (): string => $this->isMarketplaceHelper()
+                    ? 'Откроется кабинет арендатора без финансов, договоров, актов, начислений и задолженности. Будут доступны витрина, товары, общение и торговые места.'
+                    : 'Кабинет арендатора откроется в новой вкладке. Текущая страница админки останется открытой.')
                 ->visible(fn (): bool => $this->canImpersonateCabinet())
                 ->url(fn (): string => route('filament.admin.tenants.cabinet-impersonate', ['tenant' => (int) $this->record->id]))
                 ->openUrlInNewTab();
@@ -227,7 +233,7 @@ class EditTenant extends BaseEditRecord
             return true;
         }
 
-        if (! $user->hasRole('market-admin')) {
+        if (! $user->hasAnyRole(['market-admin', 'market-marketing', 'market-advertising'])) {
             return false;
         }
 
@@ -252,6 +258,15 @@ class EditTenant extends BaseEditRecord
         }
 
         return TenantMarketplaceLinks::storeUrl($this->record);
+    }
+
+    protected function isMarketplaceHelper(): bool
+    {
+        $user = AdminPanelImpersonation::resolveAdminUser(\Filament\Facades\Filament::auth()->user());
+
+        return $user instanceof User
+            && $user->hasAnyRole(['market-marketing', 'market-advertising'])
+            && ! $user->hasAnyRole(['super-admin', 'market-admin', 'market-manager', 'market-owner', 'market-owner-director']);
     }
 
     protected function buildHeaderChatViewData(): array

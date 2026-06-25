@@ -45,6 +45,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         'department',
         'manager_id',
         'organization_level',
+        'organization_role',
         'birth_date',
         'password',
         'market_id',

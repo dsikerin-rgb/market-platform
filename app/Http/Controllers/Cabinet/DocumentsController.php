@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Cabinet;
 
 use App\Http\Controllers\Controller;
 use App\Models\TenantDocument;
+use App\Support\CabinetAssistanceMode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
@@ -13,6 +14,8 @@ class DocumentsController extends Controller
 {
     public function index(Request $request): View
     {
+        abort_unless(CabinetAssistanceMode::canViewFinance($request), 403);
+
         $tenant = $request->user()->tenant;
 
         $documents = TenantDocument::query()
@@ -29,6 +32,8 @@ class DocumentsController extends Controller
 
     public function download(Request $request, int $documentId): StreamedResponse
     {
+        abort_unless(CabinetAssistanceMode::canViewFinance($request), 403);
+
         $tenant = $request->user()->tenant;
 
         $document = TenantDocument::query()

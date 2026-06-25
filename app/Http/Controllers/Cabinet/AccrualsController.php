@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Cabinet;
 
 use App\Http\Controllers\Controller;
 use App\Models\TenantAccrual;
+use App\Support\CabinetAssistanceMode;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -11,6 +12,8 @@ class AccrualsController extends Controller
 {
     public function index(Request $request): View
     {
+        abort_unless(CabinetAssistanceMode::canViewFinance($request), 403);
+
         $tenant = $request->user()->tenant;
         $allowedSpaceIds = $request->user()->allowedTenantSpaceIds();
 
