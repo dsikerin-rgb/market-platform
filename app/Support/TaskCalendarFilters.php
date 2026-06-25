@@ -6,7 +6,6 @@ namespace App\Support;
 
 use App\Models\Task;
 use App\Models\User;
-use Filament\Facades\Filament;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
@@ -182,15 +181,7 @@ class TaskCalendarFilters
     public static function resolveMarketIdForUser(User $user): ?int
     {
         if ($user->isSuperAdmin()) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-            $value = session("filament.{$panelId}.selected_market_id");
-
-            if (! filled($value)) {
-                $value = session('filament.admin.selected_market_id');
-            }
-
-            return filled($value) ? (int) $value : null;
+            return app(MarketContext::class)->selectedMarketIdFromSession();
         }
 
         return $user->market_id ? (int) $user->market_id : null;
