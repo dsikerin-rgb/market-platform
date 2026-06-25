@@ -360,7 +360,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $disk = Storage::disk(MarketDocument::storageDisk());
         abort_unless($disk->exists($path), 404);
 
-        $fileName = str_replace(["\r", "\n", '"'], '', $document->resolvedFileName());
+        $fileName = str_replace(["\r", "\n", '"'], '', $document->displayFileName());
         $fileName = $fileName !== '' ? $fileName : 'document';
         $asciiFileName = preg_replace('/[^A-Za-z0-9._-]+/', '_', $fileName) ?: 'document';
         $mimeType = trim((string) ($document->mime_type ?: $disk->mimeType($path))) ?: 'application/octet-stream';

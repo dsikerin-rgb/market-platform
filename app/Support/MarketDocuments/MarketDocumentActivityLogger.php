@@ -39,7 +39,7 @@ class MarketDocumentActivityLogger
                 'folder_id' => $document->folder_id ? (int) $document->folder_id : null,
                 'action' => $action,
                 'visibility' => filled($document->visibility) ? (string) $document->visibility : null,
-                'document_name' => $document->resolvedFileName(),
+                'document_name' => $document->displayFileName(),
                 'file_path' => filled($document->file_path) ? (string) $document->file_path : null,
                 'ip_address' => request()?->ip(),
                 'user_agent' => str(request()?->userAgent() ?? '')->limit(255, '')->toString(),

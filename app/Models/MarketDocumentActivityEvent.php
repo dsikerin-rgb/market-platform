@@ -12,6 +12,7 @@ class MarketDocumentActivityEvent extends Model
 {
     public const ACTION_UPLOADED = 'uploaded';
     public const ACTION_SHARED = 'shared';
+    public const ACTION_RENAMED = 'renamed';
     public const ACTION_MOVED = 'moved';
     public const ACTION_TRASHED = 'trashed';
     public const ACTION_RESTORED = 'restored';
@@ -90,6 +91,7 @@ class MarketDocumentActivityEvent extends Model
         return [
             self::ACTION_UPLOADED => 'Загрузка',
             self::ACTION_SHARED => 'Доступ открыт',
+            self::ACTION_RENAMED => 'Переименование',
             self::ACTION_MOVED => 'Перенос',
             self::ACTION_TRASHED => 'В корзину',
             self::ACTION_RESTORED => 'Восстановление',

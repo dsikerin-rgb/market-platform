@@ -255,6 +255,28 @@ class MarketDocument extends Model
         return $name !== '' ? $name : 'Документ';
     }
 
+    public function displayFileName(): string
+    {
+        $title = trim((string) $this->title);
+        $fileName = $this->resolvedFileName();
+
+        if ($title === '') {
+            return $fileName;
+        }
+
+        $extension = strtolower((string) pathinfo($fileName, PATHINFO_EXTENSION));
+
+        if ($extension === '') {
+            return $title;
+        }
+
+        $titleExtension = strtolower((string) pathinfo($title, PATHINFO_EXTENSION));
+
+        return $titleExtension === ''
+            ? "{$title}.{$extension}"
+            : $title;
+    }
+
     public function fileSizeLabel(): string
     {
         $bytes = (int) $this->file_size;
@@ -317,7 +339,7 @@ class MarketDocument extends Model
 
         $diskName = self::storageDisk();
         $storage = Storage::disk($diskName);
-        $name = Str::ascii($this->resolvedFileName()) ?: 'document';
+        $name = Str::ascii($this->displayFileName()) ?: 'document';
 
         try {
             if (method_exists($storage, 'temporaryUrl')) {

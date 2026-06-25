@@ -563,10 +563,7 @@ class MarketDocumentResource extends BaseResource
 
     public static function documentTitleLabel(MarketDocument $record): string
     {
-        $title = trim((string) $record->title);
-        $fileName = $record->resolvedFileName();
-
-        return $title !== '' ? $title : $fileName;
+        return $record->displayFileName();
     }
 
     /**
@@ -653,6 +650,19 @@ class MarketDocumentResource extends BaseResource
             ->form(static::shareForm('Напишите короткое сообщение к файлу, если нужно.'))
             ->action(fn (MarketDocument $record, array $data): mixed => static::shareDocument($record, $data));
 
+        $rename = Action::make('rename')
+            ->label('Переименовать')
+            ->icon('heroicon-o-pencil-square')
+            ->color('gray')
+            ->modalHeading('Переименовать файл')
+            ->modalSubmitActionLabel('Сохранить')
+            ->visible(fn (MarketDocument $record): bool => blank($record->archived_at) && static::canManageDocument($record))
+            ->fillForm(fn (MarketDocument $record): array => [
+                'title' => static::documentTitleLabel($record),
+            ])
+            ->form(static::renameForm())
+            ->action(fn (MarketDocument $record, array $data): mixed => static::renameDocument($record, $data));
+
         $move = Action::make('move')
             ->label('Перенести')
             ->icon('heroicon-o-folder-arrow-down')
@@ -692,7 +702,7 @@ class MarketDocumentResource extends BaseResource
             ->visible(fn (MarketDocument $record): bool => filled($record->archived_at) && static::canManageDocument($record))
             ->action(fn (MarketDocument $record): mixed => static::destroyDocument($record));
 
-        $actions[] = ActionGroup::make([$open, $download, $share, $move, $delete, $restore, $destroy])
+        $actions[] = ActionGroup::make([$open, $download, $share, $rename, $move, $delete, $restore, $destroy])
             ->label('Действия')
             ->icon('heroicon-o-ellipsis-vertical')
             ->iconButton()
@@ -811,6 +821,19 @@ class MarketDocumentResource extends BaseResource
                 ->rows(3)
                 ->maxLength(1000)
                 ->placeholder($messagePlaceholder),
+        ];
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    protected static function renameForm(): array
+    {
+        return [
+            Forms\Components\TextInput::make('title')
+                ->label('Название')
+                ->required()
+                ->maxLength(255),
         ];
     }
 
@@ -941,6 +964,56 @@ class MarketDocumentResource extends BaseResource
     /**
      * @param array<string, mixed> $data
      */
+    protected static function renameDocument(MarketDocument $record, array $data): mixed
+    {
+        if (! static::canManageDocument($record)) {
+            throw ValidationException::withMessages([
+                'title' => 'У вас нет прав на переименование этого файла.',
+            ]);
+        }
+
+        $title = trim((string) ($data['title'] ?? ''));
+
+        if ($title === '') {
+            throw ValidationException::withMessages([
+                'title' => 'Укажите название файла.',
+            ]);
+        }
+
+        if (str_contains($title, '/') || str_contains($title, '\\')) {
+            throw ValidationException::withMessages([
+                'title' => 'Название не должно содержать символы / или \\.',
+            ]);
+        }
+
+        $oldName = $record->displayFileName();
+
+        $record->forceFill([
+            'title' => $title,
+        ])->save();
+
+        app(MarketDocumentActivityLogger::class)->log(
+            $record,
+            MarketDocumentActivityEvent::ACTION_RENAMED,
+            Filament::auth()->user(),
+            null,
+            [
+                'old_name' => $oldName,
+                'new_name' => $record->displayFileName(),
+            ],
+        );
+
+        \Filament\Notifications\Notification::make()
+            ->title('Файл переименован')
+            ->success()
+            ->send();
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
     protected static function moveDocument(MarketDocument $record, array $data): mixed
     {
         return static::moveDocuments(new EloquentCollection([$record]), $data);
@@ -996,7 +1069,7 @@ class MarketDocumentResource extends BaseResource
                     continue;
                 }
 
-                $archiveName = static::uniqueArchiveFileName($record->resolvedFileName(), $usedNames);
+                $archiveName = static::uniqueArchiveFileName($record->displayFileName(), $usedNames);
                 $absolutePath = method_exists($disk, 'path') ? $disk->path($path) : null;
 
                 if ($absolutePath && is_file($absolutePath)) {
@@ -1350,7 +1423,7 @@ class MarketDocumentResource extends BaseResource
             app(StaffConversationService::class)->startConversation(
                 $author,
                 $recipient,
-                'Файл: ' . $record->resolvedFileName(),
+                'Файл: ' . $record->displayFileName(),
                 $body,
                 [static::shareAttachmentPayload($record)],
             );
@@ -1484,7 +1557,7 @@ class MarketDocumentResource extends BaseResource
     protected static function shareMessageText(MarketDocument $record, User $author, string $message): string
     {
         $authorName = trim((string) ($author->name ?: $author->email));
-        $text = ($authorName !== '' ? $authorName : 'Сотрудник') . ' поделился с вами файлом: ' . $record->resolvedFileName();
+        $text = ($authorName !== '' ? $authorName : 'Сотрудник') . ' поделился с вами файлом: ' . $record->displayFileName();
 
         if ($message !== '') {
             $text .= PHP_EOL . $message;
@@ -1502,7 +1575,7 @@ class MarketDocumentResource extends BaseResource
         $sender = $authorName !== '' ? $authorName : 'Сотрудник';
         $fileList = $records
             ->take(8)
-            ->map(fn (MarketDocument $record): string => '- ' . $record->resolvedFileName())
+            ->map(fn (MarketDocument $record): string => '- ' . $record->displayFileName())
             ->implode(PHP_EOL);
 
         $text = $sender . ' поделился с вами файлами:' . PHP_EOL . $fileList;
@@ -1528,7 +1601,7 @@ class MarketDocumentResource extends BaseResource
 
         return [
             'path' => (string) $record->file_path,
-            'name' => $record->resolvedFileName(),
+            'name' => $record->displayFileName(),
             'mime' => $mime !== '' ? $mime : 'application/octet-stream',
             'size' => (int) ($record->file_size ?? 0),
             'is_image' => str_starts_with($mime, 'image/'),
