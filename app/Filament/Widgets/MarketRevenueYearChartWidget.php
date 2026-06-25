@@ -6,6 +6,8 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
+use App\Models\User;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
@@ -92,24 +94,7 @@ class MarketRevenueYearChartWidget extends ChartWidget
 
     private function resolveMarketIdForWidget($user): ?int
     {
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-
-        if (! $isSuperAdmin) {
-            return $user->market_id ? (int) $user->market_id : null;
-        }
-
-        $value = session('dashboard_market_id');
-
-        if (blank($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament_{$panelId}_market_id");
-        }
-
-        if (blank($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->currentMarketId($user instanceof User ? $user : null);
     }
 
     private function resolveTimezone(?string $marketTimezone): string
