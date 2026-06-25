@@ -47,6 +47,7 @@ class MarketAttentionWidgetLinksTest extends TestCase
         ]);
 
         $this->actingAs($user);
+        session(['selected_market_id' => (int) $market->id]);
 
         Livewire::test(MarketAttentionWidget::class)
             ->assertSee('recent_errors=1', false)
@@ -96,6 +97,7 @@ class MarketAttentionWidgetLinksTest extends TestCase
         ]);
 
         $this->actingAs($user);
+        session(['selected_market_id' => (int) $market->id]);
 
         Livewire::test(MarketAttentionWidget::class)
             ->assertSee('with_red_debt=1', false)

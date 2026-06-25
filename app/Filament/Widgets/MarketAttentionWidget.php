@@ -19,6 +19,7 @@ use App\Models\TenantRequest;
 use App\Models\User;
 use App\Notifications\TicketChatNotification;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
@@ -296,30 +297,7 @@ class MarketAttentionWidget extends Widget
     {
         $user = Filament::auth()->user();
 
-        if (! $user) {
-            return 0;
-        }
-
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-
-        if (! $isSuperAdmin) {
-            return (int) ($user->market_id ?: 0);
-        }
-
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $value =
-            session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id');
-
-        if (filled($value)) {
-            return (int) $value;
-        }
-
-        $fallback = Market::query()->orderBy('name')->value('id');
-
-        return $fallback ? (int) $fallback : 0;
+        return (int) (app(MarketContext::class)->currentMarketId($user instanceof User ? $user : null) ?? 0);
     }
 
     private function resolveTimezone(?string $marketTimezone): string
