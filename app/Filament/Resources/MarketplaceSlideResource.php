@@ -6,6 +6,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MarketplaceSlideResource\Pages;
 use App\Models\MarketplaceSlide;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
@@ -36,18 +37,7 @@ class MarketplaceSlideResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $value = session('dashboard_market_id');
-
-        if (! filled($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament.{$panelId}.selected_market_id");
-        }
-
-        if (! filled($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     public static function shouldRegisterNavigation(): bool

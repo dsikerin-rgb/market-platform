@@ -11,6 +11,7 @@ use App\Models\MarketHolidayTaskLink;
 use App\Models\Task;
 use App\Models\User;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
@@ -623,14 +624,7 @@ class MarketHolidayResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $value = session("filament.{$panelId}.selected_market_id");
-
-        if (! filled($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     public static function scopeUpcoming(Builder $query): Builder
