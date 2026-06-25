@@ -115,6 +115,7 @@ class TenantResource extends BaseResource
     {
         $user = Filament::auth()->user();
         $canViewFullTenantProfile = AdminCapabilities::canViewFullTenantProfile($user);
+        $canViewTenantMarketplaceContacts = AdminCapabilities::canViewTenantMarketplaceContacts($user);
 
         $tabs = Tabs::make('tenant_tabs')
             ->columnSpanFull();
@@ -344,7 +345,7 @@ class TenantResource extends BaseResource
                             ->visible(fn (): bool => $canViewFullTenantProfile),
 
                         Section::make('Сотрудники по торговым местам')
-                            ->visible(fn (): bool => $canViewFullTenantProfile)
+                            ->visible(fn (): bool => $canViewFullTenantProfile || $canViewTenantMarketplaceContacts)
                             ->description('Здесь видно, какие дополнительные сотрудники уже назначены на конкретные торговые места. Основной аккаунт арендатора в этом обзоре не показывается.')
                             ->schema([
                                 Forms\Components\Placeholder::make('contacts_staff_by_spaces')

@@ -23,7 +23,10 @@ class MarketplaceMarketingAccessTest extends TestCase
 
         self::assertTrue(AdminCapabilities::canManageMarketplaceContent($user, 1));
         self::assertTrue(AdminCapabilities::canViewMarketplaceOrders($user, 1));
+        self::assertTrue(AdminCapabilities::canViewTenantDirectory($user, 1));
         self::assertTrue(AdminCapabilities::canViewTenantMarketplaceContacts($user, 1));
+        self::assertFalse(AdminCapabilities::canViewTenantDirectory($user, 2));
+        self::assertFalse(AdminCapabilities::canViewFullTenantProfile($user, 1));
         self::assertFalse(AdminCapabilities::canViewFinance($user, 1));
         self::assertFalse(AdminCapabilities::canViewTenantContracts($user, 1));
 
@@ -42,6 +45,8 @@ class MarketplaceMarketingAccessTest extends TestCase
         $otherMarketChat = $this->chat(marketId: 2);
         $policy = new MarketplaceChatPolicy();
 
+        self::assertTrue(AdminCapabilities::canViewTenantDirectory($user, 1));
+        self::assertFalse(AdminCapabilities::canViewFullTenantProfile($user, 1));
         self::assertTrue($policy->view($user, $chat));
         self::assertTrue($policy->reply($user, $chat));
         self::assertTrue($policy->updateStatus($user, $chat));
