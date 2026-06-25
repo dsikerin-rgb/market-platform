@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Начать MarketContext локально в отдельной ветке/worktree без global scope и без prod-изменений.',
-    'next_step' => 'Старт первого безопасного этапа: MarketContext + flags disabled локально, затем тесты и staging.',
+    'current_focus' => 'Начать MarketScope локально за feature flag без подключения global scope к prod-поведению.',
+    'next_step' => 'Подготовить BelongsToMarket trait и MarketScope в disabled/shadow режиме, затем тесты enabled/disabled.',
     'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
         [
@@ -26,7 +26,7 @@ return [
                 ['title' => 'Создан технический SaaS-план', 'status' => 'done'],
                 ['title' => 'Создан план привлечения клиентов', 'status' => 'done'],
                 ['title' => 'Создан мастер-план с аварийным восстановлением', 'status' => 'done'],
-                ['title' => 'Отдельная ветка/worktree для SaaS-работ', 'status' => 'pending'],
+                ['title' => 'Отдельная ветка/worktree для SaaS-работ', 'status' => 'done'],
             ],
         ],
         [
@@ -48,15 +48,15 @@ return [
             'key' => 'market_context',
             'title' => '1. MarketContext',
             'weight' => 14,
-            'status' => 'pending',
+            'status' => 'done',
             'summary' => 'Единый источник текущего market_id без включения global scope.',
             'items' => [
-                ['title' => 'Safe flags в .env.example', 'status' => 'pending'],
-                ['title' => 'config для market context', 'status' => 'pending'],
-                ['title' => 'Сервис MarketContext', 'status' => 'pending'],
-                ['title' => 'Поддержка super-admin выбранного рынка', 'status' => 'pending'],
-                ['title' => 'Поддержка withMarket для jobs/API', 'status' => 'pending'],
-                ['title' => 'Тесты MarketContext', 'status' => 'pending'],
+                ['title' => 'Safe flags в .env.example', 'status' => 'done'],
+                ['title' => 'config для market context', 'status' => 'done'],
+                ['title' => 'Сервис MarketContext', 'status' => 'done'],
+                ['title' => 'Поддержка super-admin выбранного рынка', 'status' => 'done'],
+                ['title' => 'Поддержка withMarket для jobs/API', 'status' => 'done'],
+                ['title' => 'Тесты MarketContext', 'status' => 'done'],
             ],
         ],
         [
