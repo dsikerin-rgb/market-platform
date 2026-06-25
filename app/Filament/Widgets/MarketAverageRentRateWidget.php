@@ -6,6 +6,8 @@ declare(strict_types=1);
 namespace App\Filament\Widgets;
 
 use App\Filament\Resources\MarketSpaceResource;
+use App\Models\User;
+use App\Support\MarketContext;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use Filament\Facades\Filament;
 use Filament\Widgets\StatsOverviewWidget;
@@ -71,21 +73,7 @@ class MarketAverageRentRateWidget extends StatsOverviewWidget
 
     private function resolveMarketIdForWidget($user): ?int
     {
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-
-        if (! $isSuperAdmin) {
-            return $user->market_id ? (int) $user->market_id : null;
-        }
-
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        $value =
-            session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id');
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->currentMarketId($user instanceof User ? $user : null);
     }
 
     private function buildEmptyStat(string $description, ?string $url = null): Stat
