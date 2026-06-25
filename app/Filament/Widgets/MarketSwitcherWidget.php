@@ -7,6 +7,7 @@ namespace App\Filament\Widgets;
 
 use App\Models\Market;
 use App\Models\ContractDebt;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
@@ -38,21 +39,7 @@ class MarketSwitcherWidget extends Widget
     public function mount(): void
     {
         // Единый ключ выбора рынка для всего дашборда
-        $value = session('dashboard_market_id');
-
-        // fallback-ключи (на случай старых версий/кэшей)
-        if (blank($value)) {
-            $value = session($this->sessionKey());
-        }
-
-        if (blank($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament_{$panelId}_market_id");
-        }
-
-        if (blank($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
+        $value = $this->resolveSelectedMarketIdFromContext();
 
         if (filled($value)) {
             $this->selectedMarketId = (int) $value;
@@ -140,6 +127,11 @@ class MarketSwitcherWidget extends Widget
         $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
 
         return "filament.{$panelId}.selected_market_id";
+    }
+
+    private function resolveSelectedMarketIdFromContext(): ?int
+    {
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     private function resolveDefaultMarketId(): ?int
