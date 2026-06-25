@@ -6,7 +6,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\Staff\StaffResource;
 use App\Filament\Resources\StaffInvitationResource;
-use Filament\Facades\Filament;
+use App\Support\MarketContext;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -50,19 +50,6 @@ class StaffWorkspaceWidget extends Widget
 
     private function resolveMarketId(): int
     {
-        $user = Filament::auth()->user();
-
-        if (! $user) {
-            return 0;
-        }
-
-        if (! $user->isSuperAdmin()) {
-            return (int) ($user->market_id ?: 0);
-        }
-
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $value = session("filament_{$panelId}_market_id");
-
-        return filled($value) ? (int) $value : 0;
+        return (int) (app(MarketContext::class)->currentMarketId() ?? 0);
     }
 }
