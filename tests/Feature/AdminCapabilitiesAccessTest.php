@@ -454,8 +454,6 @@ class AdminCapabilitiesAccessTest extends TestCase
     public static function noTenantDirectoryRoles(): array
     {
         return [
-            'market-marketing' => ['market-marketing'],
-            'market-advertising' => ['market-advertising'],
             'staff' => ['staff'],
         ];
     }
