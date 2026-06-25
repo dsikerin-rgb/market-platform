@@ -21,6 +21,7 @@ use App\Filament\Pages\Requests;
 use App\Filament\Pages\SettingsHub;
 use App\Filament\Pages\UserNotificationSettings;
 use App\Filament\Pages\UserProfile;
+use App\Filament\Pages\WorkProgress;
 use App\Filament\Widgets\ExpiringContractsWidget;
 use App\Filament\Widgets\MarketOverviewStatsWidget;
 use App\Filament\Widgets\MarketSpacesStatusChartWidget;
@@ -159,6 +160,7 @@ class AdminPanelProvider extends PanelProvider
                 Requests::class,
                 MailDiagnostics::class,
                 OpsDiagnostics::class,
+                WorkProgress::class,
                 UserNotificationSettings::class,
             ])
 
