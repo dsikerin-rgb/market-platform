@@ -574,6 +574,37 @@ class MarketDocumentResource extends BaseResource
         return static::documentTypeMeta(static::documentExtension($record), (string) $record->mime_type);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    protected static function documentPropertiesViewData(MarketDocument $record): array
+    {
+        $record->loadMissing([
+            'folder.parent',
+            'market:id,name',
+            'owner:id,name,email',
+            'uploadedBy:id,name,email',
+        ]);
+
+        $activityEvents = collect();
+
+        if (static::canViewActivityLog() && DbSchema::hasTable('market_document_activity_events')) {
+            $activityEvents = $record->activityEvents()
+                ->with('actor:id,name,email')
+                ->latest('id')
+                ->limit(5)
+                ->get();
+        }
+
+        return [
+            'record' => $record,
+            'typeMeta' => static::documentTypeMetaForRecord($record),
+            'activityEvents' => $activityEvents,
+            'canViewActivityLog' => static::canViewActivityLog(),
+            'activityLogUrl' => static::activityLogUrl(),
+        ];
+    }
+
     protected static function documentExtension(MarketDocument $record): string
     {
         $name = trim($record->resolvedFileName());
@@ -650,6 +681,19 @@ class MarketDocumentResource extends BaseResource
             ->form(static::shareForm('Напишите короткое сообщение к файлу, если нужно.'))
             ->action(fn (MarketDocument $record, array $data): mixed => static::shareDocument($record, $data));
 
+        $properties = Action::make('properties')
+            ->label('Свойства')
+            ->icon('heroicon-o-information-circle')
+            ->color('gray')
+            ->modalHeading('Свойства файла')
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Закрыть')
+            ->modalWidth('lg')
+            ->modalContent(fn (MarketDocument $record) => view(
+                'filament.resources.market-documents.actions.properties',
+                static::documentPropertiesViewData($record),
+            ));
+
         $rename = Action::make('rename')
             ->label('Переименовать')
             ->icon('heroicon-o-pencil-square')
@@ -702,7 +746,7 @@ class MarketDocumentResource extends BaseResource
             ->visible(fn (MarketDocument $record): bool => filled($record->archived_at) && static::canManageDocument($record))
             ->action(fn (MarketDocument $record): mixed => static::destroyDocument($record));
 
-        $actions[] = ActionGroup::make([$open, $download, $share, $rename, $move, $delete, $restore, $destroy])
+        $actions[] = ActionGroup::make([$open, $download, $share, $properties, $rename, $move, $delete, $restore, $destroy])
             ->label('Действия')
             ->icon('heroicon-o-ellipsis-vertical')
             ->iconButton()

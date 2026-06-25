@@ -162,6 +162,7 @@
             font-size: 14px;
             font-weight: 800;
             line-height: 1;
+            text-decoration: none;
             cursor: pointer;
         }
 
@@ -174,6 +175,11 @@
             border-color: #0ea5e9;
             color: #ffffff;
             background: #0ea5e9;
+        }
+
+        .mdw-action-button.is-secondary {
+            color: #475569;
+            font-weight: 750;
         }
 
         .mdw-hidden-file-input {
@@ -551,17 +557,6 @@
                     </a>
                 @endif
 
-                @if (($canViewActivityLog ?? false) && filled($activityLogUrl ?? null))
-                    <a href="{{ $activityLogUrl }}" class="mdw-node">
-                        <span class="mdw-node__icon">
-                            <x-filament::icon icon="heroicon-o-clock" class="h-5 w-5" />
-                        </span>
-                        <span class="mdw-node__body">
-                            <span class="mdw-node__label">Журнал диска</span>
-                            <span class="mdw-node__meta">Действия с файлами</span>
-                        </span>
-                    </a>
-                @endif
             </nav>
         </aside>
 
@@ -592,6 +587,13 @@
                             onchange="if (this.files && this.files.length > 0) this.form.submit()"
                         />
                     </form>
+
+                    @if (($canViewActivityLog ?? false) && filled($activityLogUrl ?? null))
+                        <a href="{{ $activityLogUrl }}" class="mdw-action-button is-secondary">
+                            <x-filament::icon icon="heroicon-o-clock" class="h-4 w-4" />
+                            <span>Журнал действий</span>
+                        </a>
+                    @endif
                 </div>
             </header>
             @endif
