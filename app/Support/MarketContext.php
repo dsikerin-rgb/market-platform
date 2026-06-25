@@ -126,6 +126,21 @@ final class MarketContext
         return null;
     }
 
+    public function syncSelectedMarketIdInSession(?int $marketId, ?string $panelId = null): void
+    {
+        $keys = $this->sessionKeys($panelId);
+
+        if ($marketId === null || $marketId <= 0) {
+            session()->forget($keys);
+
+            return;
+        }
+
+        foreach ($keys as $key) {
+            session()->put($key, $marketId);
+        }
+    }
+
     public function panelId(): string
     {
         try {

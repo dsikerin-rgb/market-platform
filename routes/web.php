@@ -61,6 +61,7 @@ use App\Services\TenantContracts\ContractDocumentClassifier;
 use App\Support\MarketSpaces\MarketSpaceShapePolicy;
 use App\Support\MarketDocuments\MarketDocumentActivityLogger;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use App\Support\OneC\OneCDailyExchangeWarning;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate as FilamentAuthenticate;
@@ -802,11 +803,10 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $marketId = $validated['market_id'] ?? null;
 
-        if (blank($marketId)) {
-            $request->session()->forget('filament.admin.selected_market_id');
-        } else {
-            $request->session()->put('filament.admin.selected_market_id', (int) $marketId);
-        }
+        app(MarketContext::class)->syncSelectedMarketIdInSession(
+            blank($marketId) ? null : (int) $marketId,
+            'admin',
+        );
 
         return back();
     })->name('filament.admin.switch-market');
