@@ -11,7 +11,9 @@ use App\Filament\Resources\TenantResource;
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\ContractDebt;
 use App\Models\Market;
+use App\Models\User;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -339,22 +341,7 @@ class MarketOverviewStatsWidget extends StatsOverviewWidget
 
     private function resolveMarketIdForWidget($user): int
     {
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-
-        if (! $isSuperAdmin) {
-            return (int) ($user->market_id ?: 0);
-        }
-
-        $value = session('dashboard_market_id');
-
-        if (blank($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament.{$panelId}.selected_market_id")
-                ?? session("filament_{$panelId}_market_id")
-                ?? session('filament.admin.selected_market_id');
-        }
-
-        return (int) ($value ?: 0);
+        return (int) (app(MarketContext::class)->currentMarketId($user instanceof User ? $user : null) ?? 0);
     }
 
     protected function resolveLatestDebtMonth(int $marketId): ?string
