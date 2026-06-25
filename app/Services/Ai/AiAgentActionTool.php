@@ -21,6 +21,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Support\Search\LooseSearch;
 use App\Support\StaffConversationService;
+use App\Support\TaskAssignmentRules;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -227,6 +228,10 @@ PROMPT;
         if ($hasExplicitAssignee) {
             if (! $assignee) {
                 return $this->failure('Не удалось найти сотрудника для назначения.');
+            }
+
+            if (! app(TaskAssignmentRules::class)->canAssignWork($actor, $assignee)) {
+                return $this->failure('Этого сотрудника нельзя назначить исполнителем. Можно добавить его наблюдателем, чтобы он видел задачу и был в курсе.');
             }
         } elseif ($isReminder) {
             $assignee = $actor;

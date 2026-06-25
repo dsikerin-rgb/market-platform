@@ -8,6 +8,7 @@ use App\Models\MarketSpace;
 use App\Models\TenantAccrual;
 use App\Models\TenantDocument;
 use App\Models\Ticket;
+use App\Support\CabinetAssistanceMode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -20,28 +21,29 @@ class DashboardController extends Controller
         $tenant = $request->user()->tenant;
         $allowedSpaceIds = $request->user()->allowedTenantSpaceIds();
         $ticketHasSpaceColumn = $this->supportsTicketSpaceColumn();
+        $canViewFinance = CabinetAssistanceMode::canViewFinance($request);
 
-        $accrualsQuery = TenantAccrual::query()
+        $accrualsQuery = $canViewFinance ? TenantAccrual::query()
             ->where('tenant_id', $tenant->id)
             ->when($tenant->market_id, fn ($query) => $query->where('market_id', $tenant->market_id))
             ->when($allowedSpaceIds !== [], fn ($query) => $query->where(function ($q) use ($allowedSpaceIds): void {
                 $q->whereNull('market_space_id')->orWhereIn('market_space_id', $allowedSpaceIds);
-            }));
+            })) : null;
 
-        $totalDebt = (float) $accrualsQuery->sum('total_with_vat');
+        $totalDebt = $accrualsQuery ? (float) $accrualsQuery->sum('total_with_vat') : 0.0;
 
-        $latestPeriod = (string) TenantAccrual::query()
+        $latestPeriod = $canViewFinance ? (string) TenantAccrual::query()
             ->where('tenant_id', $tenant->id)
             ->when($tenant->market_id, fn ($query) => $query->where('market_id', $tenant->market_id))
             ->when($allowedSpaceIds !== [], fn ($query) => $query->where(function ($q) use ($allowedSpaceIds): void {
                 $q->whereNull('market_space_id')->orWhereIn('market_space_id', $allowedSpaceIds);
             }))
             ->orderByDesc('period')
-            ->value('period');
+            ->value('period') : '';
 
         $monthAccruals = 0.0;
 
-        if ($latestPeriod !== '') {
+        if ($canViewFinance && $latestPeriod !== '') {
             $monthAccruals = (float) TenantAccrual::query()
                 ->where('tenant_id', $tenant->id)
                 ->when($tenant->market_id, fn ($query) => $query->where('market_id', $tenant->market_id))
@@ -71,10 +73,10 @@ class DashboardController extends Controller
             ->when($allowedSpaceIds !== [], fn ($query) => $query->whereIn('id', $allowedSpaceIds))
             ->count();
 
-        $securityDepositAmount = ContractDebt::securityDepositAmountForTenant(
+        $securityDepositAmount = $canViewFinance ? ContractDebt::securityDepositAmountForTenant(
             (int) $tenant->market_id,
             (int) $tenant->id,
-        );
+        ) : 0.0;
 
         return view('cabinet.dashboard', [
             'tenant' => $tenant,
@@ -85,6 +87,7 @@ class DashboardController extends Controller
             'openRequestsCount' => $openRequestsCount,
             'documentsCount' => $documentsCount,
             'spacesCount' => $spacesCount,
+            'canViewFinance' => $canViewFinance,
         ]);
     }
 

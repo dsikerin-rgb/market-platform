@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Cabinet\TenantImpersonationService;
 use App\Support\AdminPanelImpersonation;
+use App\Support\CabinetAssistanceMode;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -76,6 +77,7 @@ class CabinetImpersonationController extends Controller
             'tenant_id' => (int) $tenant->id,
             'tenant_name' => (string) ($tenant->display_name ?? $tenant->name ?? ''),
             'audit_id' => $auditId,
+            'access_mode' => (string) ($payload['access_mode'] ?? CabinetAssistanceMode::MODE_FULL),
             'admin_return_url' => (string) ($payload['admin_return_url'] ?? url('/admin/tenants/' . (int) $tenant->id . '/edit')),
         ]);
 

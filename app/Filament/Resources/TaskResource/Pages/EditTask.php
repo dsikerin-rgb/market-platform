@@ -8,7 +8,9 @@ namespace App\Filament\Resources\TaskResource\Pages;
 
 use App\Filament\Resources\TaskResource;
 use App\Models\Task;
+use App\Models\User;
 use App\Services\TaskHolidayLinkService;
+use App\Support\TaskAssignmentRules;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -240,9 +242,7 @@ class EditTask extends BaseEditRecord
             return;
         }
 
-        if (array_key_exists('assignee_id', $data)) {
-            TaskResource::validateTaskAssigneeForCurrentUser($data['assignee_id'] ?? null);
-        }
+        $data = $this->filterInvalidAssigneeData($data);
 
         $task->forceFill($data)->save();
 
@@ -777,6 +777,7 @@ class EditTask extends BaseEditRecord
         }
 
         $data = $this->filterDisallowedFormData($data, $record);
+        $data = $this->filterInvalidAssigneeData($data);
 
         $record->fill($data);
         $record->save();
@@ -814,6 +815,30 @@ class EditTask extends BaseEditRecord
         if (array_key_exists('assignee_id', $data)) {
             TaskResource::validateTaskAssigneeForCurrentUser($data['assignee_id'] ?? null);
         }
+
+        return $data;
+    }
+
+    private function filterInvalidAssigneeData(array $data): array
+    {
+        if (! array_key_exists('assignee_id', $data) || blank($data['assignee_id'])) {
+            return $data;
+        }
+
+        $actor = auth()->user();
+        $target = User::query()->find((int) $data['assignee_id']);
+
+        if (app(TaskAssignmentRules::class)->canAssignWork($actor, $target)) {
+            return $data;
+        }
+
+        unset($data['assignee_id']);
+
+        Notification::make()
+            ->title('Этого сотрудника нельзя назначить исполнителем')
+            ->body('Его можно добавить наблюдателем, чтобы он видел задачу и был в курсе.')
+            ->warning()
+            ->send();
 
         return $data;
     }

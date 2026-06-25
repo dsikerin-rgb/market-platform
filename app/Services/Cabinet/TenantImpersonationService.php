@@ -7,6 +7,7 @@ namespace App\Services\Cabinet;
 use App\Models\CabinetImpersonationAudit;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\CabinetAssistanceMode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -21,6 +22,11 @@ class TenantImpersonationService
 
     private const CACHE_PREFIX = 'cabinet:impersonation:token:';
 
+    private const MARKETPLACE_HELP_ROLES = [
+        'market-marketing',
+        'market-advertising',
+    ];
+
     private ?bool $hasAuditTable = null;
 
     public function canIssue(User $impersonator, Tenant $tenant): bool
@@ -29,7 +35,7 @@ class TenantImpersonationService
             return true;
         }
 
-        if (! $impersonator->hasRole('market-admin')) {
+        if (! $impersonator->hasAnyRole(['market-admin', ...self::MARKETPLACE_HELP_ROLES])) {
             return false;
         }
 
@@ -38,7 +44,7 @@ class TenantImpersonationService
 
     public function isCrossMarketDenied(User $impersonator, Tenant $tenant): bool
     {
-        return $impersonator->hasRole('market-admin')
+        return $impersonator->hasAnyRole(['market-admin', ...self::MARKETPLACE_HELP_ROLES])
             && (int) ($impersonator->market_id ?? 0) !== (int) $tenant->market_id;
     }
 
@@ -77,6 +83,7 @@ class TenantImpersonationService
             'tenant_id' => (int) $tenant->id,
             'cabinet_user_id' => (int) $cabinetUser->id,
             'market_id' => (int) $tenant->market_id,
+            'access_mode' => $this->accessModeFor($impersonator),
             'admin_return_url' => url('/admin/tenants/' . (int) $tenant->id . '/edit'),
         ];
 
@@ -185,6 +192,17 @@ class TenantImpersonationService
         $value = trim((string) $userAgent);
 
         return $value === '' ? null : mb_substr($value, 0, 1000);
+    }
+
+    private function accessModeFor(User $impersonator): string
+    {
+        if ($impersonator->hasAnyRole(self::MARKETPLACE_HELP_ROLES)
+            && ! $impersonator->hasAnyRole(['super-admin', 'market-admin', 'market-manager', 'market-owner', 'market-owner-director'])
+        ) {
+            return CabinetAssistanceMode::MODE_MARKETPLACE_HELP;
+        }
+
+        return CabinetAssistanceMode::MODE_FULL;
     }
 
     /**

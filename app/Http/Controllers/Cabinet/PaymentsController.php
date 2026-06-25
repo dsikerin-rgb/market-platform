@@ -7,6 +7,7 @@ use App\Models\TenantAccrual;
 use App\Models\TenantPayment;
 use App\Models\TenantSettlementBalance;
 use App\Services\Finance\SettlementBalancePresentation;
+use App\Support\CabinetAssistanceMode;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -17,6 +18,8 @@ class PaymentsController extends Controller
 {
     public function __invoke(Request $request): View
     {
+        abort_unless(CabinetAssistanceMode::canViewFinance($request), 403);
+
         $user = $request->user();
         $tenant = $user->tenant;
         $allowedSpaceIds = $this->financeAllowedSpaceIds($user);
