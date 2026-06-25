@@ -14,6 +14,7 @@ use App\Models\Market;
 use App\Models\MarketSpace;
 use App\Services\MarketSpaces\MarketSpaceDuplicateSignalService;
 use App\Support\AdminPanelImpersonation;
+use App\Support\MarketContext;
 use App\Services\PostgresBackupService;
 use App\Services\Tenants\TenantDuplicateSignalService;
 use BackedEnum;
@@ -1398,15 +1399,13 @@ class OpsDiagnostics extends Page
 
     private function selectedMarketId(): int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $marketId = app(MarketContext::class)->selectedMarketIdFromSession();
 
-        $value = session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id')
-            ?? Filament::auth()->user()?->market_id;
+        if ($marketId !== null) {
+            return $marketId;
+        }
 
-        return filled($value) ? (int) $value : 0;
+        return (int) (Filament::auth()->user()?->market_id ?: 0);
     }
 
     /**
