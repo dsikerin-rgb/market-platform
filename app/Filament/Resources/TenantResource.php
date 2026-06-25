@@ -17,6 +17,7 @@ use App\Services\Debt\DebtAggregator;
 use App\Services\Debt\DebtStatusResolver;
 use App\Services\Finance\SettlementBalancePresentation;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use App\Support\Search\LooseSearch;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -77,14 +78,7 @@ class TenantResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $value =
-            session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id');
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     public static function getGloballySearchableAttributes(): array
