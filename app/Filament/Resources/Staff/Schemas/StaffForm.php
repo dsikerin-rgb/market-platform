@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Staff\Schemas;
 
 use App\Filament\Resources\Staff\StaffResource;
 use App\Models\User;
+use App\Support\MarketContext;
 use App\Support\RoleScenarioCatalog;
 use App\Support\TaskAssignmentRules;
 use App\Support\UserNotificationPreferences;
@@ -24,6 +25,7 @@ class StaffForm
     public static function configure(Schema $schema): Schema
     {
         $user = Filament::auth()->user();
+        $selectedMarketId = static::selectedMarketIdFromSession();
 
         $marketSelect = Forms\Components\Select::make('market_id')
             ->label('Рынок')
@@ -32,7 +34,7 @@ class StaffForm
             ->preload()
             ->required()
             ->default(fn () => $user?->isSuperAdmin()
-                ? session('filament.admin.selected_market_id')
+                ? $selectedMarketId
                 : $user?->market_id)
             ->visible(fn () => (bool) $user && $user->isSuperAdmin())
             ->dehydrated(true)
@@ -45,7 +47,7 @@ class StaffForm
 
         $staffManagerOptions = function (?User $record = null) use ($user): array {
             $marketId = $record?->market_id
-                ?: ($user?->isSuperAdmin() ? session('filament.admin.selected_market_id') : $user?->market_id);
+                ?: ($user?->isSuperAdmin() ? static::selectedMarketIdFromSession() : $user?->market_id);
 
             $query = User::query()
                 ->select(['id', 'name'])
@@ -449,7 +451,7 @@ class StaffForm
             ->orderBy('name');
 
         if ($actor?->isSuperAdmin()) {
-            $marketId = $record?->market_id ?: session('filament.admin.selected_market_id');
+            $marketId = $record?->market_id ?: static::selectedMarketIdFromSession();
 
             if (filled($marketId)) {
                 $query->where('market_id', (int) $marketId);
@@ -475,5 +477,10 @@ class StaffForm
             ->limit(50)
             ->pluck('name', 'id')
             ->toArray();
+    }
+
+    protected static function selectedMarketIdFromSession(): ?int
+    {
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 }
