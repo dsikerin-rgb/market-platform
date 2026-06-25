@@ -3,8 +3,9 @@
 namespace App\Filament\Resources\MarketLocationResource\Pages;
 
 use App\Filament\Resources\MarketLocationResource;
-use Filament\Facades\Filament;
 use App\Filament\Resources\Pages\BaseCreateRecord;
+use App\Support\MarketContext;
+use Filament\Facades\Filament;
 
 class CreateMarketLocation extends BaseCreateRecord
 {
@@ -29,7 +30,7 @@ class CreateMarketLocation extends BaseCreateRecord
 
         // Super-admin: если выбран рынок через переключатель — принудительно проставим
         if (empty($data['market_id'])) {
-            $selectedMarketId = session('filament.admin.selected_market_id');
+            $selectedMarketId = app(MarketContext::class)->selectedMarketIdFromSession();
             if (filled($selectedMarketId)) {
                 $data['market_id'] = (int) $selectedMarketId;
             }
