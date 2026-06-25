@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Widgets;
 
 use App\Models\Market;
+use App\Models\User;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\ChartWidget;
@@ -160,38 +162,7 @@ class OneCDebtSnapshotsHistoryWidget extends ChartWidget
 
     private function resolveMarketIdForWidget($user): ?int
     {
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-
-        if (! $isSuperAdmin) {
-            return $user->market_id ? (int) $user->market_id : null;
-        }
-
-        $value = session('dashboard_market_id');
-
-        if (blank($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament.{$panelId}.selected_market_id")
-                ?? session("filament_{$panelId}_market_id");
-        }
-
-        if (blank($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        if (filled($value)) {
-            return (int) $value;
-        }
-
-        return $this->resolveDefaultMarketId();
-    }
-
-    private function resolveDefaultMarketId(): ?int
-    {
-        $marketId = Market::query()
-            ->orderBy('id')
-            ->value('id');
-
-        return $marketId ? (int) $marketId : null;
+        return app(MarketContext::class)->currentMarketId($user instanceof User ? $user : null);
     }
 
     private function resolveTimezone(?string $marketTimezone): string
