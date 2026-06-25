@@ -15,6 +15,7 @@ use App\Models\Operation;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Operations\MarketPeriodResolver;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -637,14 +638,7 @@ class OperationResource extends BaseResource
             return (int) ($user->market_id ?: 0);
         }
 
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        $value =
-            session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id');
-
-        return (int) ($value ?: 0);
+        return app(MarketContext::class)->selectedMarketIdFromSession() ?? 0;
     }
 
     public static function resolveMarketTimezone(): string
