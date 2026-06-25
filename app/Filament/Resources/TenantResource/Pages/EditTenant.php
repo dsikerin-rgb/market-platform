@@ -9,6 +9,7 @@ use App\Models\Ticket;
 use App\Models\TicketComment;
 use App\Models\User;
 use App\Support\AdminPanelImpersonation;
+use App\Support\TenantMarketplaceLinks;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use App\Filament\Resources\Pages\BaseEditRecord;
@@ -144,6 +145,19 @@ class EditTenant extends BaseEditRecord
                 'recordName' => trim((string) ($this->record?->name ?? '')),
             ]);
 
+        $actions[] = Actions\Action::make('open_marketplace_store')
+                ->label('Открыть витрину')
+                ->icon('heroicon-o-building-storefront')
+                ->color('gray')
+                ->size('lg')
+                ->outlined()
+                ->extraAttributes([
+                    'class' => 'tenant-card-action tenant-card-action--secondary',
+                    'data-subtitle' => 'Публичная страница арендатора',
+                ])
+                ->visible(fn (): bool => $this->canOpenMarketplaceStore())
+                ->url(fn (): ?string => $this->marketplaceStoreUrl())
+                ->openUrlInNewTab();
         $actions[] = Actions\Action::make('cabinet_impersonate')
                 ->label('Войти в кабинет')
                 ->icon('heroicon-o-arrow-right-on-rectangle')
@@ -218,6 +232,26 @@ class EditTenant extends BaseEditRecord
         }
 
         return (int) ($user->market_id ?? 0) === (int) ($this->record->market_id ?? 0);
+    }
+
+    protected function canOpenMarketplaceStore(): bool
+    {
+        if (! $this->record) {
+            return false;
+        }
+
+        $user = AdminPanelImpersonation::resolveAdminUser(\Filament\Facades\Filament::auth()->user());
+
+        return TenantMarketplaceLinks::canOpenStore($user instanceof User ? $user : null, $this->record);
+    }
+
+    protected function marketplaceStoreUrl(): ?string
+    {
+        if (! $this->canOpenMarketplaceStore()) {
+            return null;
+        }
+
+        return TenantMarketplaceLinks::storeUrl($this->record);
     }
 
     protected function buildHeaderChatViewData(): array
