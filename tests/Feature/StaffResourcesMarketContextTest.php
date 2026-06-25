@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Filament\Resources\Staff\StaffResource;
+use App\Filament\Resources\Staff\Schemas\StaffForm;
 use App\Filament\Resources\StaffInvitationResource;
 use App\Filament\Resources\StaffInvitationResource\Schemas\StaffInvitationForm;
 use Filament\Facades\Filament;
@@ -28,6 +29,7 @@ class StaffResourcesMarketContextTest extends TestCase
         session(['selected_market_id' => $marketId]);
 
         self::assertSame($marketId, $this->resolvedMarketId(StaffResource::class));
+        self::assertSame($marketId, $this->resolvedMarketId(StaffForm::class));
         self::assertSame($marketId, $this->resolvedMarketId(StaffInvitationResource::class));
         self::assertSame($marketId, $this->resolvedMarketId(StaffInvitationForm::class));
     }
@@ -39,6 +41,7 @@ class StaffResourcesMarketContextTest extends TestCase
         session(['filament_admin_market_id' => $marketId]);
 
         self::assertSame($marketId, $this->resolvedMarketId(StaffResource::class));
+        self::assertSame($marketId, $this->resolvedMarketId(StaffForm::class));
         self::assertSame($marketId, $this->resolvedMarketId(StaffInvitationResource::class));
         self::assertSame($marketId, $this->resolvedMarketId(StaffInvitationForm::class));
     }
