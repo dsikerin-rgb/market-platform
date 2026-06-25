@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\MarketDocument;
+use App\Models\MarketDocumentActivityEvent;
+use App\Support\MarketDocuments\MarketDocumentActivityLogger;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -44,7 +46,7 @@ class PurgeMarketDocumentTrashCommand extends Command
 
         $query
             ->orderBy('id')
-            ->chunkById(100, function ($documents) use ($storage, &$deleted, &$failed): void {
+            ->chunkById(100, function ($documents) use ($storage, $days, $cutoff, &$deleted, &$failed): void {
                 foreach ($documents as $document) {
                     if (! $document instanceof MarketDocument) {
                         continue;
@@ -56,6 +58,17 @@ class PurgeMarketDocumentTrashCommand extends Command
                         if ($path !== '' && $storage->exists($path)) {
                             $storage->delete($path);
                         }
+
+                        app(MarketDocumentActivityLogger::class)->log(
+                            $document,
+                            MarketDocumentActivityEvent::ACTION_PURGED_BY_RETENTION,
+                            null,
+                            null,
+                            [
+                                'retention_days' => $days,
+                                'cutoff' => $cutoff->toDateTimeString(),
+                            ],
+                        );
 
                         $document->delete();
                         $deleted++;

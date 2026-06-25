@@ -24,13 +24,14 @@ class MarketDocumentResourcePermissionTest extends TestCase
         self::assertFalse(MarketDocumentResource::canBulkManageDocuments());
     }
 
-    public function test_uploader_can_manage_their_shared_document(): void
+    public function test_uploader_cannot_manage_their_shared_document_without_admin_role(): void
     {
         $this->actingAsTestUser(id: 1, marketId: 1);
         $document = $this->sharedDocument(marketId: 1, uploadedByUserId: 1);
 
-        self::assertTrue(MarketDocumentResource::canManageDocument($document));
-        self::assertTrue(MarketDocumentResource::canEdit($document));
+        self::assertFalse(MarketDocumentResource::canManageDocument($document));
+        self::assertFalse(MarketDocumentResource::canEdit($document));
+        self::assertTrue(MarketDocumentResource::canShareDocument($document));
     }
 
     public function test_market_admin_can_manage_shared_documents_and_bulk_actions(): void
@@ -40,6 +41,18 @@ class MarketDocumentResourcePermissionTest extends TestCase
 
         self::assertTrue(MarketDocumentResource::canManageDocument($document));
         self::assertTrue(MarketDocumentResource::canBulkManageDocuments());
+    }
+
+    public function test_activity_log_is_visible_only_to_admins(): void
+    {
+        $this->actingAsTestUser(id: 1, marketId: 1);
+        self::assertFalse(MarketDocumentResource::canViewActivityLog());
+
+        $this->actingAsTestUser(id: 2, marketId: 1, marketAdmin: true);
+        self::assertTrue(MarketDocumentResource::canViewActivityLog());
+
+        $this->actingAsTestUser(id: 3, marketId: 1, superAdmin: true);
+        self::assertTrue(MarketDocumentResource::canViewActivityLog());
     }
 
     public function test_regular_staff_can_bulk_manage_only_personal_disk_context(): void

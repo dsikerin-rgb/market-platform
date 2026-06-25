@@ -36,4 +36,18 @@ class MarketDocumentTest extends TestCase
         $this->assertSame('Регламенты', $document->categoryLabel());
         $this->assertSame('2,0 МБ', $document->fileSizeLabel());
     }
+
+    public function test_display_file_name_preserves_original_extension(): void
+    {
+        $document = new MarketDocument([
+            'title' => 'Счёт за июнь',
+            'original_name' => 'invoice.pdf',
+        ]);
+
+        $this->assertSame('Счёт за июнь.pdf', $document->displayFileName());
+
+        $document->title = 'Счёт за июнь.pdf';
+
+        $this->assertSame('Счёт за июнь.pdf', $document->displayFileName());
+    }
 }

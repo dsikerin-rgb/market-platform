@@ -258,6 +258,65 @@
             background: #ffffff;
         }
 
+        .mdw-content-folders {
+            display: grid;
+            background: #ffffff;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+        }
+
+        .mdw-content-folder {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 92px 72px;
+            align-items: center;
+            gap: 16px;
+            min-height: 48px;
+            padding: 9px 20px 9px 30px;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.82);
+            color: #0f172a;
+            text-decoration: none;
+        }
+
+        .mdw-content-folder:last-child {
+            border-bottom: 0;
+        }
+
+        .mdw-content-folder:hover {
+            background: #f8fafc;
+        }
+
+        .mdw-content-folder__main {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .mdw-content-folder__icon {
+            display: grid;
+            place-items: center;
+            width: 24px;
+            height: 24px;
+            flex: 0 0 24px;
+            color: #0284c7;
+        }
+
+        .mdw-content-folder__name {
+            min-width: 0;
+            color: #0f172a;
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+        }
+
+        .mdw-content-folder__meta {
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.2;
+            text-align: right;
+            white-space: nowrap;
+        }
+
         .mdw-table .fi-ta-content {
             overflow-x: hidden;
         }
@@ -372,11 +431,23 @@
                 justify-content: flex-start;
                 margin-top: 0;
             }
+
+            .mdw-content-folder {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 4px;
+            }
+
+            .mdw-content-folder__meta {
+                padding-left: 34px;
+                text-align: left;
+            }
         }
     </style>
 
     @php
-        $activeSection = collect($sections)->firstWhere('isActive', true) ?? $sections[0];
+        $activeSection = collect($sections)->firstWhere('isActive', true)
+            ?? collect($sections)->firstWhere('key', $activeTab ?? 'personal')
+            ?? $sections[0];
     @endphp
 
     <div>
@@ -479,6 +550,18 @@
                         </span>
                     </a>
                 @endif
+
+                @if (($canViewActivityLog ?? false) && filled($activityLogUrl ?? null))
+                    <a href="{{ $activityLogUrl }}" class="mdw-node">
+                        <span class="mdw-node__icon">
+                            <x-filament::icon icon="heroicon-o-clock" class="h-5 w-5" />
+                        </span>
+                        <span class="mdw-node__body">
+                            <span class="mdw-node__label">Журнал диска</span>
+                            <span class="mdw-node__meta">Действия с файлами</span>
+                        </span>
+                    </a>
+                @endif
             </nav>
         </aside>
 
@@ -511,6 +594,23 @@
                     </form>
                 </div>
             </header>
+            @endif
+
+            @if (($contentFolders ?? []) !== [])
+                <div class="mdw-content-folders">
+                    @foreach ($contentFolders as $folder)
+                        <a href="{{ $folder['url'] }}" class="mdw-content-folder">
+                            <span class="mdw-content-folder__main">
+                                <span class="mdw-content-folder__icon">
+                                    <x-filament::icon icon="heroicon-o-folder" class="h-5 w-5" />
+                                </span>
+                                <span class="mdw-content-folder__name">{{ $folder['name'] }}</span>
+                            </span>
+                            <span class="mdw-content-folder__meta">{{ $folder['documents'] }} файлов</span>
+                            <span class="mdw-content-folder__meta">{{ $folder['folders'] }} папок</span>
+                        </a>
+                    @endforeach
+                </div>
             @endif
 
             <div class="mdw-table">
