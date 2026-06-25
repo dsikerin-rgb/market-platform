@@ -7,6 +7,7 @@ namespace App\Filament\Pages;
 use App\Filament\Resources\MarketplaceSlideResource;
 use App\Models\Market;
 use App\Models\MarketplaceSlide;
+use App\Support\MarketContext;
 use App\Support\MarketplaceSettingsValue;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -274,18 +275,7 @@ class MarketplaceSettings extends Page
 
     protected function selectedMarketIdFromSession(): ?int
     {
-        $value = session('dashboard_market_id');
-
-        if (! filled($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament.{$panelId}.selected_market_id");
-        }
-
-        if (! filled($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     protected static function canManageMarketplaceSettings(): bool
