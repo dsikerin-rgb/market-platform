@@ -20,6 +20,7 @@ use App\Models\Market;
 use App\Models\Task;
 use App\Models\TenantRequest;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use App\Support\MarketSpaces\MarketSpaceDashboardMetrics;
 use App\Support\OneC\OneCDailyExchangeWarning;
 use Carbon\CarbonImmutable;
@@ -708,19 +709,18 @@ class Dashboard extends BaseDashboard
 
     private function resolveSelectedMarketId(): int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
+        $value = $this->resolveSelectedMarketIdFromContext();
 
-        $value =
-            session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id');
-
-        if (filled($value)) {
-            return (int) $value;
+        if ($value !== null) {
+            return $value;
         }
 
         return $this->resolveDefaultMarketId();
+    }
+
+    private function resolveSelectedMarketIdFromContext(): ?int
+    {
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     private function syncDashboardMarketId(): void
