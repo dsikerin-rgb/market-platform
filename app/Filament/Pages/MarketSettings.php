@@ -11,6 +11,7 @@ use App\Models\MarketplaceSlide;
 use App\Models\User;
 use App\Services\Debt\DebtDecisionPolicy;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use App\Support\MarketplaceSettingsValue;
 use App\Support\TestingModeNoticeSettings;
 use App\Support\UserNotificationPreferences;
@@ -1070,19 +1071,7 @@ class MarketSettings extends Page
 
     protected function selectedMarketIdFromSession(): ?int
     {
-        // сначала единый ключ дашборда (он у тебя уже используется в виджетах)
-        $value = session('dashboard_market_id');
-
-        if (! filled($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament.{$panelId}.selected_market_id");
-        }
-
-        if (! filled($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     /**
