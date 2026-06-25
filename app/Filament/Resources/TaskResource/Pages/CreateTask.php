@@ -8,6 +8,8 @@ namespace App\Filament\Resources\TaskResource\Pages;
 
 use App\Filament\Resources\TaskResource;
 use App\Models\Task;
+use App\Models\User;
+use App\Support\TaskAssignmentRules;
 use App\Filament\Resources\Pages\BaseCreateRecord;
 
 class CreateTask extends BaseCreateRecord
@@ -30,6 +32,16 @@ class CreateTask extends BaseCreateRecord
     {
         if (! array_key_exists('status', $data) || blank($data['status'])) {
             $data['status'] = $this->resolveDefaultStatusValue();
+        }
+
+        $assigneeId = (int) ($data['assignee_id'] ?? 0);
+        if ($assigneeId > 0) {
+            $actor = auth()->user();
+            $target = User::query()->find($assigneeId);
+
+            if (! app(TaskAssignmentRules::class)->canAssignWork($actor, $target)) {
+                unset($data['assignee_id']);
+            }
         }
 
         return $data;

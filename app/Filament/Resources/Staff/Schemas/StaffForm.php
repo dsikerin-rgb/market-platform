@@ -3,7 +3,9 @@
 
 namespace App\Filament\Resources\Staff\Schemas;
 
+use App\Models\User;
 use App\Support\RoleScenarioCatalog;
+use App\Support\TaskAssignmentRules;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -117,6 +119,33 @@ class StaffForm
                         ->maxLength(255)
                         ->nullable()
                         ->placeholder('Администрация, финансы, маркетинг')
+                        ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
+
+                    Forms\Components\Select::make('manager_user_id')
+                        ->label('Руководитель')
+                        ->options(fn (?User $record): array => self::managerOptions($user, $record))
+                        ->searchable()
+                        ->getSearchResultsUsing(fn (string $search): array => self::managerOptions($user, null, $search))
+                        ->preload()
+                        ->nullable()
+                        ->native(false)
+                        ->helperText('Используется для правил назначения задач.')
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
+
+                    Forms\Components\Select::make('organization_level')
+                        ->label('Уровень в структуре')
+                        ->options(self::organizationLevelOptions())
+                        ->nullable()
+                        ->native(false)
+                        ->helperText('1 - высший уровень, 10 - исполнительский.')
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
+
+                    Forms\Components\TextInput::make('organization_role')
+                        ->label('Роль в структуре')
+                        ->maxLength(255)
+                        ->nullable()
+                        ->placeholder('Руководитель отдела, специалист, куратор')
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
                         ->columnSpan(['default' => 12, 'lg' => 3]),
 
@@ -351,5 +380,56 @@ class StaffForm
                 ])
                 ->columnSpanFull(),
         ]);
+    }
+
+    private static function organizationLevelOptions(): array
+    {
+        return [
+            1 => '1 - директор / собственник',
+            2 => '2 - руководитель рынка',
+            3 => '3 - руководитель отдела',
+            4 => '4 - старший специалист',
+            5 => '5 - специалист',
+            6 => '6 - младший специалист',
+            7 => '7 - линейный сотрудник',
+            8 => '8 - стажер / помощник',
+            9 => '9 - временный исполнитель',
+            10 => '10 - внешний исполнитель',
+        ];
+    }
+
+    private static function managerOptions(?User $actor, ?User $record = null, ?string $search = null): array
+    {
+        $query = User::query()
+            ->select(['id', 'name'])
+            ->orderBy('name');
+
+        if ($actor?->isSuperAdmin()) {
+            $marketId = $record?->market_id ?: session('filament.admin.selected_market_id');
+
+            if (filled($marketId)) {
+                $query->where('market_id', (int) $marketId);
+            }
+        } elseif ($actor?->market_id) {
+            $query->where('market_id', (int) $actor->market_id);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+
+        $query = app(TaskAssignmentRules::class)->applyObserverScope($query, $actor);
+
+        if ($record?->exists) {
+            $query->whereKeyNot((int) $record->id);
+        }
+
+        $search = trim((string) $search);
+        if ($search !== '') {
+            $query->where('name', 'like', '%' . str_replace(['%', '_'], ['\\%', '\\_'], $search) . '%');
+        }
+
+        return $query
+            ->limit(50)
+            ->pluck('name', 'id')
+            ->toArray();
     }
 }

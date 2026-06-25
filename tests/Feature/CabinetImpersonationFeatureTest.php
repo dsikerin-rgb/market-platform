@@ -75,6 +75,53 @@ class CabinetImpersonationFeatureTest extends TestCase
         $this->assertAuthenticatedAs($context['cabinetUser'], 'web');
     }
 
+    public function test_marketing_can_open_tenant_cabinet_in_marketplace_help_mode(): void
+    {
+        $context = $this->createTenantWithCabinetUser();
+        $marketing = $this->createUser(
+            marketId: (int) $context['market']->id,
+            role: 'market-marketing',
+        );
+
+        $this->actingAs($marketing, 'web');
+
+        $response = $this->post(route('filament.admin.tenants.cabinet-impersonate', [
+            'tenant' => (int) $context['tenant']->id,
+        ]));
+
+        $response->assertRedirect();
+        $this->get((string) $response->headers->get('Location'))
+            ->assertRedirect(route('cabinet.dashboard'));
+
+        $this->assertAuthenticatedAs($context['cabinetUser'], 'web');
+
+        $this->get(route('cabinet.showcase.edit'))->assertOk();
+        $this->get(route('cabinet.products.index'))->assertOk();
+        $this->get(route('cabinet.payments'))->assertForbidden();
+        $this->get(route('cabinet.accruals'))->assertForbidden();
+        $this->get(route('cabinet.documents'))->assertForbidden();
+
+        $this->assertSame(
+            \App\Support\CabinetAssistanceMode::MODE_MARKETPLACE_HELP,
+            session(TenantImpersonationService::SESSION_KEY)['access_mode'] ?? null,
+        );
+    }
+
+    public function test_advertising_cannot_open_tenant_cabinet_from_other_market(): void
+    {
+        $marketA = $this->createMarket('Advertising Market A');
+        $marketB = $this->createMarket('Advertising Market B');
+        $tenantB = $this->createTenant($marketB, 'Advertising Tenant B');
+        $this->createCabinetUserForTenant($tenantB);
+        $advertising = $this->createUser(marketId: (int) $marketA->id, role: 'market-advertising');
+
+        $this->actingAs($advertising, 'web');
+
+        $this->post(route('filament.admin.tenants.cabinet-impersonate', [
+            'tenant' => (int) $tenantB->id,
+        ]))->assertForbidden();
+    }
+
     public function test_impersonation_creates_primary_cabinet_user_when_missing(): void
     {
         $market = $this->createMarket('Тестовый рынок');

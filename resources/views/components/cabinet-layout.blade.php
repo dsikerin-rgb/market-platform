@@ -323,22 +323,27 @@
                 </div>
 
                 <nav class="cabinet-top-nav">
+                    @php($canViewCabinetFinance = \App\Support\CabinetAssistanceMode::canViewFinance(request()))
                     <a
                         href="{{ route('cabinet.dashboard') }}"
                         @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.dashboard')])
                     >Главная</a>
-                    <a
-                        href="{{ route('cabinet.payments') }}"
-                        @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.accruals') || request()->routeIs('cabinet.payments')])
-                    >Финансы</a>
+                    @if($canViewCabinetFinance)
+                        <a
+                            href="{{ route('cabinet.payments') }}"
+                            @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.accruals') || request()->routeIs('cabinet.payments')])
+                        >Финансы</a>
+                    @endif
                     <a
                         href="{{ route('cabinet.requests') }}"
                         @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.requests*') || request()->routeIs('cabinet.customer-chat')])
                     >Общение</a>
-                    <a
-                        href="{{ route('cabinet.documents') }}"
-                        @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.documents')])
-                    >Документы</a>
+                    @if($canViewCabinetFinance)
+                        <a
+                            href="{{ route('cabinet.documents') }}"
+                            @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.documents')])
+                        >Документы</a>
+                    @endif
                     <a
                         href="{{ route('cabinet.products.index') }}"
                         @class(['cabinet-top-nav__link', 'is-active' => request()->routeIs('cabinet.products.*')])
@@ -392,17 +397,19 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="cabinet-bottom-nav__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 11.25L12 3l9.75 8.25M4.5 9.75V20.25h15V9.75M9.75 20.25v-6h4.5v6"/></svg>
                     <span class="cabinet-bottom-nav__label">Главная</span>
                 </a>
-                <a
-                    href="{{ route('cabinet.payments') }}"
-                    @class([
-                        'cabinet-bottom-nav__item group rounded-2xl transition-colors transition-shadow duration-200',
-                        'bg-sky-600 text-white ring-1 ring-sky-700/70 shadow-[0_4px_14px_rgba(2,132,199,0.35)]' => request()->routeIs('cabinet.accruals') || request()->routeIs('cabinet.payments'),
-                        'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90' => ! (request()->routeIs('cabinet.accruals') || request()->routeIs('cabinet.payments')),
-                    ])
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="cabinet-bottom-nav__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12H3m0 0l4-4m-4 4l4 4M3 6h18M3 18h12"/></svg>
-                    <span class="cabinet-bottom-nav__label">Финансы</span>
-                </a>
+                @if(\App\Support\CabinetAssistanceMode::canViewFinance(request()))
+                    <a
+                        href="{{ route('cabinet.payments') }}"
+                        @class([
+                            'cabinet-bottom-nav__item group rounded-2xl transition-colors transition-shadow duration-200',
+                            'bg-sky-600 text-white ring-1 ring-sky-700/70 shadow-[0_4px_14px_rgba(2,132,199,0.35)]' => request()->routeIs('cabinet.accruals') || request()->routeIs('cabinet.payments'),
+                            'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90' => ! (request()->routeIs('cabinet.accruals') || request()->routeIs('cabinet.payments')),
+                        ])
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="cabinet-bottom-nav__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12H3m0 0l4-4m-4 4l4 4M3 6h18M3 18h12"/></svg>
+                        <span class="cabinet-bottom-nav__label">Финансы</span>
+                    </a>
+                @endif
                 <a
                     href="{{ route('cabinet.requests') }}"
                     @class([
@@ -421,17 +428,19 @@
                     </span>
                     <span class="cabinet-bottom-nav__label">Общение</span>
                 </a>
-                <a
-                    href="{{ route('cabinet.documents') }}"
-                    @class([
-                        'cabinet-bottom-nav__item group rounded-2xl transition-colors transition-shadow duration-200',
-                        'bg-sky-600 text-white ring-1 ring-sky-700/70 shadow-[0_4px_14px_rgba(2,132,199,0.35)]' => request()->routeIs('cabinet.documents'),
-                        'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90' => ! request()->routeIs('cabinet.documents'),
-                    ])
+                @if(\App\Support\CabinetAssistanceMode::canViewFinance(request()))
+                    <a
+                        href="{{ route('cabinet.documents') }}"
+                        @class([
+                            'cabinet-bottom-nav__item group rounded-2xl transition-colors transition-shadow duration-200',
+                            'bg-sky-600 text-white ring-1 ring-sky-700/70 shadow-[0_4px_14px_rgba(2,132,199,0.35)]' => request()->routeIs('cabinet.documents'),
+                            'text-slate-700 hover:text-slate-900 hover:bg-slate-100/90' => ! request()->routeIs('cabinet.documents'),
+                        ])
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" class="cabinet-bottom-nav__icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3h7l5 5v13a1 1 0 01-1 1H7a2 2 0 01-2-2V5a2 2 0 012-2z"/><path stroke-linecap="round" stroke-linejoin="round" d="M14 3v5h5"/></svg>
                     <span class="cabinet-bottom-nav__label">Документы</span>
-                </a>
+                    </a>
+                @endif
                 <a
                     href="{{ route('cabinet.showcase.edit') }}"
                     @class([

@@ -43,6 +43,9 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
         'phone',
         'job_title',
         'department',
+        'manager_user_id',
+        'organization_level',
+        'organization_role',
         'birth_date',
         'password',
         'market_id',
@@ -80,6 +83,8 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             'notification_preferences' => 'array',
             'last_seen_at' => 'datetime',
             'birth_date' => 'date',
+            'manager_user_id' => 'integer',
+            'organization_level' => 'integer',
         ];
     }
 
@@ -96,6 +101,16 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public function aiProfile(): HasOne
     {
         return $this->hasOne(AiUserProfile::class);
+    }
+
+    public function manager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'manager_user_id');
+    }
+
+    public function directReports(): HasMany
+    {
+        return $this->hasMany(User::class, 'manager_user_id');
     }
 
     public function personalDocuments(): HasMany
