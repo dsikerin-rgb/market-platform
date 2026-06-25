@@ -7,6 +7,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\TenantResource;
 use App\Services\Tenants\TenantDuplicateSignalService;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Widgets\Widget;
 use Illuminate\Support\Facades\DB;
@@ -46,15 +47,7 @@ class MapReviewDataQualitySignalsWidget extends Widget
 
     private function selectedMarketId(): int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        $value = session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id')
-            ?? Filament::auth()->user()?->market_id;
-
-        return filled($value) ? (int) $value : 0;
+        return (int) (app(MarketContext::class)->currentMarketId() ?? 0);
     }
 
     /**

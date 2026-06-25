@@ -77,11 +77,11 @@ return [
             'key' => 'resources_and_context',
             'title' => '3. Ресурсы, dashboard, API, jobs',
             'weight' => 16,
-            'status' => 'pending',
+            'status' => 'in_progress',
             'summary' => 'Перевод ключевых экранов и фоновых сценариев на единый market context.',
             'items' => [
                 ['title' => 'Filament resources используют единый context', 'status' => 'pending'],
-                ['title' => 'Dashboard/widgets используют единый context', 'status' => 'pending'],
+                ['title' => 'Dashboard/widgets используют единый context', 'status' => 'in_progress'],
                 ['title' => 'Карта рынка использует тот же market_id', 'status' => 'pending'],
                 ['title' => '1C API выставляет context из integration token', 'status' => 'pending'],
                 ['title' => 'Jobs/commands получают market_id явно', 'status' => 'pending'],
