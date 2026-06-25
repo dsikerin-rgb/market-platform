@@ -78,6 +78,10 @@ class EditStaff extends BaseEditRecord
             return $data;
         }
 
+        if (! StaffResource::canManageStaffAccess($user)) {
+            unset($data['roles']);
+        }
+
         // Market-level roles must not change employee market assignment.
         if (! $user->isSuperAdmin()) {
             $data['market_id'] = $this->record->market_id;

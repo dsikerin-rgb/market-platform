@@ -3,6 +3,8 @@
 
 namespace App\Filament\Resources\Staff\Schemas;
 
+use App\Filament\Resources\Staff\StaffResource;
+use App\Models\User;
 use App\Support\RoleScenarioCatalog;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
@@ -132,6 +134,11 @@ class StaffForm
                         ]),
 
                     Tab::make('Доступ')
+                        ->visible(fn (string $operation, ?User $record = null): bool => StaffResource::canViewStaffAccessTab(
+                            $record,
+                            $user,
+                            $operation,
+                        ))
                         ->schema([
             Section::make('Доступ')
                 ->description('Роли определяют права сотрудника в системе')
@@ -142,6 +149,8 @@ class StaffForm
                         ->preload()
                         ->searchable()
                         ->placeholder('Выберите одну или несколько ролей')
+                        ->disabled(fn (): bool => ! StaffResource::canManageStaffAccess($user))
+                        ->dehydrated(fn (): bool => StaffResource::canManageStaffAccess($user))
                         ->relationship(
                             name: 'roles',
                             titleAttribute: 'name',
@@ -178,6 +187,13 @@ class StaffForm
                             }
 
                             return RoleScenarioCatalog::labelForSlug($slug, $name);
+                        })
+                        ->saveRelationshipsUsing(function (?User $record, $state) use ($user): void {
+                            if (! $record || ! StaffResource::canManageStaffAccess($user)) {
+                                return;
+                            }
+
+                            $record->roles()->sync($state ?? []);
                         })
                         ->columnSpan(['default' => 12, 'lg' => 6]),
                 ])

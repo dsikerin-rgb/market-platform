@@ -41,6 +41,10 @@ class CreateStaff extends BaseCreateRecord
             return $data;
         }
 
+        if (! StaffResource::canManageStaffAccess($user)) {
+            unset($data['roles']);
+        }
+
         // Рыночные роли всегда создают сотрудника только в своем рынке
         if (! $user->isSuperAdmin()) {
             $data['market_id'] = $user->market_id;
