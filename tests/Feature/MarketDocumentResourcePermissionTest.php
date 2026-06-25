@@ -55,6 +55,19 @@ class MarketDocumentResourcePermissionTest extends TestCase
         self::assertTrue(MarketDocumentResource::canViewActivityLog());
     }
 
+    public function test_disk_workspace_keeps_activity_log_out_of_folder_tree_and_exposes_file_properties(): void
+    {
+        $resourceSource = file_get_contents(app_path('Filament/Resources/MarketDocumentResource.php'));
+        $workspaceSource = file_get_contents(resource_path('views/filament/widgets/market-documents-workspace-widget.blade.php'));
+
+        self::assertIsString($resourceSource);
+        self::assertIsString($workspaceSource);
+        self::assertStringContainsString("Action::make('properties')", $resourceSource);
+        self::assertStringContainsString('Журнал действий', $workspaceSource);
+        self::assertStringNotContainsString('Журнал диска', $workspaceSource);
+        self::assertFileExists(resource_path('views/filament/resources/market-documents/actions/properties.blade.php'));
+    }
+
     public function test_regular_staff_can_bulk_manage_only_personal_disk_context(): void
     {
         $this->actingAsTestUser(id: 1, marketId: 1);
