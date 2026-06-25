@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\ReportResource\Pages;
 use App\Models\Report;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use App\Filament\Resources\BaseResource;
@@ -39,12 +40,7 @@ class ReportResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     
