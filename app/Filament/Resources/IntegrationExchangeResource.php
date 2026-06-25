@@ -7,6 +7,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\IntegrationExchangeResource\Pages;
 use App\Models\IntegrationExchange;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -48,12 +49,7 @@ class IntegrationExchangeResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     private static function payloadInt(mixed $payload, string $key, int $default = 0): int
