@@ -43,11 +43,14 @@ class MarketFeature
         }
 
         if ($user->isSuperAdmin()) {
-            $selected = session('filament.admin.selected_market_id');
-
-            return filled($selected) ? (int) $selected : null;
+            return static::selectedMarketIdFromContext();
         }
 
         return $user->market_id ? (int) $user->market_id : null;
+    }
+
+    private static function selectedMarketIdFromContext(): ?int
+    {
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 }
