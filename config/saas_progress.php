@@ -10,9 +10,9 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Подготовить отдельную ветку/worktree для MarketContext и начать первый безопасный этап без global scope.',
-    'next_step' => 'После подтверждения выкатить страницу Ход работ на prod с обычным deploy-flow, затем начать MarketContext локально.',
-    'release_policy' => 'Prod не меняется без отдельного подтверждения. Первый prod-релиз должен идти с feature flags выключенными.',
+    'current_focus' => 'Начать MarketContext локально в отдельной ветке/worktree без global scope и без prod-изменений.',
+    'next_step' => 'Старт первого безопасного этапа: MarketContext + flags disabled локально, затем тесты и staging.',
+    'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
         [
             'key' => 'safety_contour',
@@ -33,7 +33,7 @@ return [
             'key' => 'progress_page',
             'title' => '0.1. Страница Ход работ',
             'weight' => 4,
-            'status' => 'in_progress',
+            'status' => 'done',
             'summary' => 'Видимый чек-лист прогресса в админке, без миграций и без записи в prod-данные.',
             'items' => [
                 ['title' => 'Источник чек-листа в коде', 'status' => 'done'],
@@ -41,7 +41,7 @@ return [
                 ['title' => 'Доступ только владельцу проекта', 'status' => 'done'],
                 ['title' => 'Автотест персонального доступа', 'status' => 'done'],
                 ['title' => 'Локальная проверка синтаксиса и кодировок', 'status' => 'done'],
-                ['title' => 'Staging/prod rollout после подтверждения', 'status' => 'pending'],
+                ['title' => 'Staging/prod rollout после подтверждения', 'status' => 'done'],
             ],
         ],
         [
