@@ -9,6 +9,7 @@ use App\Filament\Resources\MarketSpaceGroupEpisodeResource\Pages;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceGroupEpisode;
 use App\Models\MarketSpaceGroupEpisodeChild;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Schemas\Components\Section;
@@ -68,12 +69,7 @@ class MarketSpaceGroupEpisodeResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     public static function form(Schema $schema): Schema
