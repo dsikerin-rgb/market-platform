@@ -240,6 +240,10 @@ class EditTask extends BaseEditRecord
             return;
         }
 
+        if (array_key_exists('assignee_id', $data)) {
+            TaskResource::validateTaskAssigneeForCurrentUser($data['assignee_id'] ?? null);
+        }
+
         $task->forceFill($data)->save();
 
         $this->record->refresh();
@@ -805,6 +809,10 @@ class EditTask extends BaseEditRecord
 
         if (! $canUpdateStatus) {
             unset($data['status']);
+        }
+
+        if (array_key_exists('assignee_id', $data)) {
+            TaskResource::validateTaskAssigneeForCurrentUser($data['assignee_id'] ?? null);
         }
 
         return $data;

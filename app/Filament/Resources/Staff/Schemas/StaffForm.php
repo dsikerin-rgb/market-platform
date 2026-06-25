@@ -3,6 +3,8 @@
 
 namespace App\Filament\Resources\Staff\Schemas;
 
+use App\Filament\Resources\Staff\StaffResource;
+use App\Models\User;
 use App\Support\RoleScenarioCatalog;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
@@ -39,6 +41,32 @@ class StaffForm
             ->default(fn () => $user?->market_id)
             ->visible(fn () => ! ((bool) $user && $user->isSuperAdmin()))
             ->dehydrated(true);
+
+        $staffManagerOptions = function (?User $record = null) use ($user): array {
+            $marketId = $record?->market_id
+                ?: ($user?->isSuperAdmin() ? session('filament.admin.selected_market_id') : $user?->market_id);
+
+            $query = User::query()
+                ->select(['id', 'name'])
+                ->where(function ($staffOnly): void {
+                    $staffOnly
+                        ->whereNull('tenant_id')
+                        ->orWhere('tenant_id', 0);
+                })
+                ->orderBy('name');
+
+            if (filled($marketId)) {
+                $query->where('market_id', (int) $marketId);
+            } elseif (! ($user?->isSuperAdmin() ?? false)) {
+                $query->whereRaw('1 = 0');
+            }
+
+            if ($record?->exists) {
+                $query->whereKeyNot((int) $record->id);
+            }
+
+            return $query->pluck('name', 'id')->toArray();
+        };
 
         $passwordPair = [
             Grid::make(2)->schema([
@@ -120,6 +148,26 @@ class StaffForm
                         ->dehydrateStateUsing(fn ($state) => filled($state) ? trim((string) $state) : null)
                         ->columnSpan(['default' => 12, 'lg' => 3]),
 
+                    Forms\Components\Select::make('manager_id')
+                        ->label('Руководитель')
+                        ->options(fn (?User $record = null): array => $staffManagerOptions($record))
+                        ->searchable()
+                        ->preload()
+                        ->nullable()
+                        ->native(false)
+                        ->visible(fn (): bool => StaffResource::canManageStaffAccess($user))
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
+
+                    Forms\Components\TextInput::make('organization_level')
+                        ->label('Уровень в структуре')
+                        ->numeric()
+                        ->minValue(1)
+                        ->maxValue(999)
+                        ->nullable()
+                        ->helperText('1 - высший уровень. Большее число - ниже уровень.')
+                        ->visible(fn (): bool => StaffResource::canManageStaffAccess($user))
+                        ->columnSpan(['default' => 12, 'lg' => 3]),
+
                     Forms\Components\DatePicker::make('birth_date')
                         ->label('Дата рождения')
                         ->native(false)
@@ -132,6 +180,11 @@ class StaffForm
                         ]),
 
                     Tab::make('Доступ')
+                        ->visible(fn (string $operation, ?User $record = null): bool => StaffResource::canViewStaffAccessTab(
+                            $record,
+                            $user,
+                            $operation,
+                        ))
                         ->schema([
             Section::make('Доступ')
                 ->description('Роли определяют права сотрудника в системе')
@@ -142,6 +195,8 @@ class StaffForm
                         ->preload()
                         ->searchable()
                         ->placeholder('Выберите одну или несколько ролей')
+                        ->disabled(fn (): bool => ! StaffResource::canManageStaffAccess($user))
+                        ->dehydrated(fn (): bool => StaffResource::canManageStaffAccess($user))
                         ->relationship(
                             name: 'roles',
                             titleAttribute: 'name',
@@ -178,6 +233,13 @@ class StaffForm
                             }
 
                             return RoleScenarioCatalog::labelForSlug($slug, $name);
+                        })
+                        ->saveRelationshipsUsing(function (?User $record, $state) use ($user): void {
+                            if (! $record || ! StaffResource::canManageStaffAccess($user)) {
+                                return;
+                            }
+
+                            $record->roles()->sync($state ?? []);
                         })
                         ->columnSpan(['default' => 12, 'lg' => 6]),
                 ])

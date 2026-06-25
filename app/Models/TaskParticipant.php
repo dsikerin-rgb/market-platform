@@ -4,6 +4,7 @@
 namespace App\Models;
 
 use App\Notifications\TaskParticipantAssignedNotification;
+use App\Support\StaffHierarchy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,16 @@ class TaskParticipant extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (self $participant): void {
+            if (
+                auth()->check()
+                && (string) $participant->role === Task::PARTICIPANT_ROLE_COEXECUTOR
+                && filled($participant->user_id)
+            ) {
+                StaffHierarchy::assertCanAssignTaskToUserIds(auth()->user(), [(int) $participant->user_id], 'coexecutor_user_ids');
+            }
+        });
+
         static::created(function (self $participant): void {
             $participant->notifyAssigned();
         });

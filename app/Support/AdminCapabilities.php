@@ -71,6 +71,20 @@ class AdminCapabilities
         'market-admin',
     ];
 
+    private const MARKETPLACE_CONTENT_MANAGERS = [
+        'market-admin',
+        'market-owner-director',
+        'market-marketing',
+        'market-advertising',
+    ];
+
+    private const MARKETPLACE_ORDER_MANAGERS = [
+        'market-admin',
+        'market-owner-director',
+        'market-marketing',
+        'market-advertising',
+    ];
+
     private const TENANT_CONTRACT_VIEWERS = [
         'market-owner',
         'market-owner-director',
@@ -326,6 +340,65 @@ class AdminCapabilities
             || self::can($user, 'market-holidays.delete');
     }
 
+    public static function canViewMarketplaceContent(?User $user, ?int $marketId = null): bool
+    {
+        return self::canScoped($user, $marketId, [
+            'marketplace.settings.view',
+            'marketplace.settings.update',
+            'marketplace.slides.viewAny',
+            'marketplace.slides.view',
+            'marketplace.slides.create',
+            'marketplace.slides.update',
+            'marketplace.slides.delete',
+            'marketplace.storefronts.view',
+            'marketplace.storefronts.update_content',
+            'marketplace.products.viewAny',
+            'marketplace.products.view',
+            'marketplace.products.update_content',
+            'marketplace.products.update_media',
+            'marketplace.products.publish',
+        ]) || self::hasScopedRole($user, $marketId, self::MARKETPLACE_CONTENT_MANAGERS);
+    }
+
+    public static function canManageMarketplaceContent(?User $user, ?int $marketId = null): bool
+    {
+        return self::canScoped($user, $marketId, [
+            'marketplace.settings.update',
+            'marketplace.slides.create',
+            'marketplace.slides.update',
+            'marketplace.slides.delete',
+            'marketplace.storefronts.update_content',
+            'marketplace.products.update_content',
+            'marketplace.products.update_media',
+            'marketplace.products.publish',
+        ]) || self::hasScopedRole($user, $marketId, self::MARKETPLACE_CONTENT_MANAGERS);
+    }
+
+    public static function canViewMarketplaceOrders(?User $user, ?int $marketId = null): bool
+    {
+        return self::canScoped($user, $marketId, [
+            'marketplace.orders.view',
+            'marketplace.orders.update_status',
+            'marketplace.chats.view',
+            'marketplace.chats.reply',
+        ]) || self::hasScopedRole($user, $marketId, self::MARKETPLACE_ORDER_MANAGERS);
+    }
+
+    public static function canManageMarketplaceOrders(?User $user, ?int $marketId = null): bool
+    {
+        return self::canScoped($user, $marketId, [
+            'marketplace.orders.update_status',
+            'marketplace.chats.reply',
+        ]) || self::hasScopedRole($user, $marketId, self::MARKETPLACE_ORDER_MANAGERS);
+    }
+
+    public static function canViewTenantMarketplaceContacts(?User $user, ?int $marketId = null): bool
+    {
+        return self::canScoped($user, $marketId, [
+            'tenants.marketplace-contacts.view',
+        ]) || self::hasScopedRole($user, $marketId, self::MARKETPLACE_CONTENT_MANAGERS);
+    }
+
     public static function canViewMarketLocations(?User $user, ?int $marketId = null): bool
     {
         return self::canViewMarketDirectory($user, $marketId)
@@ -487,6 +560,23 @@ class AdminCapabilities
         }
 
         return false;
+    }
+
+    /**
+     * @param list<string> $roles
+     */
+    private static function hasScopedRole(?User $user, ?int $marketId, array $roles): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if (self::isSuperAdmin($user)) {
+            return true;
+        }
+
+        return self::sameMarket($user, $marketId)
+            && self::hasAnyRole($user, $roles);
     }
 
     private static function hasMarketScope(?User $user, ?int $marketId = null): bool

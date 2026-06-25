@@ -273,6 +273,32 @@ class StaffResource extends BaseResource
         return (int) $record->market_id === (int) $user->market_id;
     }
 
+    public static function canManageStaffAccess(?User $actor = null): bool
+    {
+        $actor ??= Filament::auth()->user();
+
+        return (bool) $actor && ($actor->isSuperAdmin() || $actor->isMarketAdmin());
+    }
+
+    public static function canViewStaffAccessTab(?User $record = null, ?User $actor = null, string $operation = 'edit'): bool
+    {
+        $actor ??= Filament::auth()->user();
+
+        if (! $actor) {
+            return false;
+        }
+
+        if (static::canManageStaffAccess($actor)) {
+            return true;
+        }
+
+        if ($operation !== 'edit' || ! $record) {
+            return false;
+        }
+
+        return (int) $record->getKey() === (int) $actor->getKey();
+    }
+
     public static function canDelete($record): bool
     {
         /** @var \App\Models\User|null $user */
