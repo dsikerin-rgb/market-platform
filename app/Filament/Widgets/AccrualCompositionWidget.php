@@ -6,7 +6,9 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Widgets\Concerns\ResolvesDashboardFilterMonth;
 use App\Models\Market;
+use App\Models\User;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
@@ -265,33 +267,7 @@ class AccrualCompositionWidget extends Widget
 
     private function resolveMarketIdForWidget($user): ?int
     {
-        $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-
-        if (! $isSuperAdmin) {
-            return $user->market_id ? (int) $user->market_id : null;
-        }
-
-        $value = session('dashboard_market_id');
-
-        if (blank($value)) {
-            $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-            $value = session("filament.{$panelId}.selected_market_id")
-                ?? session("filament_{$panelId}_market_id");
-        }
-
-        if (blank($value)) {
-            $value = session('filament.admin.selected_market_id');
-        }
-
-        if (filled($value)) {
-            return (int) $value;
-        }
-
-        $marketId = Market::query()
-            ->orderBy('id')
-            ->value('id');
-
-        return $marketId ? (int) $marketId : null;
+        return app(MarketContext::class)->currentMarketId($user instanceof User ? $user : null);
     }
 
     private function resolveTimezone(?string $marketTimezone): string
