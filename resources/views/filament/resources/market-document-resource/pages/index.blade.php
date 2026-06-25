@@ -8,6 +8,7 @@
             'activeTab' => $workspace['activeTab'],
             'sections' => $workspace['sections'],
             'folderGroups' => $workspace['folderGroups'],
+            'contentFolders' => $workspace['contentFolders'],
             'activeFolder' => $workspace['activeFolder'],
             'canViewActivityLog' => $workspace['canViewActivityLog'],
             'activityLogUrl' => $workspace['activityLogUrl'],
