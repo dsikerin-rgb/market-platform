@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\StaffInvitationResource\Pages;
 use App\Filament\Resources\StaffInvitationResource\Schemas\StaffInvitationForm;
 use App\Models\StaffInvitation;
+use App\Support\MarketContext;
 use App\Support\RoleScenarioCatalog;
 use Filament\Facades\Filament;
 use App\Filament\Resources\BaseResource;
@@ -39,12 +40,7 @@ class StaffInvitationResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     protected static function canManage(): bool

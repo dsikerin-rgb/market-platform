@@ -3,6 +3,7 @@
 
 namespace App\Filament\Resources\StaffInvitationResource\Schemas;
 
+use App\Support\MarketContext;
 use App\Support\RoleScenarioCatalog;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -256,11 +257,6 @@ class StaffInvitationForm
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 }

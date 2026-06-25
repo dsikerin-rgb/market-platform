@@ -8,6 +8,7 @@ use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Filament\Resources\Staff\Schemas\StaffForm;
 use App\Filament\Resources\Staff\Tables\StaffTable;
 use App\Models\User;
+use App\Support\MarketContext;
 use App\Support\SystemAgentService;
 use BackedEnum;
 use Filament\Facades\Filament;
@@ -43,12 +44,7 @@ class StaffResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     protected static function applyInternalStaffScope(Builder $query): Builder
