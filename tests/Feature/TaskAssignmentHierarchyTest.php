@@ -6,9 +6,12 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\TaskResource;
 use App\Models\Market;
+use App\Models\Task;
+use App\Models\TaskParticipant;
 use App\Models\User;
 use App\Support\TaskAssignmentRules;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -90,6 +93,117 @@ class TaskAssignmentHierarchyTest extends TestCase
         $director = $this->staff($market, 'admin-director@example.test', 2);
 
         $this->assertTrue(app(TaskAssignmentRules::class)->canAssignWork($admin, $director));
+    }
+
+    public function test_direct_task_create_cannot_bypass_assignment_hierarchy(): void
+    {
+        $market = Market::create([
+            'name' => 'Domain guard market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $employee = $this->staff($market, 'domain-employee@example.test', 5);
+        $director = $this->staff($market, 'domain-director@example.test', 2);
+
+        $this->actingAs($employee);
+
+        $this->expectException(ValidationException::class);
+
+        Task::create([
+            'market_id' => $market->id,
+            'title' => 'Direct bypass attempt',
+            'created_by_user_id' => $employee->id,
+            'assignee_id' => $director->id,
+        ]);
+    }
+
+    public function test_direct_coexecutor_create_cannot_bypass_assignment_hierarchy(): void
+    {
+        $market = Market::create([
+            'name' => 'Participant guard market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $employee = $this->staff($market, 'participant-employee@example.test', 5);
+        $director = $this->staff($market, 'participant-director@example.test', 2);
+
+        $task = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Participant bypass attempt',
+            'created_by_user_id' => $employee->id,
+        ]);
+
+        $this->actingAs($employee);
+
+        $this->expectException(ValidationException::class);
+
+        TaskParticipant::create([
+            'task_id' => $task->id,
+            'user_id' => $director->id,
+            'role' => Task::PARTICIPANT_ROLE_COEXECUTOR,
+        ]);
+    }
+
+    public function test_direct_observer_create_allows_higher_level_employee_in_same_market(): void
+    {
+        $market = Market::create([
+            'name' => 'Observer guard market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $employee = $this->staff($market, 'observer-employee@example.test', 5);
+        $director = $this->staff($market, 'observer-director@example.test', 2);
+
+        $task = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Observer allowed',
+            'created_by_user_id' => $employee->id,
+        ]);
+
+        $this->actingAs($employee);
+
+        $participant = TaskParticipant::create([
+            'task_id' => $task->id,
+            'user_id' => $director->id,
+            'role' => Task::PARTICIPANT_ROLE_OBSERVER,
+        ]);
+
+        $this->assertTrue($participant->exists);
+    }
+
+    public function test_direct_participant_create_without_role_is_checked_as_observer(): void
+    {
+        $market = Market::create([
+            'name' => 'Default observer guard market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+        $otherMarket = Market::create([
+            'name' => 'Other observer guard market',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $employee = $this->staff($market, 'default-observer-employee@example.test', 5);
+        $outsider = $this->staff($otherMarket, 'default-observer-outsider@example.test', 5);
+
+        $task = Task::create([
+            'market_id' => $market->id,
+            'title' => 'Default observer bypass attempt',
+            'created_by_user_id' => $employee->id,
+        ]);
+
+        $this->actingAs($employee);
+
+        $this->expectException(ValidationException::class);
+
+        TaskParticipant::create([
+            'task_id' => $task->id,
+            'user_id' => $outsider->id,
+        ]);
     }
 
     /**
