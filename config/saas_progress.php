@@ -83,7 +83,7 @@ return [
                 ['title' => 'Support helpers используют единый context: TestingModeNoticeSettings + MarketFeature + TaskCalendarFilters переведены', 'status' => 'done'],
                 ['title' => 'Filament resources/pages используют единый context: ReportResource + ReportRunResource + MarketLocationTypeResource + MarketSpaceTypeResource + TaskCommentResource + TaskWatcherResource + MarketHolidayResource + MarketplaceSlideResource + StaffResource + StaffForm + IntegrationExchangeResource + TenantResource + MarketSettings + MarketplaceSettings + MapReviewResults + OpsDiagnostics + OperationResource + StaffInvitationResource + StaffInvitationForm + MarketLocationResource + MarketSpaceGroupEpisodeResource + CreateMarketLocation + EditMarketLocation + EditMarketSpace + 1C reconciliation report переведены', 'status' => 'in_progress'],
                 ['title' => 'Dashboard/widgets/Livewire используют единый context: 17 widget + Dashboard page + StaffLiveFeed + OnlineStaffRail + QuickChatDrawer переведены', 'status' => 'in_progress'],
-                ['title' => 'Карта рынка использует тот же market_id: MapReviewResults + основной экран карты переведены', 'status' => 'done'],
+                ['title' => 'Карта рынка использует тот же market_id: MapReviewResults + основной экран карты + review Blade partials переведены', 'status' => 'done'],
                 ['title' => '1C API выставляет context из integration token', 'status' => 'pending'],
                 ['title' => 'Jobs/commands получают market_id явно', 'status' => 'pending'],
                 ['title' => 'Smoke matrix для UI/API/jobs', 'status' => 'pending'],
