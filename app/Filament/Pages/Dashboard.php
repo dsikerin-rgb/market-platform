@@ -735,10 +735,7 @@ class Dashboard extends BaseDashboard
         $marketId = $this->resolveSelectedMarketId();
 
         if ($marketId > 0) {
-            session(['dashboard_market_id' => $marketId]);
-            session(["filament.{$panelId}.selected_market_id" => $marketId]);
-            session(["filament_{$panelId}_market_id" => $marketId]);
-            session(['filament.admin.selected_market_id' => $marketId]);
+            app(MarketContext::class)->syncSelectedMarketIdInSession($marketId, $panelId);
         }
     }
 
