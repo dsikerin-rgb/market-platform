@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Подготовить 1C API к MarketContext без включения tenant scope; payments endpoint завернут в context из integration token.',
-    'next_step' => 'Расширить такой же безопасный wrapper на остальные 1C endpoints и затем перейти к jobs/commands.',
+    'current_focus' => 'Подготовить 1C API к MarketContext без включения tenant scope; payments и settlements endpoints завернуты в context из integration token.',
+    'next_step' => 'Расширить такой же безопасный wrapper на contract debts, contracts и accruals, затем перейти к jobs/commands.',
     'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
         [
@@ -84,7 +84,7 @@ return [
                 ['title' => 'Filament resources/pages используют единый context: ReportResource + ReportRunResource + MarketLocationTypeResource + MarketSpaceTypeResource + TaskResource + TaskCommentResource + TaskWatcherResource + MarketHolidayResource + MarketplaceSlideResource + StaffResource + StaffForm + IntegrationExchangeResource + TenantResource + MarketSettings + MarketplaceSettings + MapReviewResults + OpsDiagnostics + OperationResource + StaffInvitationResource + StaffInvitationForm + MarketLocationResource + MarketSpaceGroupEpisodeResource + CreateMarketLocation + EditMarketLocation + EditMarketSpace + MarketSpaceResource + CreateMarketSpace + TenantContractResource + ListTenantContracts + TenantAccrualResource + TenantAccrualsTable + ListTenantAccruals + MarketDocumentResource + ListMarketDocuments + MarketDocumentActivityEventResource + 1C reconciliation report переведены', 'status' => 'in_progress'],
                 ['title' => 'Dashboard/widgets/Livewire используют единый context: 17 widget + Dashboard page read/write sync + MarketSwitcherWidget sync + StaffLiveFeed + OnlineStaffRail + QuickChatDrawer переведены', 'status' => 'in_progress'],
                 ['title' => 'Карта рынка использует тот же market_id: MapReviewResults + основной экран карты + review Blade partials + AppServiceProvider map-review routes переведены', 'status' => 'done'],
-                ['title' => '1C API выставляет context из integration token: payments endpoint подготовлен', 'status' => 'in_progress'],
+                ['title' => '1C API выставляет context из integration token: payments + settlements endpoints подготовлены', 'status' => 'in_progress'],
                 ['title' => 'Jobs/commands получают market_id явно', 'status' => 'pending'],
                 ['title' => 'Smoke matrix для UI/API/jobs: regression guard против прямых market session lookup добавлен', 'status' => 'in_progress'],
             ],

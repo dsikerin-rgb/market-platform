@@ -10,6 +10,9 @@ use App\Models\MarketIntegration;
 use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\TenantSettlementBalance;
+use App\Services\Tenants\OneCTenantResolver;
+use App\Support\MarketContext;
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -18,6 +21,7 @@ class OneCSettlementImportTest extends TestCase
     use RefreshDatabase;
 
     private Market $market;
+
     private string $token;
 
     protected function setUp(): void
@@ -29,7 +33,7 @@ class OneCSettlementImportTest extends TestCase
             'slug' => 'test-market',
         ]);
 
-        $this->token = 'test-1c-settlement-token-' . uniqid();
+        $this->token = 'test-1c-settlement-token-'.uniqid();
 
         MarketIntegration::query()->create([
             'market_id' => (int) $this->market->id,
@@ -86,7 +90,7 @@ class OneCSettlementImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -154,7 +158,7 @@ class OneCSettlementImportTest extends TestCase
         ];
 
         $headers = [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ];
 
@@ -169,6 +173,61 @@ class OneCSettlementImportTest extends TestCase
             ->assertJsonPath('updated', 1);
 
         $this->assertSame(1, TenantSettlementBalance::query()->count());
+    }
+
+    public function test_settlement_import_sets_market_context_from_integration_token(): void
+    {
+        Tenant::query()->create([
+            'market_id' => (int) $this->market->id,
+            'name' => 'Context tenant',
+            'external_id' => 'tenant-context',
+        ]);
+
+        $observedMarketId = null;
+
+        $this->app->bind(OneCTenantResolver::class, function () use (&$observedMarketId): OneCTenantResolver {
+            return new class($observedMarketId) extends OneCTenantResolver
+            {
+                private mixed $observedMarketId;
+
+                public function __construct(mixed &$observedMarketId)
+                {
+                    $this->observedMarketId = &$observedMarketId;
+                }
+
+                public function resolve(
+                    int $marketId,
+                    string $tenantExternalId,
+                    array $payload,
+                    string $source,
+                    CarbonInterface $now,
+                    array $options = [],
+                ): array {
+                    $this->observedMarketId = app(MarketContext::class)->currentMarketId();
+
+                    return parent::resolve($marketId, $tenantExternalId, $payload, $source, $now, $options);
+                }
+            };
+        });
+
+        $this->postJson(route('api.1c.settlements.store'), [
+            'calculated_at' => '2026-06-11 08:00:00',
+            'period_from' => '2026-06-01',
+            'period_to' => '2026-06-30',
+            'account' => '62.01',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-context',
+                    'settlement_document_external_id' => 'doc-context',
+                    'closing_debit' => 1250,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer '.$this->token,
+            'Accept' => 'application/json',
+        ])->assertOk();
+
+        $this->assertSame((int) $this->market->id, $observedMarketId);
     }
 
     public function test_settlement_import_requires_valid_token(): void
@@ -242,7 +301,7 @@ class OneCSettlementImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ])
             ->assertOk()
@@ -302,7 +361,7 @@ class OneCSettlementImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ])
             ->assertOk()
