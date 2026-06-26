@@ -44,7 +44,9 @@ return [
         'dashboard_market_id',
         'filament.{panel}.selected_market_id',
         'filament_{panel}_market_id',
+        'filament.{panel}.market_id',
         'filament.admin.selected_market_id',
+        'filament.admin.market_id',
         'selected_market_id',
     ],
 ];
