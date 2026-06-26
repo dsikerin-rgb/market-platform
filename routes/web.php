@@ -846,9 +846,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
 
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $selectedMarketId = session("filament.{$panelId}.selected_market_id")
-            ?? session('filament.admin.selected_market_id');
+        $selectedMarketId = app(MarketContext::class)->selectedMarketIdFromSession();
 
         if ($isSuperAdmin) {
             $market = filled($selectedMarketId)
