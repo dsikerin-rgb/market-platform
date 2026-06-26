@@ -86,7 +86,7 @@ return [
                 ['title' => 'Карта рынка использует тот же market_id: MapReviewResults + основной экран карты + review Blade partials + AppServiceProvider map-review routes переведены', 'status' => 'done'],
                 ['title' => '1C API выставляет context из integration token', 'status' => 'pending'],
                 ['title' => 'Jobs/commands получают market_id явно', 'status' => 'pending'],
-                ['title' => 'Smoke matrix для UI/API/jobs', 'status' => 'pending'],
+                ['title' => 'Smoke matrix для UI/API/jobs: regression guard против прямых market session lookup добавлен', 'status' => 'in_progress'],
             ],
         ],
         [
