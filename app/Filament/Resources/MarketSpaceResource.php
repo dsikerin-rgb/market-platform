@@ -17,6 +17,7 @@ use App\Services\Finance\SettlementBalancePresentation;
 use App\Services\Operations\MarketPeriodResolver;
 use App\Services\Operations\OperationsStateService;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use App\Support\MarketSpaces\MarketSpaceShapePolicy;
 use App\Support\Search\LooseSearch;
 use Filament\Facades\Filament;
@@ -71,12 +72,7 @@ class MarketSpaceResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     /**

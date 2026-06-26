@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use App\Filament\Resources\MarketLocationResource;
 use App\Filament\Resources\MarketLocationResource\Pages\CreateMarketLocation;
 use App\Filament\Resources\MarketLocationResource\Pages\EditMarketLocation;
+use App\Filament\Resources\MarketSpaceResource;
+use App\Filament\Resources\MarketSpaceResource\Pages\CreateMarketSpace;
 use App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace;
 use App\Filament\Resources\MarketSpaceGroupEpisodeResource;
 use App\Models\User;
@@ -32,6 +34,7 @@ class MarketStructureResourcesMarketContextTest extends TestCase
 
         self::assertSame($marketId, $this->resolvedMarketId(MarketLocationResource::class));
         self::assertSame($marketId, $this->resolvedMarketId(MarketSpaceGroupEpisodeResource::class));
+        self::assertSame($marketId, $this->resolvedMarketId(MarketSpaceResource::class));
     }
 
     public function test_market_location_pages_use_market_context_session_keys(): void
@@ -64,6 +67,45 @@ class MarketStructureResourcesMarketContextTest extends TestCase
 
         self::assertSame($marketId, $this->resolvedMarketId(MarketLocationResource::class));
         self::assertSame($marketId, $this->resolvedMarketId(MarketSpaceGroupEpisodeResource::class));
+        self::assertSame($marketId, $this->resolvedMarketId(MarketSpaceResource::class));
+    }
+
+    public function test_market_space_resource_uses_market_context_session_lookup(): void
+    {
+        $source = (string) file_get_contents(app_path('Filament/Resources/MarketSpaceResource.php'));
+        $start = strpos($source, 'protected static function selectedMarketIdFromSession(): ?int');
+        $end = is_int($start) ? strpos($source, '/**', $start) : false;
+        $methodSource = (is_int($start) && is_int($end)) ? substr($source, $start, $end - $start) : '';
+
+        self::assertNotSame('', $methodSource);
+        self::assertStringContainsString('app(MarketContext::class)->selectedMarketIdFromSession()', $methodSource);
+        self::assertStringNotContainsString('Filament::getCurrentPanel()?->getId()', $methodSource);
+        self::assertStringNotContainsString('session($key)', $methodSource);
+    }
+
+    public function test_create_market_space_syncs_selected_market_through_market_context(): void
+    {
+        $marketId = 81828;
+
+        $this->storeCreateMarketSpaceSelectedMarketId($marketId);
+
+        foreach ([
+            'dashboard_market_id',
+            'filament.admin.selected_market_id',
+            'filament_admin_market_id',
+            'selected_market_id',
+        ] as $key) {
+            self::assertSame($marketId, session($key));
+        }
+
+        $source = (string) file_get_contents(app_path('Filament/Resources/MarketSpaceResource/Pages/CreateMarketSpace.php'));
+        $start = strpos($source, 'private function storeSelectedMarketIdInSession(?int $marketId): void');
+        $end = is_int($start) ? strpos($source, 'private function normalizeReturnUrl', $start) : false;
+        $methodSource = (is_int($start) && is_int($end)) ? substr($source, $start, $end - $start) : '';
+
+        self::assertNotSame('', $methodSource);
+        self::assertStringContainsString('app(MarketContext::class)->syncSelectedMarketIdInSession($marketId)', $methodSource);
+        self::assertStringNotContainsString('session(["filament_{$panelId}_market_id" => $marketId])', $methodSource);
     }
 
     public function test_edit_market_space_reads_selected_market_through_market_context(): void
@@ -111,6 +153,13 @@ class MarketStructureResourcesMarketContextTest extends TestCase
         $method->setAccessible(true);
 
         return $method->invoke(new EditMarketLocation, $data);
+    }
+
+    private function storeCreateMarketSpaceSelectedMarketId(?int $marketId): void
+    {
+        $method = new ReflectionMethod(CreateMarketSpace::class, 'storeSelectedMarketIdInSession');
+        $method->setAccessible(true);
+        $method->invoke(new CreateMarketSpace, $marketId);
     }
 
     private function actingAsSuperAdmin(): void
