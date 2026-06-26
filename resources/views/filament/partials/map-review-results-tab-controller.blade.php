@@ -2,6 +2,7 @@
     use App\Filament\Resources\MarketSpaceResource;
     use App\Filament\Widgets\MapReviewDataQualitySignalsWidget;
     use App\Services\MarketMap\MapReviewResultsService;
+    use App\Support\MarketContext;
     use Filament\Facades\Filament;
     use Livewire\Livewire;
 
@@ -12,11 +13,7 @@
     $manualDuplicateActions = [];
 
     if ($activeReviewResultsTab === 'review') {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $selectedMarketId = session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id')
+        $selectedMarketId = app(MarketContext::class)->selectedMarketIdFromSession()
             ?? Filament::auth()->user()?->market_id;
 
         if (filled($selectedMarketId)) {

@@ -1,6 +1,7 @@
 @php
     use App\Domain\Operations\SpaceReviewDecision;
     use App\Services\MarketMap\MapReviewResultsService;
+    use App\Support\MarketContext;
     use Filament\Facades\Filament;
 
     $activeReviewResultsTab = in_array(request()->query('tab', 'review'), ['review', 'unconfirmed_links', 'data_quality', 'applied'], true)
@@ -10,11 +11,7 @@
     $historicalGroupActions = [];
 
     if ($activeReviewResultsTab === 'review') {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $selectedMarketId = session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id')
+        $selectedMarketId = app(MarketContext::class)->selectedMarketIdFromSession()
             ?? Filament::auth()->user()?->market_id;
 
         if (filled($selectedMarketId)) {
