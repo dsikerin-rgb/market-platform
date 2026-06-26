@@ -10,6 +10,9 @@ use App\Models\MarketIntegration;
 use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Models\TenantPayment;
+use App\Services\Tenants\OneCTenantResolver;
+use App\Support\MarketContext;
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -18,6 +21,7 @@ class OneCPaymentImportTest extends TestCase
     use RefreshDatabase;
 
     private Market $market;
+
     private string $token;
 
     protected function setUp(): void
@@ -29,7 +33,7 @@ class OneCPaymentImportTest extends TestCase
             'slug' => 'test-market',
         ]);
 
-        $this->token = 'test-1c-payment-token-' . uniqid();
+        $this->token = 'test-1c-payment-token-'.uniqid();
 
         MarketIntegration::query()->create([
             'market_id' => (int) $this->market->id,
@@ -81,7 +85,7 @@ class OneCPaymentImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -142,7 +146,7 @@ class OneCPaymentImportTest extends TestCase
         ];
 
         $headers = [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ];
 
@@ -157,6 +161,62 @@ class OneCPaymentImportTest extends TestCase
             ->assertJsonPath('skipped', 1);
 
         $this->assertSame(1, TenantPayment::query()->count());
+    }
+
+    public function test_payment_import_sets_market_context_from_integration_token(): void
+    {
+        Tenant::query()->create([
+            'market_id' => (int) $this->market->id,
+            'name' => 'Context tenant',
+            'external_id' => 'tenant-context',
+        ]);
+
+        $observedMarketId = null;
+
+        $this->app->bind(OneCTenantResolver::class, function () use (&$observedMarketId): OneCTenantResolver {
+            return new class($observedMarketId) extends OneCTenantResolver
+            {
+                private mixed $observedMarketId;
+
+                public function __construct(mixed &$observedMarketId)
+                {
+                    $this->observedMarketId = &$observedMarketId;
+                }
+
+                public function resolve(
+                    int $marketId,
+                    string $tenantExternalId,
+                    array $payload,
+                    string $source,
+                    CarbonInterface $now,
+                    array $options = [],
+                ): array {
+                    $this->observedMarketId = app(MarketContext::class)->currentMarketId();
+
+                    return parent::resolve($marketId, $tenantExternalId, $payload, $source, $now, $options);
+                }
+            };
+        });
+
+        $this->postJson(route('api.1c.payments.store'), [
+            'calculated_at' => '2026-06-09 19:00:00',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-context',
+                    'payment_external_id' => 'payment-context',
+                    'document_number' => 'BP-CONTEXT',
+                    'payment_date' => '2026-06-08',
+                    'period' => '2026-06',
+                    'amount' => 1250,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer '.$this->token,
+            'Accept' => 'application/json',
+        ])->assertOk();
+
+        $this->assertSame((int) $this->market->id, $observedMarketId);
     }
 
     public function test_payment_import_requires_valid_token(): void
@@ -231,7 +291,7 @@ class OneCPaymentImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ])
             ->assertOk()

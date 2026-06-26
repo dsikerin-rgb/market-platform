@@ -10,6 +10,7 @@ use App\Models\MarketIntegration;
 use App\Models\TenantContract;
 use App\Models\TenantPayment;
 use App\Services\Tenants\OneCTenantResolver;
+use App\Support\MarketContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ use Throwable;
 class PaymentController extends Controller
 {
     private const ENDPOINT = '/api/1c/payments';
+
     private const ENTITY_TYPE = 'payments';
 
     public function store(Request $request, OneCTenantResolver $tenantResolver): JsonResponse
@@ -78,275 +80,284 @@ class PaymentController extends Controller
 
             $marketId = (int) $integration->market_id;
 
-            $exchange = IntegrationExchange::query()->create([
-                'market_id' => $marketId,
-                'direction' => IntegrationExchange::DIRECTION_IN,
-                'entity_type' => self::ENTITY_TYPE,
-                'status' => IntegrationExchange::STATUS_IN_PROGRESS,
-                'created_by' => null,
-                'started_at' => $startedAt,
-                'finished_at' => null,
-                'payload' => [
-                    'endpoint' => self::ENDPOINT,
-                    'market_integration_id' => (int) $integration->id,
-                    'request_meta' => [
-                        'ip' => $request->ip(),
-                        'user_agent' => (string) $request->userAgent(),
-                    ],
-                ],
-            ]);
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                function () use ($request, $tenantResolver, $integration, $marketId, $startedAt, &$exchange): JsonResponse {
+                    $exchange = IntegrationExchange::query()->create([
+                        'market_id' => $marketId,
+                        'direction' => IntegrationExchange::DIRECTION_IN,
+                        'entity_type' => self::ENTITY_TYPE,
+                        'status' => IntegrationExchange::STATUS_IN_PROGRESS,
+                        'created_by' => null,
+                        'started_at' => $startedAt,
+                        'finished_at' => null,
+                        'payload' => [
+                            'endpoint' => self::ENDPOINT,
+                            'market_integration_id' => (int) $integration->id,
+                            'request_meta' => [
+                                'ip' => $request->ip(),
+                                'user_agent' => (string) $request->userAgent(),
+                            ],
+                        ],
+                    ]);
 
-            try {
-                $validated = $request->validate([
-                    'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
-                    'items' => ['required', 'array', 'min:1'],
+                    try {
+                        $validated = $request->validate([
+                            'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
+                            'items' => ['required', 'array', 'min:1'],
 
-                    'items.*.tenant_external_id' => ['required', 'string', 'max:255'],
-                    'items.*.contract_external_id' => ['nullable', 'string', 'max:255'],
-                    'items.*.payment_external_id' => ['nullable', 'string', 'max:255'],
-                    'items.*.document_number' => ['nullable', 'string', 'max:255'],
-                    'items.*.payment_date' => ['required', 'date_format:Y-m-d'],
-                    'items.*.period' => ['required', 'regex:/^\d{4}-\d{2}$/'],
-                    'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
-                    'items.*.organization_name' => ['nullable', 'string', 'max:255'],
-                    'items.*.account' => ['nullable', 'string', 'max:64'],
-                    'items.*.debit_account' => ['nullable', 'string', 'max:64'],
-                    'items.*.amount' => ['required', 'numeric'],
-                    'items.*.currency' => ['nullable', 'string', 'size:3'],
-                    'items.*.purpose' => ['nullable', 'string'],
+                            'items.*.tenant_external_id' => ['required', 'string', 'max:255'],
+                            'items.*.contract_external_id' => ['nullable', 'string', 'max:255'],
+                            'items.*.payment_external_id' => ['nullable', 'string', 'max:255'],
+                            'items.*.document_number' => ['nullable', 'string', 'max:255'],
+                            'items.*.payment_date' => ['required', 'date_format:Y-m-d'],
+                            'items.*.period' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+                            'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
+                            'items.*.organization_name' => ['nullable', 'string', 'max:255'],
+                            'items.*.account' => ['nullable', 'string', 'max:64'],
+                            'items.*.debit_account' => ['nullable', 'string', 'max:64'],
+                            'items.*.amount' => ['required', 'numeric'],
+                            'items.*.currency' => ['nullable', 'string', 'size:3'],
+                            'items.*.purpose' => ['nullable', 'string'],
 
-                    'items.*.inn' => ['nullable', 'string', 'max:32'],
-                    'items.*.kpp' => ['nullable', 'string', 'max:32'],
-                    'items.*.tenant_name' => ['nullable', 'string', 'max:255'],
-                ]);
-            } catch (ValidationException $e) {
-                $received = is_array($request->input('items')) ? count($request->input('items')) : 0;
+                            'items.*.inn' => ['nullable', 'string', 'max:32'],
+                            'items.*.kpp' => ['nullable', 'string', 'max:32'],
+                            'items.*.tenant_name' => ['nullable', 'string', 'max:255'],
+                        ]);
+                    } catch (ValidationException $e) {
+                        $received = is_array($request->input('items')) ? count($request->input('items')) : 0;
 
-                $this->writeImportLog([
-                    'status' => 'validation_error',
-                    'endpoint' => self::ENDPOINT,
-                    'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                    'market_id' => $marketId,
-                    'integration_id' => (int) $integration->id,
-                    'received' => $received,
-                    'inserted' => 0,
-                    'skipped' => 0,
-                    'calculated_at' => is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null,
-                    'error_message' => 'Validation failed',
-                    'meta' => [
-                        'errors' => $e->errors(),
-                        'ip' => $request->ip(),
-                    ],
-                ]);
+                        $this->writeImportLog([
+                            'status' => 'validation_error',
+                            'endpoint' => self::ENDPOINT,
+                            'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                            'market_id' => $marketId,
+                            'integration_id' => (int) $integration->id,
+                            'received' => $received,
+                            'inserted' => 0,
+                            'skipped' => 0,
+                            'calculated_at' => is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null,
+                            'error_message' => 'Validation failed',
+                            'meta' => [
+                                'errors' => $e->errors(),
+                                'ip' => $request->ip(),
+                            ],
+                        ]);
 
-                $exchange->markFinishedError('Validation failed', array_merge((array) ($exchange->payload ?? []), [
-                    'status' => 'validation_error',
-                    'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                    'received' => $received,
-                    'inserted' => 0,
-                    'skipped' => 0,
-                    'validation_errors' => $e->errors(),
-                    'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
-                ]));
-                $exchange->save();
+                        $exchange->markFinishedError('Validation failed', array_merge((array) ($exchange->payload ?? []), [
+                            'status' => 'validation_error',
+                            'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                            'received' => $received,
+                            'inserted' => 0,
+                            'skipped' => 0,
+                            'validation_errors' => $e->errors(),
+                            'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
+                        ]));
+                        $exchange->save();
 
-                throw $e;
-            }
+                        throw $e;
+                    }
 
-            $received = count($validated['items']);
-            $inserted = 0;
-            $skipped = 0;
-            $linkedContracts = 0;
-            $unresolvedContracts = 0;
-            $tenantsCreated = 0;
-            $tenantsUpdatedByInn = 0;
-            $snapshotDeleted = 0;
-            $snapshotSyncSkippedPeriods = [];
-            $receivedByPeriod = [];
-            $skippedByPeriod = [];
-            $touchedPaymentIdsByPeriod = [];
-            $now = now();
+                    $received = count($validated['items']);
+                    $inserted = 0;
+                    $skipped = 0;
+                    $linkedContracts = 0;
+                    $unresolvedContracts = 0;
+                    $tenantsCreated = 0;
+                    $tenantsUpdatedByInn = 0;
+                    $snapshotDeleted = 0;
+                    $snapshotSyncSkippedPeriods = [];
+                    $receivedByPeriod = [];
+                    $skippedByPeriod = [];
+                    $touchedPaymentIdsByPeriod = [];
+                    $now = now();
 
-            DB::beginTransaction();
+                    DB::beginTransaction();
 
-            foreach ($validated['items'] as $item) {
-                $tenantExternalId = trim((string) $item['tenant_external_id']);
-                $contractExternalId = trim((string) ($item['contract_external_id'] ?? ''));
-                $paymentExternalId = trim((string) ($item['payment_external_id'] ?? ''));
-                $documentNumber = trim((string) ($item['document_number'] ?? ''));
-                $paymentDate = trim((string) $item['payment_date']);
-                $periodYm = trim((string) $item['period']);
-                $periodDate = $periodYm . '-01';
-                $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
-                $organizationName = trim((string) ($item['organization_name'] ?? ''));
-                $account = trim((string) ($item['account'] ?? ''));
-                $debitAccount = trim((string) ($item['debit_account'] ?? ''));
-                $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
-                $purpose = trim((string) ($item['purpose'] ?? ''));
-                $amount = $this->normalizeMoney($item['amount']);
-                $receivedByPeriod[$periodDate] = ($receivedByPeriod[$periodDate] ?? 0) + 1;
+                    foreach ($validated['items'] as $item) {
+                        $tenantExternalId = trim((string) $item['tenant_external_id']);
+                        $contractExternalId = trim((string) ($item['contract_external_id'] ?? ''));
+                        $paymentExternalId = trim((string) ($item['payment_external_id'] ?? ''));
+                        $documentNumber = trim((string) ($item['document_number'] ?? ''));
+                        $paymentDate = trim((string) $item['payment_date']);
+                        $periodYm = trim((string) $item['period']);
+                        $periodDate = $periodYm.'-01';
+                        $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
+                        $organizationName = trim((string) ($item['organization_name'] ?? ''));
+                        $account = trim((string) ($item['account'] ?? ''));
+                        $debitAccount = trim((string) ($item['debit_account'] ?? ''));
+                        $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
+                        $purpose = trim((string) ($item['purpose'] ?? ''));
+                        $amount = $this->normalizeMoney($item['amount']);
+                        $receivedByPeriod[$periodDate] = ($receivedByPeriod[$periodDate] ?? 0) + 1;
 
-                if ($currency === '') {
-                    $currency = 'RUB';
-                }
+                        if ($currency === '') {
+                            $currency = 'RUB';
+                        }
 
-                $tenantResolution = $tenantResolver->resolve(
-                    $marketId,
-                    $tenantExternalId,
-                    $item,
-                    'payments',
-                    $now,
-                    ['activate_resolved_tenant' => true],
-                );
+                        $tenantResolution = $tenantResolver->resolve(
+                            $marketId,
+                            $tenantExternalId,
+                            $item,
+                            'payments',
+                            $now,
+                            ['activate_resolved_tenant' => true],
+                        );
 
-                $tenant = $tenantResolution['tenant'];
+                        $tenant = $tenantResolution['tenant'];
 
-                if (! $tenant) {
-                    $skippedByPeriod[$periodDate] = ($skippedByPeriod[$periodDate] ?? 0) + 1;
-                    $skipped++;
-                    continue;
-                }
+                        if (! $tenant) {
+                            $skippedByPeriod[$periodDate] = ($skippedByPeriod[$periodDate] ?? 0) + 1;
+                            $skipped++;
 
-                if ($tenantResolution['mode'] === 'created') {
-                    $tenantsCreated++;
-                } elseif ($tenantResolution['mode'] === 'matched_inn') {
-                    $tenantsUpdatedByInn++;
-                }
+                            continue;
+                        }
 
-                $contract = $this->resolveContract($marketId, (int) $tenant->id, $contractExternalId);
+                        if ($tenantResolution['mode'] === 'created') {
+                            $tenantsCreated++;
+                        } elseif ($tenantResolution['mode'] === 'matched_inn') {
+                            $tenantsUpdatedByInn++;
+                        }
 
-                if ($contract) {
-                    $linkedContracts++;
-                } elseif ($contractExternalId !== '') {
-                    $unresolvedContracts++;
-                }
+                        $contract = $this->resolveContract($marketId, (int) $tenant->id, $contractExternalId);
 
-                $sourceRowHash = $this->makePaymentHash(
-                    $marketId,
-                    $tenantExternalId,
-                    $contractExternalId,
-                    $paymentExternalId,
-                    $documentNumber,
-                    $paymentDate,
-                    $periodYm,
-                    $organizationExternalId,
-                    $organizationName,
-                    $account,
-                    $debitAccount,
-                    $currency,
-                    $amount,
-                    $purpose,
-                );
+                        if ($contract) {
+                            $linkedContracts++;
+                        } elseif ($contractExternalId !== '') {
+                            $unresolvedContracts++;
+                        }
 
-                $existing = TenantPayment::query()
-                    ->where('market_id', $marketId)
-                    ->where('source_row_hash', $sourceRowHash)
-                    ->first();
+                        $sourceRowHash = $this->makePaymentHash(
+                            $marketId,
+                            $tenantExternalId,
+                            $contractExternalId,
+                            $paymentExternalId,
+                            $documentNumber,
+                            $paymentDate,
+                            $periodYm,
+                            $organizationExternalId,
+                            $organizationName,
+                            $account,
+                            $debitAccount,
+                            $currency,
+                            $amount,
+                            $purpose,
+                        );
 
-                if ($existing) {
-                    $touchedPaymentIdsByPeriod[$periodDate] ??= [];
-                    $touchedPaymentIdsByPeriod[$periodDate][] = (int) $existing->id;
-                    $skipped++;
-                    continue;
-                }
+                        $existing = TenantPayment::query()
+                            ->where('market_id', $marketId)
+                            ->where('source_row_hash', $sourceRowHash)
+                            ->first();
 
-                $payment = TenantPayment::query()->create([
-                    'market_id' => $marketId,
-                    'tenant_id' => (int) $tenant->id,
-                    'tenant_contract_id' => $contract?->id,
-                    'tenant_external_id' => $tenantExternalId,
-                    'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
-                    'payment_external_id' => $paymentExternalId !== '' ? $paymentExternalId : null,
-                    'document_number' => $documentNumber !== '' ? $documentNumber : null,
-                    'payment_date' => $paymentDate,
-                    'period' => $periodDate,
-                    'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
-                    'organization_name' => $organizationName !== '' ? $organizationName : null,
-                    'account' => $account !== '' ? $account : null,
-                    'debit_account' => $debitAccount !== '' ? $debitAccount : null,
-                    'amount' => $amount,
-                    'currency' => $currency,
-                    'purpose' => $purpose !== '' ? $purpose : null,
-                    'source' => '1c',
-                    'source_file' => '1c:payments',
-                    'payload' => $item,
-                    'imported_at' => $now,
-                    'source_row_hash' => $sourceRowHash,
-                ]);
+                        if ($existing) {
+                            $touchedPaymentIdsByPeriod[$periodDate] ??= [];
+                            $touchedPaymentIdsByPeriod[$periodDate][] = (int) $existing->id;
+                            $skipped++;
 
-                $touchedPaymentIdsByPeriod[$periodDate] ??= [];
-                $touchedPaymentIdsByPeriod[$periodDate][] = (int) $payment->id;
-                $inserted++;
-            }
+                            continue;
+                        }
 
-            foreach ($receivedByPeriod as $periodDate => $periodReceived) {
-                if (($skippedByPeriod[$periodDate] ?? 0) > 0) {
-                    $snapshotSyncSkippedPeriods[] = $periodDate;
-                    continue;
-                }
+                        $payment = TenantPayment::query()->create([
+                            'market_id' => $marketId,
+                            'tenant_id' => (int) $tenant->id,
+                            'tenant_contract_id' => $contract?->id,
+                            'tenant_external_id' => $tenantExternalId,
+                            'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
+                            'payment_external_id' => $paymentExternalId !== '' ? $paymentExternalId : null,
+                            'document_number' => $documentNumber !== '' ? $documentNumber : null,
+                            'payment_date' => $paymentDate,
+                            'period' => $periodDate,
+                            'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
+                            'organization_name' => $organizationName !== '' ? $organizationName : null,
+                            'account' => $account !== '' ? $account : null,
+                            'debit_account' => $debitAccount !== '' ? $debitAccount : null,
+                            'amount' => $amount,
+                            'currency' => $currency,
+                            'purpose' => $purpose !== '' ? $purpose : null,
+                            'source' => '1c',
+                            'source_file' => '1c:payments',
+                            'payload' => $item,
+                            'imported_at' => $now,
+                            'source_row_hash' => $sourceRowHash,
+                        ]);
 
-                $touchedIds = array_values(array_unique($touchedPaymentIdsByPeriod[$periodDate] ?? []));
-                if ($touchedIds === []) {
-                    $snapshotSyncSkippedPeriods[] = $periodDate;
-                    continue;
-                }
+                        $touchedPaymentIdsByPeriod[$periodDate] ??= [];
+                        $touchedPaymentIdsByPeriod[$periodDate][] = (int) $payment->id;
+                        $inserted++;
+                    }
 
-                $snapshotDeleted += TenantPayment::query()
-                    ->where('market_id', $marketId)
-                    ->whereDate('period', $periodDate)
-                    ->where('source', '1c')
-                    ->where('source_file', '1c:payments')
-                    ->whereNotIn('id', $touchedIds)
-                    ->delete();
-            }
+                    foreach ($receivedByPeriod as $periodDate => $periodReceived) {
+                        if (($skippedByPeriod[$periodDate] ?? 0) > 0) {
+                            $snapshotSyncSkippedPeriods[] = $periodDate;
 
-            DB::commit();
+                            continue;
+                        }
 
-            $warnings = [
-                'snapshot_deleted' => $snapshotDeleted,
-                'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
-            ];
+                        $touchedIds = array_values(array_unique($touchedPaymentIdsByPeriod[$periodDate] ?? []));
+                        if ($touchedIds === []) {
+                            $snapshotSyncSkippedPeriods[] = $periodDate;
 
-            $payload = [
-                'status' => 'ok',
-                'http_status' => Response::HTTP_OK,
-                'calculated_at' => (string) $validated['calculated_at'],
-                'received' => $received,
-                'inserted' => $inserted,
-                'skipped' => $skipped,
-                'linked_contracts' => $linkedContracts,
-                'unresolved_contracts' => $unresolvedContracts,
-                'tenants_created' => $tenantsCreated,
-                'tenants_updated_by_inn' => $tenantsUpdatedByInn,
-                'warnings' => $warnings,
-                'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
-            ];
+                            continue;
+                        }
 
-            $exchange->markFinishedOk(array_merge((array) ($exchange->payload ?? []), $payload));
-            $exchange->save();
+                        $snapshotDeleted += TenantPayment::query()
+                            ->where('market_id', $marketId)
+                            ->whereDate('period', $periodDate)
+                            ->where('source', '1c')
+                            ->where('source_file', '1c:payments')
+                            ->whereNotIn('id', $touchedIds)
+                            ->delete();
+                    }
 
-            $this->writeImportLog([
-                'status' => 'ok',
-                'endpoint' => self::ENDPOINT,
-                'http_status' => Response::HTTP_OK,
-                'market_id' => $marketId,
-                'integration_id' => (int) $integration->id,
-                'received' => $received,
-                'inserted' => $inserted,
-                'skipped' => $skipped,
-                'calculated_at' => (string) $validated['calculated_at'],
-                'duration_ms' => $payload['duration_ms'],
-                'meta' => [
-                    'linked_contracts' => $linkedContracts,
-                    'unresolved_contracts' => $unresolvedContracts,
-                    'tenants_created' => $tenantsCreated,
-                    'tenants_updated_by_inn' => $tenantsUpdatedByInn,
-                    'snapshot_deleted' => $snapshotDeleted,
-                    'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
-                ],
-            ]);
+                    DB::commit();
 
-            return response()->json($payload);
+                    $warnings = [
+                        'snapshot_deleted' => $snapshotDeleted,
+                        'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
+                    ];
+
+                    $payload = [
+                        'status' => 'ok',
+                        'http_status' => Response::HTTP_OK,
+                        'calculated_at' => (string) $validated['calculated_at'],
+                        'received' => $received,
+                        'inserted' => $inserted,
+                        'skipped' => $skipped,
+                        'linked_contracts' => $linkedContracts,
+                        'unresolved_contracts' => $unresolvedContracts,
+                        'tenants_created' => $tenantsCreated,
+                        'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                        'warnings' => $warnings,
+                        'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
+                    ];
+
+                    $exchange->markFinishedOk(array_merge((array) ($exchange->payload ?? []), $payload));
+                    $exchange->save();
+
+                    $this->writeImportLog([
+                        'status' => 'ok',
+                        'endpoint' => self::ENDPOINT,
+                        'http_status' => Response::HTTP_OK,
+                        'market_id' => $marketId,
+                        'integration_id' => (int) $integration->id,
+                        'received' => $received,
+                        'inserted' => $inserted,
+                        'skipped' => $skipped,
+                        'calculated_at' => (string) $validated['calculated_at'],
+                        'duration_ms' => $payload['duration_ms'],
+                        'meta' => [
+                            'linked_contracts' => $linkedContracts,
+                            'unresolved_contracts' => $unresolvedContracts,
+                            'tenants_created' => $tenantsCreated,
+                            'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                            'snapshot_deleted' => $snapshotDeleted,
+                            'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
+                        ],
+                    ]);
+
+                    return response()->json($payload);
+                },
+            );
         } catch (Throwable $e) {
             if (DB::transactionLevel() > 0) {
                 DB::rollBack();
