@@ -47,12 +47,7 @@ class MarketSwitcherWidget extends Widget
             $this->selectedMarketId = $this->resolveDefaultMarketId();
 
             if ($this->selectedMarketId) {
-                session(['dashboard_market_id' => $this->selectedMarketId]);
-                session([$this->sessionKey() => $this->selectedMarketId]);
-
-                $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-                session(["filament_{$panelId}_market_id" => $this->selectedMarketId]);
-                session(['filament.admin.selected_market_id' => $this->selectedMarketId]);
+                $this->syncSelectedMarketId($this->selectedMarketId);
             }
         }
 
@@ -77,17 +72,9 @@ class MarketSwitcherWidget extends Widget
     {
         $value = $this->selectedMarketId ? (int) $this->selectedMarketId : null;
 
-        // 1) Главный ключ (его читают Dashboard и виджеты)
-        session(['dashboard_market_id' => $value]);
+        $this->syncSelectedMarketId($value);
 
-        // 2) Совместимость: старые/разные ключи (чтобы ничего не "отвалилось" внезапно)
-        session([$this->sessionKey() => $value]);
-
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        session(["filament_{$panelId}_market_id" => $value]);
-        session(['filament.admin.selected_market_id' => $value]);
-
-        // 3) При смене рынка — выставляем “разумный” дефолт месяца:
+        // При смене рынка — выставляем “разумный” дефолт месяца:
         // последний месяц, где реально есть данные (иначе пользователь видит нули и думает, что фильтр сломан).
         if ($value) {
             $tz = $this->resolveMarketTimezone($value);
@@ -119,19 +106,14 @@ class MarketSwitcherWidget extends Widget
         ];
     }
 
-    /**
-     * Старый ключ (оставляем для совместимости).
-     */
-    protected function sessionKey(): string
-    {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        return "filament.{$panelId}.selected_market_id";
-    }
-
     private function resolveSelectedMarketIdFromContext(): ?int
     {
         return app(MarketContext::class)->selectedMarketIdFromSession();
+    }
+
+    private function syncSelectedMarketId(?int $marketId): void
+    {
+        app(MarketContext::class)->syncSelectedMarketIdInSession($marketId);
     }
 
     private function resolveDefaultMarketId(): ?int
