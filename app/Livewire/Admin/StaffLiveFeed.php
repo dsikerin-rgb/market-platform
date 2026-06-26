@@ -5,6 +5,7 @@ namespace App\Livewire\Admin;
 use App\Models\StaffFeedPost;
 use App\Models\StaffConversationMessage;
 use App\Models\User;
+use App\Support\MarketContext;
 use App\Support\MarketplaceMediaStorage;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -235,15 +236,7 @@ class StaffLiveFeed extends Component
             return (int) ($user->market_id ?: 0);
         }
 
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        return (int) (
-            session('dashboard_market_id')
-            ?: session("filament.{$panelId}.selected_market_id")
-            ?: session("filament_{$panelId}_market_id")
-            ?: session('filament.admin.selected_market_id')
-            ?: 0
-        );
+        return (int) (app(MarketContext::class)->currentMarketId($user) ?? 0);
     }
 
     private function isSuperAdmin(User $user): bool

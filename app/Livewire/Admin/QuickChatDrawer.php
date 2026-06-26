@@ -21,6 +21,7 @@ use App\Services\Ai\AiConsultantService;
 use App\Services\Ai\AiPageNudgeContextService;
 use App\Services\Ai\AiUserProfileService;
 use App\Support\MessageAttachmentStorage;
+use App\Support\MarketContext;
 use App\Support\Search\LooseSearch;
 use App\Support\StaffConversationService;
 use App\Support\TicketAccessService;
@@ -2202,15 +2203,7 @@ class QuickChatDrawer extends Component
             return (int) ($user->market_id ?? 0);
         }
 
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        return (int) (
-            session('dashboard_market_id')
-            ?: session("filament.{$panelId}.selected_market_id")
-            ?: session("filament_{$panelId}_market_id")
-            ?: session('filament.admin.selected_market_id')
-            ?: 0
-        );
+        return (int) (app(MarketContext::class)->currentMarketId($user) ?? 0);
     }
 
     private function isSuperAdmin(User $user): bool
