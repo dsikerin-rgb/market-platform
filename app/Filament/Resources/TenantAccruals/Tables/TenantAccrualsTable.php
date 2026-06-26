@@ -9,6 +9,7 @@ use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantAccruals\TenantAccrualResource;
 use App\Models\MarketLocation;
 use App\Models\TenantAccrual;
+use App\Support\MarketContext;
 use Carbon\Carbon;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
@@ -435,11 +436,7 @@ class TenantAccrualsTable
 
     private static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     private static function resolveMarketIdForCurrentUser(): ?int

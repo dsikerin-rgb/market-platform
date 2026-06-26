@@ -9,6 +9,7 @@ use App\Filament\Widgets\TenantAccrualsWorkspaceWidget;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
@@ -334,10 +335,6 @@ class ListTenantAccruals extends ListRecords
 
     private function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 }

@@ -9,6 +9,7 @@ use App\Filament\Resources\TenantAccruals\Schemas\TenantAccrualForm;
 use App\Filament\Resources\TenantAccruals\Tables\TenantAccrualsTable;
 use App\Models\TenantAccrual;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -51,11 +52,7 @@ class TenantAccrualResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     public static function getGloballySearchableAttributes(): array
