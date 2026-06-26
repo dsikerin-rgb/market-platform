@@ -107,10 +107,7 @@ class AppServiceProvider extends ServiceProvider
                 ]);
 
                 $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-                $marketId = session('dashboard_market_id')
-                    ?? session("filament.{$panelId}.selected_market_id")
-                    ?? session("filament_{$panelId}_market_id")
-                    ?? session('filament.admin.selected_market_id')
+                $marketId = app(MarketContext::class)->selectedMarketIdFromSession($panelId)
                     ?? $user->market_id;
 
                 if (! filled($marketId)) {
@@ -199,10 +196,7 @@ class AppServiceProvider extends ServiceProvider
                 ]);
 
                 $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-                $marketId = session('dashboard_market_id')
-                    ?? session("filament.{$panelId}.selected_market_id")
-                    ?? session("filament_{$panelId}_market_id")
-                    ?? session('filament.admin.selected_market_id')
+                $marketId = app(MarketContext::class)->selectedMarketIdFromSession($panelId)
                     ?? $user->market_id;
 
                 abort_unless(filled($marketId), 422, 'Market is not selected.');
