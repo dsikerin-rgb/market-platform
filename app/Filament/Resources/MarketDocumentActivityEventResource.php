@@ -6,6 +6,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\MarketDocumentActivityEventResource\Pages;
 use App\Models\MarketDocumentActivityEvent;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -153,17 +154,6 @@ class MarketDocumentActivityEventResource extends BaseResource
 
     private static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        $value =
-            session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session("filament.{$panelId}.market_id")
-            ?? session('filament.admin.selected_market_id')
-            ?? session('filament.admin.market_id')
-            ?? session('dashboard_market_id')
-            ?? session('selected_market_id');
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 }

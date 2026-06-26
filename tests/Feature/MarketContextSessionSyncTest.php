@@ -56,6 +56,7 @@ class MarketContextSessionSyncTest extends TestCase
             'dashboard_market_id',
             'filament.admin.selected_market_id',
             'filament_admin_market_id',
+            'filament.admin.market_id',
             'selected_market_id',
         ];
     }

@@ -9,6 +9,7 @@ use App\Models\Market;
 use App\Models\MarketDocument;
 use App\Models\MarketDocumentActivityEvent;
 use App\Models\MarketDocumentFolder;
+use App\Support\MarketContext;
 use App\Support\MarketDocuments\MarketDocumentActivityLogger;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -729,17 +730,6 @@ class ListMarketDocuments extends ListRecords
 
     protected function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        $value =
-            session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session("filament.{$panelId}.market_id")
-            ?? session('filament.admin.selected_market_id')
-            ?? session('filament.admin.market_id')
-            ?? session('dashboard_market_id')
-            ?? session('selected_market_id');
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 }

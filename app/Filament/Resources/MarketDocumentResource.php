@@ -16,6 +16,7 @@ use App\Models\TenantContract;
 use App\Models\TenantRequest;
 use App\Models\User;
 use App\Notifications\MarketDocumentSharedNotification;
+use App\Support\MarketContext;
 use App\Support\MarketDocuments\MarketDocumentActivityLogger;
 use App\Support\StaffConversationService;
 use Filament\Actions\Action;
@@ -1667,18 +1668,7 @@ class MarketDocumentResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        $value =
-            session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session("filament.{$panelId}.market_id")
-            ?? session('filament.admin.selected_market_id')
-            ?? session('filament.admin.market_id')
-            ?? session('dashboard_market_id')
-            ?? session('selected_market_id');
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     private static function selectedFolderFromRequest(): ?MarketDocumentFolder
