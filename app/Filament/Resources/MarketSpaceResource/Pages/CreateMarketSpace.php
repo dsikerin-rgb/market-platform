@@ -10,7 +10,7 @@ use App\Filament\Resources\Pages\BaseCreateRecord;
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceMapShape;
 use App\Services\MarketSpaces\MarketSpaceStateGuard;
-use Filament\Facades\Filament;
+use App\Support\MarketContext;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
@@ -220,8 +220,7 @@ class CreateMarketSpace extends BaseCreateRecord
             return;
         }
 
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        session(["filament_{$panelId}_market_id" => $marketId]);
+        app(MarketContext::class)->syncSelectedMarketIdInSession($marketId);
     }
 
     private function normalizeReturnUrl(mixed $value): ?string
