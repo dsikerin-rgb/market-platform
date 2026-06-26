@@ -7,9 +7,9 @@ namespace App\Support\OneC;
 use App\Filament\Resources\TenantContractResource;
 use App\Filament\Resources\TenantResource;
 use App\Models\Market;
+use App\Support\MarketContext;
 use App\Support\Search\LooseSearch;
 use Carbon\CarbonImmutable;
-use Filament\Facades\Filament;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -87,12 +87,7 @@ class AccrualPaymentReconciliationReport
             return $user->market_id ? (int) $user->market_id : null;
         }
 
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $value =
-            session('dashboard_market_id')
-            ?? session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session('filament.admin.selected_market_id');
+        $value = app(MarketContext::class)->selectedMarketIdFromSession();
 
         if (filled($value)) {
             return (int) $value;
