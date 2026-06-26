@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\MarketLocationResource;
 use App\Filament\Resources\MarketLocationResource\Pages\CreateMarketLocation;
 use App\Filament\Resources\MarketLocationResource\Pages\EditMarketLocation;
+use App\Filament\Resources\MarketSpaceResource\Pages\EditMarketSpace;
 use App\Filament\Resources\MarketSpaceGroupEpisodeResource;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -63,6 +64,18 @@ class MarketStructureResourcesMarketContextTest extends TestCase
 
         self::assertSame($marketId, $this->resolvedMarketId(MarketLocationResource::class));
         self::assertSame($marketId, $this->resolvedMarketId(MarketSpaceGroupEpisodeResource::class));
+    }
+
+    public function test_edit_market_space_reads_selected_market_through_market_context(): void
+    {
+        $source = (string) file_get_contents(app_path('Filament/Resources/MarketSpaceResource/Pages/EditMarketSpace.php'));
+        $start = strpos($source, 'protected function mutateFormDataBeforeSave(array $data): array');
+        $end = is_int($start) ? strpos($source, 'private function prepareParentGroupMapShapeResolution', $start) : false;
+        $methodSource = (is_int($start) && is_int($end)) ? substr($source, $start, $end - $start) : '';
+
+        self::assertNotSame('', $methodSource);
+        self::assertStringContainsString('app(MarketContext::class)->selectedMarketIdFromSession()', $methodSource);
+        self::assertStringNotContainsString("session('filament.admin.selected_market_id')", $methodSource);
     }
 
     /**

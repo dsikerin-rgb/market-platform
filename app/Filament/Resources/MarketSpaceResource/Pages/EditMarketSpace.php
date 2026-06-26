@@ -15,6 +15,7 @@ use App\Models\Tenant;
 use App\Services\MarketSpaces\MarketSpaceStateGuard;
 use App\Services\MarketSpaces\SpaceGroupManager;
 use App\Services\MarketSpaces\TenantSwitchPlanner;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Checkbox;
 use Filament\Notifications\Notification;
@@ -135,7 +136,7 @@ class EditMarketSpace extends BaseEditRecord
         }
 
         // Super-admin: если выбран рынок через переключатель — фиксируем market_id.
-        $selectedMarketId = session('filament.admin.selected_market_id');
+        $selectedMarketId = app(MarketContext::class)->selectedMarketIdFromSession();
         if (filled($selectedMarketId)) {
             $data['market_id'] = (int) $selectedMarketId;
         } else {
