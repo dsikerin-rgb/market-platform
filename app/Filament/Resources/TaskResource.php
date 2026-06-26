@@ -15,6 +15,7 @@ use App\Models\MarketHoliday;
 use App\Models\Task;
 use App\Models\TaskParticipant;
 use App\Models\User;
+use App\Support\MarketContext;
 use App\Support\Search\LooseSearch;
 use App\Support\StaffHierarchy;
 use App\Support\SystemAgentService;
@@ -1221,17 +1222,7 @@ $assigneeColumn = TextColumn::make('assignee.name')
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-
-        $value =
-            session("filament.{$panelId}.selected_market_id")
-            ?? session("filament_{$panelId}_market_id")
-            ?? session("filament.{$panelId}.market_id")
-            ?? session('filament.admin.selected_market_id')
-            ?? session('filament.admin.market_id')
-            ?? session('selected_market_id');
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     protected static function resolveMarketName(?int $marketId): ?string
