@@ -11,6 +11,7 @@ use App\Models\TenantContract;
 use App\Services\MarketSpaces\SpaceGroupResolver;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use App\Support\AdminCapabilities;
+use App\Support\MarketContext;
 use App\Support\MarketSpaces\MarketSpaceGroupEpisodeResolver;
 use App\Support\Search\LooseSearch;
 use App\Support\TenantContracts\TenantContractOperationalActivity;
@@ -108,12 +109,7 @@ class TenantContractResource extends BaseResource
 
     protected static function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 
     protected static function canViewTechnicalFields(): bool

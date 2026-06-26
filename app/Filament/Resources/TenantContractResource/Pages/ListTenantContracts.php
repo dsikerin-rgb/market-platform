@@ -7,6 +7,7 @@ namespace App\Filament\Resources\TenantContractResource\Pages;
 use App\Filament\Resources\TenantContractResource;
 use App\Models\MarketSpace;
 use App\Filament\Widgets\TenantContractsWorkspaceWidget;
+use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Schemas\Components\Html;
@@ -261,10 +262,6 @@ class ListTenantContracts extends ListRecords
 
     private function selectedMarketIdFromSession(): ?int
     {
-        $panelId = Filament::getCurrentPanel()?->getId() ?? 'admin';
-        $key = "filament_{$panelId}_market_id";
-        $value = session($key);
-
-        return filled($value) ? (int) $value : null;
+        return app(MarketContext::class)->selectedMarketIdFromSession();
     }
 }
