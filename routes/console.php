@@ -24,7 +24,7 @@ Schedule::call(function () {
 
 Schedule::command('market:calendar:generate-sanitary --execute --all-markets')->dailyAt('03:15')->withoutOverlapping();
 Schedule::command('market:calendar:generate-tasks --execute --all-markets')->everyThirtyMinutes()->withoutOverlapping();
-Schedule::command('market:holidays:notify')->everyThirtyMinutes();
+Schedule::command('market:holidays:notify --execute')->everyThirtyMinutes();
 Schedule::command('operations:rebuild-space-snapshots --execute --all-markets')->everyThirtyMinutes()->withoutOverlapping();
 Schedule::command('marketplace:repair-demo-asset-permissions --execute')->dailyAt('03:25')->withoutOverlapping();
 Schedule::command('ops:postgres-backup --rotate')

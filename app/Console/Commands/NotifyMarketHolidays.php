@@ -11,12 +11,22 @@ use Illuminate\Support\Collection;
 
 class NotifyMarketHolidays extends Command
 {
-    protected $signature = 'market:holidays:notify';
+    protected $signature = 'market:holidays:notify
+        {--dry-run : Run in dry-run mode}
+        {--execute : Send notifications and mark holidays as notified (default: dry-run)}';
 
     protected $description = 'Отправка уведомлений о предстоящих праздниках рынка.';
 
     public function handle(): int
     {
+        $execute = (bool) $this->option('execute');
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return Command::FAILURE;
+        }
+
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
         $now = now();
 
         $holidays = MarketHoliday::query()
@@ -28,6 +38,13 @@ class NotifyMarketHolidays extends Command
 
         if ($holidays->isEmpty()) {
             $this->info('Нет праздников для уведомления.');
+
+            return Command::SUCCESS;
+        }
+
+        if ($dryRun) {
+            $this->info(sprintf('Would notify holidays: %d.', $holidays->count()));
+            $this->info('DRY RUN: no notifications were sent and no holidays were marked notified. Use --execute to apply.');
 
             return Command::SUCCESS;
         }
