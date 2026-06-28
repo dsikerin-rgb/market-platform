@@ -8,11 +8,11 @@ use App\Http\Controllers\Controller;
 use App\Models\IntegrationExchange;
 use App\Models\MarketIntegration;
 use App\Models\MarketSpace;
-use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use App\Services\Tenants\OneCTenantResolver;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +26,7 @@ use Throwable;
 class AccrualController extends Controller
 {
     private const ENDPOINT = '/api/1c/accruals';
+
     private const ENTITY_TYPE = 'accruals';
 
     public function store(Request $request, TenantAccrualContractResolver $contractResolver, OneCTenantResolver $tenantResolver): JsonResponse
@@ -84,508 +85,517 @@ class AccrualController extends Controller
 
             $marketId = (int) $integration->market_id;
 
-            $exchange = new IntegrationExchange();
-            $exchange->market_id = $marketId;
-            $exchange->direction = IntegrationExchange::DIRECTION_IN;
-            $exchange->entity_type = self::ENTITY_TYPE;
-            $exchange->status = IntegrationExchange::STATUS_IN_PROGRESS;
-            $exchange->created_by = null;
-            $exchange->started_at = $startedAt;
-            $exchange->finished_at = null;
-            $exchange->payload = [
-                'endpoint' => self::ENDPOINT,
-                'market_integration_id' => (int) $integration->id,
-                'request_meta' => [
-                    'ip' => $request->ip(),
-                    'user_agent' => (string) $request->userAgent(),
-                ],
-            ];
-            $exchange->save();
-
-            try {
-                $validated = $request->validate([
-                    'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
-                    'items' => ['required', 'array', 'min:1'],
-
-                    'items.*.tenant_external_id' => ['required', 'string', 'max:255'],
-                    'items.*.contract_external_id' => ['nullable', 'string', 'max:255'],
-                    'items.*.period' => ['required', 'regex:/^\d{4}-\d{2}$/'],
-                    'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
-                    'items.*.organization_name' => ['nullable', 'string', 'max:255'],
-                    'items.*.account' => ['nullable', 'string', 'max:64'],
-                    'items.*.document_external_id' => ['nullable', 'string', 'max:255'],
-                    'items.*.document_number' => ['nullable', 'string', 'max:255'],
-                    'items.*.document_date' => ['nullable', 'date_format:Y-m-d'],
-                    'items.*.document_name' => ['nullable', 'string'],
-                    'items.*.service_name' => ['nullable', 'string', 'max:255'],
-                    'items.*.line_description' => ['nullable', 'string'],
-                    'items.*.purpose' => ['nullable', 'string'],
-
-                    'items.*.market_space_code' => ['nullable', 'string', 'max:255'],
-                    'items.*.source_place_code' => ['nullable', 'string', 'max:255'],
-                    'items.*.source_place_name' => ['nullable', 'string', 'max:255'],
-                    'items.*.activity_type' => ['nullable', 'string', 'max:255'],
-                    'items.*.days' => ['nullable', 'integer', 'min:0'],
-
-                    'items.*.inn' => ['nullable', 'string', 'max:32'],
-                    'items.*.kpp' => ['nullable', 'string', 'max:32'],
-                    'items.*.tenant_name' => ['nullable', 'string', 'max:255'],
-
-                    'items.*.area_sqm' => ['nullable', 'numeric'],
-                    'items.*.rent_rate' => ['nullable', 'numeric'],
-                    'items.*.rent_amount' => ['nullable', 'numeric'],
-                    'items.*.management_fee' => ['nullable', 'numeric'],
-                    'items.*.utilities_amount' => ['nullable', 'numeric'],
-                    'items.*.electricity_amount' => ['nullable', 'numeric'],
-                    'items.*.total_no_vat' => ['nullable', 'numeric'],
-                    'items.*.vat_rate' => ['nullable', 'numeric'],
-                    'items.*.total_with_vat' => ['nullable', 'numeric'],
-                    'items.*.cash_amount' => ['nullable', 'numeric'],
-                    'items.*.currency' => ['nullable', 'string', 'size:3'],
-                ]);
-            } catch (ValidationException $e) {
-                $items = $request->input('items');
-                $received = is_array($items) ? count($items) : 0;
-                $calculatedAt = is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null;
-
-                $this->writeImportLog([
-                    'status' => 'validation_error',
-                    'endpoint' => self::ENDPOINT,
-                    'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                    'market_id' => $marketId,
-                    'integration_id' => (int) $integration->id,
-                    'received' => $received,
-                    'inserted' => 0,
-                    'skipped' => 0,
-                    'calculated_at' => $calculatedAt,
-                    'error_message' => 'Validation failed',
-                    'meta' => [
-                        'errors' => $e->errors(),
-                        'ip' => $request->ip(),
-                    ],
-                ]);
-
-                if ($exchange) {
-                    $exchange->status = IntegrationExchange::STATUS_ERROR;
-                    $exchange->error = 'Validation failed';
-                    $exchange->finished_at = now();
-                    $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
-                        'status' => 'validation_error',
-                        'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                        'calculated_at' => $calculatedAt,
-                        'received' => $received,
-                        'inserted' => 0,
-                        'skipped' => 0,
-                        'validation_errors' => $e->errors(),
-                        'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
-                    ]);
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                function () use ($request, $contractResolver, $tenantResolver, $integration, $marketId, $startedAt, &$sequencePreflight, &$exchange): JsonResponse {
+                    $exchange = new IntegrationExchange;
+                    $exchange->market_id = $marketId;
+                    $exchange->direction = IntegrationExchange::DIRECTION_IN;
+                    $exchange->entity_type = self::ENTITY_TYPE;
+                    $exchange->status = IntegrationExchange::STATUS_IN_PROGRESS;
+                    $exchange->created_by = null;
+                    $exchange->started_at = $startedAt;
+                    $exchange->finished_at = null;
+                    $exchange->payload = [
+                        'endpoint' => self::ENDPOINT,
+                        'market_integration_id' => (int) $integration->id,
+                        'request_meta' => [
+                            'ip' => $request->ip(),
+                            'user_agent' => (string) $request->userAgent(),
+                        ],
+                    ];
                     $exchange->save();
-                }
 
-                throw $e;
-            }
+                    try {
+                        $validated = $request->validate([
+                            'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
+                            'items' => ['required', 'array', 'min:1'],
 
-            [$spaceIndex, $keysWithCollisions] = $this->buildSpaceIndex($marketId);
-            $calculatedAt = (string) $validated['calculated_at'];
-            $received = count($validated['items']);
-            $inserted = 0;
-            $updated = 0;
-            $skipped = 0;
-            $tenantsCreated = 0;
-            $tenantsUpdatedByInn = 0;
-            $linkedContracts = 0;
-            $exactContractLinks = 0;
-            $resolvedContractLinks = 0;
-            $ambiguousContracts = 0;
-            $resolvedSpaces = 0;
-            $spacesResolvedFromContract = 0;
-            $unresolvedContracts = 0;
-            $unresolvedSpaces = 0;
-            $legacyIdentityMatches = 0;
-            $snapshotDeleted = 0;
-            $snapshotSyncSkippedPeriods = [];
-            $notFoundTenants = [];
-            $receivedByPeriod = [];
-            $skippedByPeriod = [];
-            $touchedAccrualIdsByPeriod = [];
-            $now = now();
-            $sequencePreflight = $this->syncTenantAccrualPrimaryKeySequence();
+                            'items.*.tenant_external_id' => ['required', 'string', 'max:255'],
+                            'items.*.contract_external_id' => ['nullable', 'string', 'max:255'],
+                            'items.*.period' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+                            'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
+                            'items.*.organization_name' => ['nullable', 'string', 'max:255'],
+                            'items.*.account' => ['nullable', 'string', 'max:64'],
+                            'items.*.document_external_id' => ['nullable', 'string', 'max:255'],
+                            'items.*.document_number' => ['nullable', 'string', 'max:255'],
+                            'items.*.document_date' => ['nullable', 'date_format:Y-m-d'],
+                            'items.*.document_name' => ['nullable', 'string'],
+                            'items.*.service_name' => ['nullable', 'string', 'max:255'],
+                            'items.*.line_description' => ['nullable', 'string'],
+                            'items.*.purpose' => ['nullable', 'string'],
 
-            DB::beginTransaction();
+                            'items.*.market_space_code' => ['nullable', 'string', 'max:255'],
+                            'items.*.source_place_code' => ['nullable', 'string', 'max:255'],
+                            'items.*.source_place_name' => ['nullable', 'string', 'max:255'],
+                            'items.*.activity_type' => ['nullable', 'string', 'max:255'],
+                            'items.*.days' => ['nullable', 'integer', 'min:0'],
 
-            foreach ($validated['items'] as $index => $item) {
-                $tenantExternalId = trim((string) $item['tenant_external_id']);
-                $contractExternalId = trim((string) ($item['contract_external_id'] ?? ''));
-                $periodYm = trim((string) $item['period']);
-                $periodDate = $periodYm . '-01';
-                $hasOrganizationExternalId = array_key_exists('organization_external_id', $item);
-                $hasOrganizationName = array_key_exists('organization_name', $item);
-                $hasAccount = array_key_exists('account', $item);
-                $hasDocumentExternalId = array_key_exists('document_external_id', $item);
-                $hasDocumentNumber = array_key_exists('document_number', $item);
-                $hasDocumentDate = array_key_exists('document_date', $item);
-                $hasDocumentName = array_key_exists('document_name', $item);
-                $hasServiceName = array_key_exists('service_name', $item);
-                $hasLineDescription = array_key_exists('line_description', $item);
-                $hasPurpose = array_key_exists('purpose', $item);
-                $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
-                $organizationName = trim((string) ($item['organization_name'] ?? ''));
-                $account = trim((string) ($item['account'] ?? ''));
-                $documentExternalId = trim((string) ($item['document_external_id'] ?? ''));
-                $documentNumber = trim((string) ($item['document_number'] ?? ''));
-                $documentDate = trim((string) ($item['document_date'] ?? ''));
-                $documentName = trim((string) ($item['document_name'] ?? ''));
-                $serviceName = trim((string) ($item['service_name'] ?? ''));
-                $lineDescription = trim((string) ($item['line_description'] ?? ''));
-                $purpose = trim((string) ($item['purpose'] ?? ''));
-                $spaceKey = trim((string) ($item['market_space_code'] ?? $item['source_place_code'] ?? ''));
-                $hasDirectSpaceKey = $spaceKey !== '';
-                $sourcePlaceCode = trim((string) ($item['source_place_code'] ?? $spaceKey));
-                $sourcePlaceName = trim((string) ($item['source_place_name'] ?? ''));
-                $activityType = trim((string) ($item['activity_type'] ?? ''));
-                $receivedByPeriod[$periodDate] = ($receivedByPeriod[$periodDate] ?? 0) + 1;
+                            'items.*.inn' => ['nullable', 'string', 'max:32'],
+                            'items.*.kpp' => ['nullable', 'string', 'max:32'],
+                            'items.*.tenant_name' => ['nullable', 'string', 'max:255'],
 
-                if ($tenantExternalId === '' || $periodYm === '') {
-                    $skippedByPeriod[$periodDate] = ($skippedByPeriod[$periodDate] ?? 0) + 1;
-                    $skipped++;
-                    continue;
-                }
+                            'items.*.area_sqm' => ['nullable', 'numeric'],
+                            'items.*.rent_rate' => ['nullable', 'numeric'],
+                            'items.*.rent_amount' => ['nullable', 'numeric'],
+                            'items.*.management_fee' => ['nullable', 'numeric'],
+                            'items.*.utilities_amount' => ['nullable', 'numeric'],
+                            'items.*.electricity_amount' => ['nullable', 'numeric'],
+                            'items.*.total_no_vat' => ['nullable', 'numeric'],
+                            'items.*.vat_rate' => ['nullable', 'numeric'],
+                            'items.*.total_with_vat' => ['nullable', 'numeric'],
+                            'items.*.cash_amount' => ['nullable', 'numeric'],
+                            'items.*.currency' => ['nullable', 'string', 'size:3'],
+                        ]);
+                    } catch (ValidationException $e) {
+                        $items = $request->input('items');
+                        $received = is_array($items) ? count($items) : 0;
+                        $calculatedAt = is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null;
 
-                $tenantResolution = $tenantResolver->resolve(
-                    $marketId,
-                    $tenantExternalId,
-                    $item,
-                    'accruals',
-                    $now,
-                );
-                $tenant = $tenantResolution['tenant'] ?? null;
+                        $this->writeImportLog([
+                            'status' => 'validation_error',
+                            'endpoint' => self::ENDPOINT,
+                            'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                            'market_id' => $marketId,
+                            'integration_id' => (int) $integration->id,
+                            'received' => $received,
+                            'inserted' => 0,
+                            'skipped' => 0,
+                            'calculated_at' => $calculatedAt,
+                            'error_message' => 'Validation failed',
+                            'meta' => [
+                                'errors' => $e->errors(),
+                                'ip' => $request->ip(),
+                            ],
+                        ]);
 
-                if (($tenantResolution['mode'] ?? 'failed') === 'created') {
-                    $tenantsCreated++;
-                } elseif (($tenantResolution['mode'] ?? 'failed') === 'matched_inn') {
-                    $tenantsUpdatedByInn++;
-                }
+                        if ($exchange) {
+                            $exchange->status = IntegrationExchange::STATUS_ERROR;
+                            $exchange->error = 'Validation failed';
+                            $exchange->finished_at = now();
+                            $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                                'status' => 'validation_error',
+                                'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                                'calculated_at' => $calculatedAt,
+                                'received' => $received,
+                                'inserted' => 0,
+                                'skipped' => 0,
+                                'validation_errors' => $e->errors(),
+                                'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
+                            ]);
+                            $exchange->save();
+                        }
 
-                if (! $tenant) {
-                    $notFoundTenants[] = $tenantExternalId;
-                    $skippedByPeriod[$periodDate] = ($skippedByPeriod[$periodDate] ?? 0) + 1;
-                    $skipped++;
-                    continue;
-                }
-
-                $marketSpaceId = null;
-                if ($spaceKey !== '') {
-                    [$resolvedId, $spaceState] = $this->resolveMarketSpaceId($spaceIndex, $spaceKey);
-                    if ($spaceState === 'ok') {
-                        $marketSpaceId = $resolvedId;
-                        $resolvedSpaces++;
-                    } else {
-                        $unresolvedSpaces++;
+                        throw $e;
                     }
-                }
 
-                $match = $contractResolver->resolveMatch(
-                    marketId: $marketId,
-                    tenantId: (int) $tenant->id,
-                    marketSpaceId: $marketSpaceId,
-                    period: CarbonImmutable::createFromFormat('Y-m-d', $periodDate),
-                    contractExternalId: $contractExternalId !== '' ? $contractExternalId : null,
-                );
+                    [$spaceIndex, $keysWithCollisions] = $this->buildSpaceIndex($marketId);
+                    $calculatedAt = (string) $validated['calculated_at'];
+                    $received = count($validated['items']);
+                    $inserted = 0;
+                    $updated = 0;
+                    $skipped = 0;
+                    $tenantsCreated = 0;
+                    $tenantsUpdatedByInn = 0;
+                    $linkedContracts = 0;
+                    $exactContractLinks = 0;
+                    $resolvedContractLinks = 0;
+                    $ambiguousContracts = 0;
+                    $resolvedSpaces = 0;
+                    $spacesResolvedFromContract = 0;
+                    $unresolvedContracts = 0;
+                    $unresolvedSpaces = 0;
+                    $legacyIdentityMatches = 0;
+                    $snapshotDeleted = 0;
+                    $snapshotSyncSkippedPeriods = [];
+                    $notFoundTenants = [];
+                    $receivedByPeriod = [];
+                    $skippedByPeriod = [];
+                    $touchedAccrualIdsByPeriod = [];
+                    $now = now();
+                    $sequencePreflight = $this->syncTenantAccrualPrimaryKeySequence();
 
-                $tenantContractId = $match->tenantContractId;
-                $legacyMarketSpaceId = $marketSpaceId;
+                    DB::beginTransaction();
 
-                if ($match->isLinked()) {
-                    $linkedContracts++;
+                    foreach ($validated['items'] as $index => $item) {
+                        $tenantExternalId = trim((string) $item['tenant_external_id']);
+                        $contractExternalId = trim((string) ($item['contract_external_id'] ?? ''));
+                        $periodYm = trim((string) $item['period']);
+                        $periodDate = $periodYm.'-01';
+                        $hasOrganizationExternalId = array_key_exists('organization_external_id', $item);
+                        $hasOrganizationName = array_key_exists('organization_name', $item);
+                        $hasAccount = array_key_exists('account', $item);
+                        $hasDocumentExternalId = array_key_exists('document_external_id', $item);
+                        $hasDocumentNumber = array_key_exists('document_number', $item);
+                        $hasDocumentDate = array_key_exists('document_date', $item);
+                        $hasDocumentName = array_key_exists('document_name', $item);
+                        $hasServiceName = array_key_exists('service_name', $item);
+                        $hasLineDescription = array_key_exists('line_description', $item);
+                        $hasPurpose = array_key_exists('purpose', $item);
+                        $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
+                        $organizationName = trim((string) ($item['organization_name'] ?? ''));
+                        $account = trim((string) ($item['account'] ?? ''));
+                        $documentExternalId = trim((string) ($item['document_external_id'] ?? ''));
+                        $documentNumber = trim((string) ($item['document_number'] ?? ''));
+                        $documentDate = trim((string) ($item['document_date'] ?? ''));
+                        $documentName = trim((string) ($item['document_name'] ?? ''));
+                        $serviceName = trim((string) ($item['service_name'] ?? ''));
+                        $lineDescription = trim((string) ($item['line_description'] ?? ''));
+                        $purpose = trim((string) ($item['purpose'] ?? ''));
+                        $spaceKey = trim((string) ($item['market_space_code'] ?? $item['source_place_code'] ?? ''));
+                        $hasDirectSpaceKey = $spaceKey !== '';
+                        $sourcePlaceCode = trim((string) ($item['source_place_code'] ?? $spaceKey));
+                        $sourcePlaceName = trim((string) ($item['source_place_name'] ?? ''));
+                        $activityType = trim((string) ($item['activity_type'] ?? ''));
+                        $receivedByPeriod[$periodDate] = ($receivedByPeriod[$periodDate] ?? 0) + 1;
 
-                    if ($match->status === TenantAccrual::CONTRACT_LINK_STATUS_EXACT) {
-                        $exactContractLinks++;
-                    } else {
-                        $resolvedContractLinks++;
+                        if ($tenantExternalId === '' || $periodYm === '') {
+                            $skippedByPeriod[$periodDate] = ($skippedByPeriod[$periodDate] ?? 0) + 1;
+                            $skipped++;
+
+                            continue;
+                        }
+
+                        $tenantResolution = $tenantResolver->resolve(
+                            $marketId,
+                            $tenantExternalId,
+                            $item,
+                            'accruals',
+                            $now,
+                        );
+                        $tenant = $tenantResolution['tenant'] ?? null;
+
+                        if (($tenantResolution['mode'] ?? 'failed') === 'created') {
+                            $tenantsCreated++;
+                        } elseif (($tenantResolution['mode'] ?? 'failed') === 'matched_inn') {
+                            $tenantsUpdatedByInn++;
+                        }
+
+                        if (! $tenant) {
+                            $notFoundTenants[] = $tenantExternalId;
+                            $skippedByPeriod[$periodDate] = ($skippedByPeriod[$periodDate] ?? 0) + 1;
+                            $skipped++;
+
+                            continue;
+                        }
+
+                        $marketSpaceId = null;
+                        if ($spaceKey !== '') {
+                            [$resolvedId, $spaceState] = $this->resolveMarketSpaceId($spaceIndex, $spaceKey);
+                            if ($spaceState === 'ok') {
+                                $marketSpaceId = $resolvedId;
+                                $resolvedSpaces++;
+                            } else {
+                                $unresolvedSpaces++;
+                            }
+                        }
+
+                        $match = $contractResolver->resolveMatch(
+                            marketId: $marketId,
+                            tenantId: (int) $tenant->id,
+                            marketSpaceId: $marketSpaceId,
+                            period: CarbonImmutable::createFromFormat('Y-m-d', $periodDate),
+                            contractExternalId: $contractExternalId !== '' ? $contractExternalId : null,
+                        );
+
+                        $tenantContractId = $match->tenantContractId;
+                        $legacyMarketSpaceId = $marketSpaceId;
+
+                        if ($match->isLinked()) {
+                            $linkedContracts++;
+
+                            if ($match->status === TenantAccrual::CONTRACT_LINK_STATUS_EXACT) {
+                                $exactContractLinks++;
+                            } else {
+                                $resolvedContractLinks++;
+                            }
+                        } elseif ($match->status === TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS) {
+                            $ambiguousContracts++;
+                            $unresolvedContracts++;
+                        } elseif ($contractExternalId !== '' || $marketSpaceId) {
+                            $unresolvedContracts++;
+                        }
+
+                        if (! $hasDirectSpaceKey && $marketSpaceId === null && $tenantContractId !== null) {
+                            $contractMarketSpaceId = $this->resolveContractMarketSpaceId(
+                                $marketId,
+                                (int) $tenant->id,
+                                $tenantContractId,
+                            );
+
+                            if ($contractMarketSpaceId !== null) {
+                                $marketSpaceId = $contractMarketSpaceId;
+                                $spacesResolvedFromContract++;
+                            }
+                        }
+
+                        $hash = $this->makeAccrualHash(
+                            $marketId,
+                            $periodYm,
+                            $tenantExternalId,
+                            $contractExternalId,
+                            $organizationExternalId,
+                            $organizationName,
+                            $account,
+                            $documentExternalId,
+                            $documentNumber,
+                            $documentDate,
+                            $documentName,
+                            $serviceName,
+                            $lineDescription,
+                            $purpose,
+                            (string) ($item['days'] ?? ''),
+                            $this->normalizeHashNumber($item['area_sqm'] ?? null),
+                            $this->normalizeHashNumber($item['rent_rate'] ?? null),
+                            $this->normalizeHashNumber($item['rent_amount'] ?? null, 2),
+                            $this->normalizeHashNumber($item['management_fee'] ?? null, 2),
+                            $this->normalizeHashNumber($item['utilities_amount'] ?? null, 2),
+                            $this->normalizeHashNumber($item['electricity_amount'] ?? null, 2),
+                            $this->normalizeHashNumber($item['total_no_vat'] ?? null, 2),
+                            $this->normalizeHashNumber($item['vat_rate'] ?? null),
+                            $this->normalizeHashNumber($item['total_with_vat'] ?? null, 2),
+                            $this->normalizeHashNumber($item['cash_amount'] ?? null, 2),
+                            $this->normalizeCurrency($item['currency'] ?? null),
+                            $spaceKey,
+                            $sourcePlaceName,
+                            $activityType,
+                        );
+
+                        $identity = [
+                            'market_id' => $marketId,
+                            'period' => $periodDate,
+                            'tenant_id' => (int) $tenant->id,
+                            'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
+                            'tenant_contract_id' => $tenantContractId,
+                            'market_space_id' => $marketSpaceId,
+                            'source_place_code' => $sourcePlaceCode !== '' ? $sourcePlaceCode : null,
+                            'source_place_name' => $sourcePlaceName !== '' ? $sourcePlaceName : null,
+                            'activity_type' => $activityType !== '' ? $activityType : null,
+                        ];
+
+                        $values = [
+                            'tenant_id' => (int) $tenant->id,
+                            'contract_external_id' => $identity['contract_external_id'],
+                            'tenant_contract_id' => $tenantContractId,
+                            'contract_link_status' => $match->status,
+                            'contract_link_source' => $match->source,
+                            'contract_link_note' => $match->note,
+                            'market_space_id' => $marketSpaceId,
+                            'source_place_code' => $identity['source_place_code'],
+                            'source_place_name' => $identity['source_place_name'],
+                            'activity_type' => $identity['activity_type'],
+                            'days' => $item['days'] ?? null,
+                            'area_sqm' => $this->normalizeNumeric($item['area_sqm'] ?? null),
+                            'rent_rate' => $this->normalizeNumeric($item['rent_rate'] ?? null),
+                            'rent_amount' => $this->normalizeMoney($item['rent_amount'] ?? null),
+                            'management_fee' => $this->normalizeMoney($item['management_fee'] ?? null),
+                            'utilities_amount' => $this->normalizeMoney($item['utilities_amount'] ?? null),
+                            'electricity_amount' => $this->normalizeMoney($item['electricity_amount'] ?? null),
+                            'total_no_vat' => $this->normalizeMoney($item['total_no_vat'] ?? null),
+                            'vat_rate' => $this->normalizeNumeric($item['vat_rate'] ?? null),
+                            'total_with_vat' => $this->normalizeMoney($item['total_with_vat'] ?? null),
+                            'cash_amount' => $this->normalizeMoney($item['cash_amount'] ?? null),
+                            'currency' => $this->normalizeCurrency($item['currency'] ?? null),
+                            'status' => 'imported',
+                            'source' => '1c',
+                            'source_file' => '1c:accruals',
+                            'source_row_number' => $index + 1,
+                            'source_row_hash' => $hash,
+                            'payload' => $this->safeJsonEncode(array_merge($item, ['calculated_at' => $calculatedAt])),
+                            'imported_at' => $now,
+                            'updated_at' => $now,
+                        ];
+
+                        if ($hasOrganizationExternalId) {
+                            $values['organization_external_id'] = $organizationExternalId !== '' ? $organizationExternalId : null;
+                        }
+
+                        if ($hasOrganizationName) {
+                            $values['organization_name'] = $organizationName !== '' ? $organizationName : null;
+                        }
+
+                        if ($hasAccount) {
+                            $values['account'] = $account !== '' ? $account : null;
+                        }
+
+                        if ($hasDocumentExternalId) {
+                            $values['document_external_id'] = $documentExternalId !== '' ? $documentExternalId : null;
+                        }
+
+                        if ($hasDocumentNumber) {
+                            $values['document_number'] = $documentNumber !== '' ? $documentNumber : null;
+                        }
+
+                        if ($hasDocumentDate) {
+                            $values['document_date'] = $documentDate !== '' ? $documentDate : null;
+                        }
+
+                        if ($hasDocumentName) {
+                            $values['document_name'] = $documentName !== '' ? $documentName : null;
+                        }
+
+                        if ($hasServiceName) {
+                            $values['service_name'] = $serviceName !== '' ? $serviceName : null;
+                        }
+
+                        if ($hasLineDescription) {
+                            $values['line_description'] = $lineDescription !== '' ? $lineDescription : null;
+                        }
+
+                        if ($hasPurpose) {
+                            $values['purpose'] = $purpose !== '' ? $purpose : null;
+                        }
+
+                        $existingId = DB::table('tenant_accruals')
+                            ->where('market_id', $marketId)
+                            ->whereDate('period', $periodDate)
+                            ->where('source_row_hash', $hash)
+                            ->value('id');
+
+                        if (! $existingId) {
+                            $existingId = $this->findSingleLegacyAccrualIdentityId(
+                                $identity,
+                                $touchedAccrualIdsByPeriod[$periodDate] ?? [],
+                            );
+                            if ($existingId) {
+                                $legacyIdentityMatches++;
+                            }
+                        }
+
+                        if (! $existingId && $legacyMarketSpaceId === null && $marketSpaceId !== null) {
+                            $legacyIdentity = $identity;
+                            $legacyIdentity['market_space_id'] = null;
+
+                            $existingId = $this->findSingleLegacyAccrualIdentityId(
+                                $legacyIdentity,
+                                $touchedAccrualIdsByPeriod[$periodDate] ?? [],
+                            );
+                            if ($existingId) {
+                                $legacyIdentityMatches++;
+                            }
+                        }
+
+                        if ($existingId) {
+                            DB::table('tenant_accruals')
+                                ->where('id', (int) $existingId)
+                                ->update($values);
+
+                            $accrualId = (int) $existingId;
+                            $updated++;
+                        } else {
+                            $accrualId = (int) DB::table('tenant_accruals')->insertGetId(array_merge($identity, $values, [
+                                'created_at' => $now,
+                            ]));
+
+                            $inserted++;
+                        }
+
+                        $touchedAccrualIdsByPeriod[$periodDate] ??= [];
+                        $touchedAccrualIdsByPeriod[$periodDate][] = $accrualId;
                     }
-                } elseif ($match->status === TenantAccrual::CONTRACT_LINK_STATUS_AMBIGUOUS) {
-                    $ambiguousContracts++;
-                    $unresolvedContracts++;
-                } elseif ($contractExternalId !== '' || $marketSpaceId) {
-                    $unresolvedContracts++;
-                }
 
-                if (! $hasDirectSpaceKey && $marketSpaceId === null && $tenantContractId !== null) {
-                    $contractMarketSpaceId = $this->resolveContractMarketSpaceId(
-                        $marketId,
-                        (int) $tenant->id,
-                        $tenantContractId,
-                    );
+                    foreach ($receivedByPeriod as $periodDate => $periodReceived) {
+                        if (($skippedByPeriod[$periodDate] ?? 0) > 0) {
+                            $snapshotSyncSkippedPeriods[] = $periodDate;
 
-                    if ($contractMarketSpaceId !== null) {
-                        $marketSpaceId = $contractMarketSpaceId;
-                        $spacesResolvedFromContract++;
+                            continue;
+                        }
+
+                        $touchedIds = array_values(array_unique($touchedAccrualIdsByPeriod[$periodDate] ?? []));
+                        if ($touchedIds === []) {
+                            $snapshotSyncSkippedPeriods[] = $periodDate;
+
+                            continue;
+                        }
+
+                        $snapshotDeleted += DB::table('tenant_accruals')
+                            ->where('market_id', $marketId)
+                            ->where('period', $periodDate)
+                            ->where('source', '1c')
+                            ->where('source_file', '1c:accruals')
+                            ->whereNotIn('id', $touchedIds)
+                            ->delete();
                     }
-                }
 
-                $hash = $this->makeAccrualHash(
-                    $marketId,
-                    $periodYm,
-                    $tenantExternalId,
-                    $contractExternalId,
-                    $organizationExternalId,
-                    $organizationName,
-                    $account,
-                    $documentExternalId,
-                    $documentNumber,
-                    $documentDate,
-                    $documentName,
-                    $serviceName,
-                    $lineDescription,
-                    $purpose,
-                    (string) ($item['days'] ?? ''),
-                    $this->normalizeHashNumber($item['area_sqm'] ?? null),
-                    $this->normalizeHashNumber($item['rent_rate'] ?? null),
-                    $this->normalizeHashNumber($item['rent_amount'] ?? null, 2),
-                    $this->normalizeHashNumber($item['management_fee'] ?? null, 2),
-                    $this->normalizeHashNumber($item['utilities_amount'] ?? null, 2),
-                    $this->normalizeHashNumber($item['electricity_amount'] ?? null, 2),
-                    $this->normalizeHashNumber($item['total_no_vat'] ?? null, 2),
-                    $this->normalizeHashNumber($item['vat_rate'] ?? null),
-                    $this->normalizeHashNumber($item['total_with_vat'] ?? null, 2),
-                    $this->normalizeHashNumber($item['cash_amount'] ?? null, 2),
-                    $this->normalizeCurrency($item['currency'] ?? null),
-                    $spaceKey,
-                    $sourcePlaceName,
-                    $activityType,
-                );
+                    DB::commit();
 
-                $identity = [
-                    'market_id' => $marketId,
-                    'period' => $periodDate,
-                    'tenant_id' => (int) $tenant->id,
-                    'contract_external_id' => $contractExternalId !== '' ? $contractExternalId : null,
-                    'tenant_contract_id' => $tenantContractId,
-                    'market_space_id' => $marketSpaceId,
-                    'source_place_code' => $sourcePlaceCode !== '' ? $sourcePlaceCode : null,
-                    'source_place_name' => $sourcePlaceName !== '' ? $sourcePlaceName : null,
-                    'activity_type' => $activityType !== '' ? $activityType : null,
-                ];
+                    $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
+                    $warnings = [
+                        'space_key_collisions' => $keysWithCollisions,
+                        'contracts_linked' => $linkedContracts,
+                        'contracts_linked_exact' => $exactContractLinks,
+                        'contracts_linked_resolved' => $resolvedContractLinks,
+                        'contracts_ambiguous' => $ambiguousContracts,
+                        'spaces_resolved' => $resolvedSpaces,
+                        'spaces_resolved_from_contract' => $spacesResolvedFromContract,
+                        'contracts_unresolved' => $unresolvedContracts,
+                        'spaces_unresolved' => $unresolvedSpaces,
+                        'legacy_identity_matches' => $legacyIdentityMatches,
+                        'snapshot_deleted' => $snapshotDeleted,
+                        'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
+                        'sequence_preflight' => $sequencePreflight,
+                    ];
 
-                $values = [
-                    'tenant_id' => (int) $tenant->id,
-                    'contract_external_id' => $identity['contract_external_id'],
-                    'tenant_contract_id' => $tenantContractId,
-                    'contract_link_status' => $match->status,
-                    'contract_link_source' => $match->source,
-                    'contract_link_note' => $match->note,
-                    'market_space_id' => $marketSpaceId,
-                    'source_place_code' => $identity['source_place_code'],
-                    'source_place_name' => $identity['source_place_name'],
-                    'activity_type' => $identity['activity_type'],
-                    'days' => $item['days'] ?? null,
-                    'area_sqm' => $this->normalizeNumeric($item['area_sqm'] ?? null),
-                    'rent_rate' => $this->normalizeNumeric($item['rent_rate'] ?? null),
-                    'rent_amount' => $this->normalizeMoney($item['rent_amount'] ?? null),
-                    'management_fee' => $this->normalizeMoney($item['management_fee'] ?? null),
-                    'utilities_amount' => $this->normalizeMoney($item['utilities_amount'] ?? null),
-                    'electricity_amount' => $this->normalizeMoney($item['electricity_amount'] ?? null),
-                    'total_no_vat' => $this->normalizeMoney($item['total_no_vat'] ?? null),
-                    'vat_rate' => $this->normalizeNumeric($item['vat_rate'] ?? null),
-                    'total_with_vat' => $this->normalizeMoney($item['total_with_vat'] ?? null),
-                    'cash_amount' => $this->normalizeMoney($item['cash_amount'] ?? null),
-                    'currency' => $this->normalizeCurrency($item['currency'] ?? null),
-                    'status' => 'imported',
-                    'source' => '1c',
-                    'source_file' => '1c:accruals',
-                    'source_row_number' => $index + 1,
-                    'source_row_hash' => $hash,
-                    'payload' => $this->safeJsonEncode(array_merge($item, ['calculated_at' => $calculatedAt])),
-                    'imported_at' => $now,
-                    'updated_at' => $now,
-                ];
-
-                if ($hasOrganizationExternalId) {
-                    $values['organization_external_id'] = $organizationExternalId !== '' ? $organizationExternalId : null;
-                }
-
-                if ($hasOrganizationName) {
-                    $values['organization_name'] = $organizationName !== '' ? $organizationName : null;
-                }
-
-                if ($hasAccount) {
-                    $values['account'] = $account !== '' ? $account : null;
-                }
-
-                if ($hasDocumentExternalId) {
-                    $values['document_external_id'] = $documentExternalId !== '' ? $documentExternalId : null;
-                }
-
-                if ($hasDocumentNumber) {
-                    $values['document_number'] = $documentNumber !== '' ? $documentNumber : null;
-                }
-
-                if ($hasDocumentDate) {
-                    $values['document_date'] = $documentDate !== '' ? $documentDate : null;
-                }
-
-                if ($hasDocumentName) {
-                    $values['document_name'] = $documentName !== '' ? $documentName : null;
-                }
-
-                if ($hasServiceName) {
-                    $values['service_name'] = $serviceName !== '' ? $serviceName : null;
-                }
-
-                if ($hasLineDescription) {
-                    $values['line_description'] = $lineDescription !== '' ? $lineDescription : null;
-                }
-
-                if ($hasPurpose) {
-                    $values['purpose'] = $purpose !== '' ? $purpose : null;
-                }
-
-                $existingId = DB::table('tenant_accruals')
-                    ->where('market_id', $marketId)
-                    ->whereDate('period', $periodDate)
-                    ->where('source_row_hash', $hash)
-                    ->value('id');
-
-                if (! $existingId) {
-                    $existingId = $this->findSingleLegacyAccrualIdentityId(
-                        $identity,
-                        $touchedAccrualIdsByPeriod[$periodDate] ?? [],
-                    );
-                    if ($existingId) {
-                        $legacyIdentityMatches++;
+                    if ($notFoundTenants !== []) {
+                        $warnings['not_found_tenants'] = array_values(array_unique($notFoundTenants));
                     }
-                }
 
-                if (! $existingId && $legacyMarketSpaceId === null && $marketSpaceId !== null) {
-                    $legacyIdentity = $identity;
-                    $legacyIdentity['market_space_id'] = null;
+                    $response = [
+                        'status' => 'ok',
+                        'market_id' => $marketId,
+                        'received' => $received,
+                        'inserted' => $inserted,
+                        'updated' => $updated,
+                        'skipped' => $skipped,
+                        'calculated_at' => $calculatedAt,
+                        'warnings' => $warnings,
+                    ];
 
-                    $existingId = $this->findSingleLegacyAccrualIdentityId(
-                        $legacyIdentity,
-                        $touchedAccrualIdsByPeriod[$periodDate] ?? [],
-                    );
-                    if ($existingId) {
-                        $legacyIdentityMatches++;
+                    $this->writeImportLog([
+                        'status' => 'ok',
+                        'endpoint' => self::ENDPOINT,
+                        'http_status' => Response::HTTP_OK,
+                        'market_id' => $marketId,
+                        'integration_id' => (int) $integration->id,
+                        'received' => $received,
+                        'inserted' => $inserted,
+                        'skipped' => $skipped,
+                        'calculated_at' => $calculatedAt,
+                        'duration_ms' => $durationMs,
+                        'meta' => [
+                            'updated' => $updated,
+                            'tenants_created' => $tenantsCreated,
+                            'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                            'legacy_identity_matches' => $legacyIdentityMatches,
+                            'snapshot_deleted' => $snapshotDeleted,
+                            'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
+                            'sequence_preflight' => $sequencePreflight,
+                            'warnings' => $warnings,
+                            'ip' => $request->ip(),
+                        ],
+                    ]);
+
+                    if ($exchange) {
+                        $exchange->status = IntegrationExchange::STATUS_OK;
+                        $exchange->finished_at = now();
+                        $exchange->error = null;
+                        $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                            'status' => 'ok',
+                            'http_status' => Response::HTTP_OK,
+                            'received' => $received,
+                            'inserted' => $inserted,
+                            'updated' => $updated,
+                            'skipped' => $skipped,
+                            'calculated_at' => $calculatedAt,
+                            'duration_ms' => $durationMs,
+                            'warnings' => $warnings,
+                        ]);
+                        $exchange->save();
                     }
-                }
 
-                if ($existingId) {
-                    DB::table('tenant_accruals')
-                        ->where('id', (int) $existingId)
-                        ->update($values);
-
-                    $accrualId = (int) $existingId;
-                    $updated++;
-                } else {
-                    $accrualId = (int) DB::table('tenant_accruals')->insertGetId(array_merge($identity, $values, [
-                        'created_at' => $now,
-                    ]));
-
-                    $inserted++;
-                }
-
-                $touchedAccrualIdsByPeriod[$periodDate] ??= [];
-                $touchedAccrualIdsByPeriod[$periodDate][] = $accrualId;
-            }
-
-            foreach ($receivedByPeriod as $periodDate => $periodReceived) {
-                if (($skippedByPeriod[$periodDate] ?? 0) > 0) {
-                    $snapshotSyncSkippedPeriods[] = $periodDate;
-                    continue;
-                }
-
-                $touchedIds = array_values(array_unique($touchedAccrualIdsByPeriod[$periodDate] ?? []));
-                if ($touchedIds === []) {
-                    $snapshotSyncSkippedPeriods[] = $periodDate;
-                    continue;
-                }
-
-                $snapshotDeleted += DB::table('tenant_accruals')
-                    ->where('market_id', $marketId)
-                    ->where('period', $periodDate)
-                    ->where('source', '1c')
-                    ->where('source_file', '1c:accruals')
-                    ->whereNotIn('id', $touchedIds)
-                    ->delete();
-            }
-
-            DB::commit();
-
-            $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
-            $warnings = [
-                'space_key_collisions' => $keysWithCollisions,
-                'contracts_linked' => $linkedContracts,
-                'contracts_linked_exact' => $exactContractLinks,
-                'contracts_linked_resolved' => $resolvedContractLinks,
-                'contracts_ambiguous' => $ambiguousContracts,
-                'spaces_resolved' => $resolvedSpaces,
-                'spaces_resolved_from_contract' => $spacesResolvedFromContract,
-                'contracts_unresolved' => $unresolvedContracts,
-                'spaces_unresolved' => $unresolvedSpaces,
-                'legacy_identity_matches' => $legacyIdentityMatches,
-                'snapshot_deleted' => $snapshotDeleted,
-                'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
-                'sequence_preflight' => $sequencePreflight,
-            ];
-
-            if ($notFoundTenants !== []) {
-                $warnings['not_found_tenants'] = array_values(array_unique($notFoundTenants));
-            }
-
-            $response = [
-                'status' => 'ok',
-                'market_id' => $marketId,
-                'received' => $received,
-                'inserted' => $inserted,
-                'updated' => $updated,
-                'skipped' => $skipped,
-                'calculated_at' => $calculatedAt,
-                'warnings' => $warnings,
-            ];
-
-            $this->writeImportLog([
-                'status' => 'ok',
-                'endpoint' => self::ENDPOINT,
-                'http_status' => Response::HTTP_OK,
-                'market_id' => $marketId,
-                'integration_id' => (int) $integration->id,
-                'received' => $received,
-                'inserted' => $inserted,
-                'skipped' => $skipped,
-                'calculated_at' => $calculatedAt,
-                'duration_ms' => $durationMs,
-                'meta' => [
-                    'updated' => $updated,
-                    'tenants_created' => $tenantsCreated,
-                    'tenants_updated_by_inn' => $tenantsUpdatedByInn,
-                    'legacy_identity_matches' => $legacyIdentityMatches,
-                    'snapshot_deleted' => $snapshotDeleted,
-                    'snapshot_sync_skipped_periods' => $snapshotSyncSkippedPeriods,
-                    'sequence_preflight' => $sequencePreflight,
-                    'warnings' => $warnings,
-                    'ip' => $request->ip(),
-                ],
-            ]);
-
-            if ($exchange) {
-                $exchange->status = IntegrationExchange::STATUS_OK;
-                $exchange->finished_at = now();
-                $exchange->error = null;
-                $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
-                    'status' => 'ok',
-                    'http_status' => Response::HTTP_OK,
-                    'received' => $received,
-                    'inserted' => $inserted,
-                    'updated' => $updated,
-                    'skipped' => $skipped,
-                    'calculated_at' => $calculatedAt,
-                    'duration_ms' => $durationMs,
-                    'warnings' => $warnings,
-                ]);
-                $exchange->save();
-            }
-
-            return response()->json($response);
+                    return response()->json($response);
+                },
+            );
         } catch (Throwable $e) {
             $rolledBack = false;
             if (DB::transactionLevel() > 0) {
@@ -891,11 +901,13 @@ class AccrualController extends Controller
         foreach ($identity as $column => $value) {
             if ($column === 'period') {
                 $query->whereDate($column, (string) $value);
+
                 continue;
             }
 
             if ($value === null) {
                 $query->whereNull($column);
+
                 continue;
             }
 
