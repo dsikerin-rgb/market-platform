@@ -1,5 +1,6 @@
 <?php
-# tests/Feature/OneCContractImportTest.php
+
+// tests/Feature/OneCContractImportTest.php
 
 declare(strict_types=1);
 
@@ -10,6 +11,9 @@ use App\Models\MarketIntegration;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantContract;
+use App\Services\Tenants\OneCTenantResolver;
+use App\Support\MarketContext;
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -18,7 +22,9 @@ class OneCContractImportTest extends TestCase
     use RefreshDatabase;
 
     private Market $market;
+
     private MarketIntegration $integration;
+
     private string $token;
 
     protected function setUp(): void
@@ -30,7 +36,7 @@ class OneCContractImportTest extends TestCase
             'slug' => 'test-market',
         ]);
 
-        $this->token = 'test-1c-token-' . uniqid();
+        $this->token = 'test-1c-token-'.uniqid();
 
         $this->integration = MarketIntegration::create([
             'market_id' => $this->market->id,
@@ -73,7 +79,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -119,7 +125,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -133,7 +139,7 @@ class OneCContractImportTest extends TestCase
 
         $this->assertNotNull($contract);
         $this->assertNull($contract->market_space_id);
-        
+
         // Проверяем, что в diagnostics есть пример
         $response->assertJsonPath('warnings.diagnostics.missing_space_key.count', 1);
     }
@@ -163,7 +169,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -177,7 +183,7 @@ class OneCContractImportTest extends TestCase
 
         $this->assertNotNull($contract);
         $this->assertNull($contract->market_space_id);
-        
+
         // Проверяем, что в diagnostics есть пример
         $response->assertJsonPath('warnings.diagnostics.space_not_found.count', 1);
     }
@@ -220,7 +226,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -234,7 +240,7 @@ class OneCContractImportTest extends TestCase
 
         $this->assertNotNull($contract);
         $this->assertNull($contract->market_space_id);
-        
+
         // Проверяем, что в diagnostics есть пример
         $response->assertJsonPath('warnings.diagnostics.space_ambiguous.count', 1);
     }
@@ -272,7 +278,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -302,7 +308,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -365,7 +371,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -423,7 +429,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -467,7 +473,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -521,7 +527,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -579,7 +585,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -619,7 +625,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -660,7 +666,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -702,7 +708,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -743,7 +749,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -785,7 +791,7 @@ class OneCContractImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -798,5 +804,60 @@ class OneCContractImportTest extends TestCase
         $this->assertNotNull($contract);
         // Двухзначный год должен быть расширен до 2023
         $this->assertEquals('2023-12-15', $contract->signed_at->format('Y-m-d'));
+    }
+
+    public function test_contract_import_sets_market_context_from_integration_token(): void
+    {
+        Tenant::query()->create([
+            'market_id' => (int) $this->market->id,
+            'external_id' => 'tenant-context',
+            'name' => 'Context tenant',
+        ]);
+
+        $observedMarketId = null;
+
+        $this->app->bind(OneCTenantResolver::class, function () use (&$observedMarketId): OneCTenantResolver {
+            return new class($observedMarketId) extends OneCTenantResolver
+            {
+                private mixed $observedMarketId;
+
+                public function __construct(mixed &$observedMarketId)
+                {
+                    $this->observedMarketId = &$observedMarketId;
+                }
+
+                public function resolve(
+                    int $marketId,
+                    string $tenantExternalId,
+                    array $payload,
+                    string $source,
+                    CarbonInterface $now,
+                    array $options = [],
+                ): array {
+                    $this->observedMarketId = app(MarketContext::class)->currentMarketId();
+
+                    return parent::resolve($marketId, $tenantExternalId, $payload, $source, $now, $options);
+                }
+            };
+        });
+
+        $this->postJson(route('api.1c.contracts.store'), [
+            'calculated_at' => '2026-06-04 13:56:51',
+            'items' => [
+                [
+                    'contract_external_id' => 'contract-context',
+                    'tenant_external_id' => 'tenant-context',
+                    'contract_number' => '1C-context',
+                    'status' => 'active',
+                    'starts_at' => '2026-06-01',
+                    'is_active' => true,
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer '.$this->token,
+            'Accept' => 'application/json',
+        ])->assertOk();
+
+        $this->assertSame((int) $this->market->id, $observedMarketId);
     }
 }

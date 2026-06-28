@@ -1,5 +1,6 @@
 <?php
-# app/Http/Controllers/Api/OneC/ContractController.php
+
+// app/Http/Controllers/Api/OneC/ContractController.php
 
 declare(strict_types=1);
 
@@ -9,11 +10,11 @@ use App\Http\Controllers\Controller;
 use App\Models\IntegrationExchange;
 use App\Models\MarketIntegration;
 use App\Models\MarketSpace;
-use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Services\TenantContracts\ContractDocumentClassifier;
 use App\Services\TenantContracts\SafeContractSpaceLinker;
 use App\Services\Tenants\OneCTenantResolver;
+use App\Support\MarketContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,7 @@ use Throwable;
 class ContractController extends Controller
 {
     private const ENDPOINT = '/api/1c/contracts';
+
     private const ENTITY_TYPE = 'contracts';
 
     /**
@@ -40,8 +42,7 @@ class ContractController extends Controller
         SafeContractSpaceLinker $safeLinker,
         ContractDocumentClassifier $classifier,
         OneCTenantResolver $tenantResolver
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $startedAt = now();
 
         /** @var IntegrationExchange|null $exchange */
@@ -103,435 +104,442 @@ class ContractController extends Controller
 
             $marketId = (int) $integration->market_id;
 
-            $exchange = new IntegrationExchange();
-            $exchange->market_id = $marketId;
-            $exchange->direction = IntegrationExchange::DIRECTION_IN;
-            $exchange->entity_type = self::ENTITY_TYPE;
-            $exchange->status = IntegrationExchange::STATUS_IN_PROGRESS;
-            $exchange->created_by = null;
-            $exchange->started_at = $startedAt;
-            $exchange->finished_at = null;
-            $exchange->payload = [
-                'endpoint' => self::ENDPOINT,
-                'market_integration_id' => (int) $integration->id,
-                'request_meta' => [
-                    'ip' => $request->ip(),
-                    'user_agent' => (string) $request->userAgent(),
-                ],
-            ];
-            $exchange->save();
-
-            try {
-                $validated = $request->validate([
-                    'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
-                    'items' => ['required', 'array', 'min:1'],
-
-                    'items.*.contract_external_id' => ['required', 'string', 'max:255'],
-                    'items.*.tenant_external_id' => ['required', 'string', 'max:255'],
-
-                    'items.*.market_space_code' => ['nullable', 'string', 'max:255'],
-
-                    'items.*.contract_number' => ['nullable', 'string', 'max:255'],
-                    'items.*.status' => ['nullable', 'string', 'max:20'],
-                    'items.*.is_active' => ['nullable', 'boolean'],
-
-                    'items.*.starts_at' => ['required', 'date_format:Y-m-d'],
-                    'items.*.ends_at' => ['nullable', 'date_format:Y-m-d'],
-                    'items.*.signed_at' => ['nullable', 'date_format:Y-m-d'],
-
-                    'items.*.monthly_rent' => ['nullable', 'numeric'],
-                    'items.*.currency' => ['nullable', 'string', 'size:3'],
-
-                    'items.*.inn' => ['nullable', 'string', 'max:32'],
-                    'items.*.kpp' => ['nullable', 'string', 'max:32'],
-                    'items.*.tenant_name' => ['nullable', 'string', 'max:255'],
-                ]);
-            } catch (ValidationException $e) {
-                $items = $request->input('items');
-                $received = is_array($items) ? count($items) : 0;
-                $calculatedAt = is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null;
-
-                $this->writeImportLog([
-                    'status' => 'validation_error',
-                    'endpoint' => self::ENDPOINT,
-                    'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                    'market_id' => $marketId,
-                    'integration_id' => (int) $integration->id,
-                    'received' => $received,
-                    'inserted' => 0,
-                    'skipped' => 0,
-                    'calculated_at' => $calculatedAt,
-                    'error_message' => 'Validation failed',
-                    'meta' => [
-                        'errors' => $e->errors(),
-                        'ip' => $request->ip(),
-                    ],
-                ]);
-
-                if ($exchange) {
-                    $exchange->status = IntegrationExchange::STATUS_ERROR;
-                    $exchange->error = 'Validation failed';
-                    $exchange->finished_at = now();
-                    $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
-                        'status' => 'validation_error',
-                        'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                        'calculated_at' => $calculatedAt,
-                        'received' => $received,
-                        'inserted' => 0,
-                        'skipped' => 0,
-                        'validation_errors' => $e->errors(),
-                        'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
-                    ]);
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                function () use ($request, $safeLinker, $classifier, $tenantResolver, $integration, $marketId, $startedAt, &$exchange): JsonResponse {
+                    $exchange = new IntegrationExchange;
+                    $exchange->market_id = $marketId;
+                    $exchange->direction = IntegrationExchange::DIRECTION_IN;
+                    $exchange->entity_type = self::ENTITY_TYPE;
+                    $exchange->status = IntegrationExchange::STATUS_IN_PROGRESS;
+                    $exchange->created_by = null;
+                    $exchange->started_at = $startedAt;
+                    $exchange->finished_at = null;
+                    $exchange->payload = [
+                        'endpoint' => self::ENDPOINT,
+                        'market_integration_id' => (int) $integration->id,
+                        'request_meta' => [
+                            'ip' => $request->ip(),
+                            'user_agent' => (string) $request->userAgent(),
+                        ],
+                    ];
                     $exchange->save();
-                }
 
-                throw $e;
-            }
+                    try {
+                        $validated = $request->validate([
+                            'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
+                            'items' => ['required', 'array', 'min:1'],
 
-            $now = now();
-            $calculatedAt = (string) $validated['calculated_at'];
+                            'items.*.contract_external_id' => ['required', 'string', 'max:255'],
+                            'items.*.tenant_external_id' => ['required', 'string', 'max:255'],
 
-            $received = count($validated['items']);
-            $created = 0;
-            $updated = 0;
-            $skipped = 0;
-            $manualSpaceMappingsPreserved = 0;
+                            'items.*.market_space_code' => ['nullable', 'string', 'max:255'],
 
-            $tenantsCreated = 0;
-            $tenantsUpdatedByInn = 0;
+                            'items.*.contract_number' => ['nullable', 'string', 'max:255'],
+                            'items.*.status' => ['nullable', 'string', 'max:20'],
+                            'items.*.is_active' => ['nullable', 'boolean'],
 
-            // Явная статистика по 4 сценариям привязки
-            $linkedContracts = 0;           // место найдено однозначно
-            $missingSpaceKey = 0;           // нет market_space_code в payload
-            $spaceNotFound = 0;             // ключ есть, но место не найдено
-            $spaceAmbiguous = 0;            // ключ матчится на несколько мест
+                            'items.*.starts_at' => ['required', 'date_format:Y-m-d'],
+                            'items.*.ends_at' => ['nullable', 'date_format:Y-m-d'],
+                            'items.*.signed_at' => ['nullable', 'date_format:Y-m-d'],
 
-            // Safe auto-link статистика
-            $safeLinkedContracts = 0;       // привязано через safe linker
-            $safeLinkedByBridge = 0;        // привязано через bridge rule
-            $safeLinkedByNumber = 0;        // привязано через number rule
+                            'items.*.monthly_rent' => ['nullable', 'numeric'],
+                            'items.*.currency' => ['nullable', 'string', 'size:3'],
 
-            // Примеры проблемных ключей для диагностики
-            $suspectedCurrentDuplicateGroups = 0;
-            $suspectedCurrentDuplicateRows = 0;
-            $suspectedCurrentDuplicateSamples = [];
-            $seenDuplicateSignatures = [];
+                            'items.*.inn' => ['nullable', 'string', 'max:32'],
+                            'items.*.kpp' => ['nullable', 'string', 'max:32'],
+                            'items.*.tenant_name' => ['nullable', 'string', 'max:255'],
+                        ]);
+                    } catch (ValidationException $e) {
+                        $items = $request->input('items');
+                        $received = is_array($items) ? count($items) : 0;
+                        $calculatedAt = is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null;
 
-            $missingKeysSample = [];
-            $notFoundKeysSample = [];
-            $ambiguousKeysSample = [];
-            $samplesLimit = 10;
+                        $this->writeImportLog([
+                            'status' => 'validation_error',
+                            'endpoint' => self::ENDPOINT,
+                            'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                            'market_id' => $marketId,
+                            'integration_id' => (int) $integration->id,
+                            'received' => $received,
+                            'inserted' => 0,
+                            'skipped' => 0,
+                            'calculated_at' => $calculatedAt,
+                            'error_message' => 'Validation failed',
+                            'meta' => [
+                                'errors' => $e->errors(),
+                                'ip' => $request->ip(),
+                            ],
+                        ]);
 
-            // Индекс мест строим 1 раз на запрос — быстро (у вас ~245 мест).
-            [$spaceIndex, $keysWithCollisions] = $this->buildSpaceIndex($marketId);
+                        if ($exchange) {
+                            $exchange->status = IntegrationExchange::STATUS_ERROR;
+                            $exchange->error = 'Validation failed';
+                            $exchange->finished_at = now();
+                            $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                                'status' => 'validation_error',
+                                'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                                'calculated_at' => $calculatedAt,
+                                'received' => $received,
+                                'inserted' => 0,
+                                'skipped' => 0,
+                                'validation_errors' => $e->errors(),
+                                'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
+                            ]);
+                            $exchange->save();
+                        }
 
-            DB::beginTransaction();
+                        throw $e;
+                    }
 
-            foreach ($validated['items'] as $item) {
-                $tenantExternalId = trim((string) $item['tenant_external_id']);
-                $contractExternalId = trim((string) $item['contract_external_id']);
+                    $now = now();
+                    $calculatedAt = (string) $validated['calculated_at'];
 
-                if ($tenantExternalId === '' || $contractExternalId === '') {
-                    $skipped++;
-                    continue;
-                }
+                    $received = count($validated['items']);
+                    $created = 0;
+                    $updated = 0;
+                    $skipped = 0;
+                    $manualSpaceMappingsPreserved = 0;
 
-                $tenantResolution = $tenantResolver->resolve(
-                    $marketId,
-                    $tenantExternalId,
-                    $item,
-                    'contracts',
-                    $now,
-                );
-                $tenant = $tenantResolution['tenant'] ?? null;
+                    $tenantsCreated = 0;
+                    $tenantsUpdatedByInn = 0;
 
-                if (($tenantResolution['mode'] ?? 'failed') === 'created') {
-                    $tenantsCreated++;
-                } elseif (($tenantResolution['mode'] ?? 'failed') === 'matched_inn') {
-                    $tenantsUpdatedByInn++;
-                }
+                    // Явная статистика по 4 сценариям привязки
+                    $linkedContracts = 0;           // место найдено однозначно
+                    $missingSpaceKey = 0;           // нет market_space_code в payload
+                    $spaceNotFound = 0;             // ключ есть, но место не найдено
+                    $spaceAmbiguous = 0;            // ключ матчится на несколько мест
 
-                if (! $tenant) {
-                    $skipped++;
-                    continue;
-                }
+                    // Safe auto-link статистика
+                    $safeLinkedContracts = 0;       // привязано через safe linker
+                    $safeLinkedByBridge = 0;        // привязано через bridge rule
+                    $safeLinkedByNumber = 0;        // привязано через number rule
 
-                // === Space mapping (safe) ===
-                $marketSpaceId = null;
-                $spaceKey = trim((string) ($item['market_space_code'] ?? ''));
-                
-                // Явное разделение на 4 сценария
-                if ($spaceKey === '') {
-                    // Сценарий 1: missing_space_key — нет ключа в payload
-                    $missingSpaceKey++;
-                    if (count($missingKeysSample) < $samplesLimit) {
-                        $missingKeysSample[] = [
-                            'contract_external_id' => $contractExternalId,
-                            'tenant_external_id' => $tenantExternalId,
+                    // Примеры проблемных ключей для диагностики
+                    $suspectedCurrentDuplicateGroups = 0;
+                    $suspectedCurrentDuplicateRows = 0;
+                    $suspectedCurrentDuplicateSamples = [];
+                    $seenDuplicateSignatures = [];
+
+                    $missingKeysSample = [];
+                    $notFoundKeysSample = [];
+                    $ambiguousKeysSample = [];
+                    $samplesLimit = 10;
+
+                    // Индекс мест строим 1 раз на запрос — быстро (у вас ~245 мест).
+                    [$spaceIndex, $keysWithCollisions] = $this->buildSpaceIndex($marketId);
+
+                    DB::beginTransaction();
+
+                    foreach ($validated['items'] as $item) {
+                        $tenantExternalId = trim((string) $item['tenant_external_id']);
+                        $contractExternalId = trim((string) $item['contract_external_id']);
+
+                        if ($tenantExternalId === '' || $contractExternalId === '') {
+                            $skipped++;
+
+                            continue;
+                        }
+
+                        $tenantResolution = $tenantResolver->resolve(
+                            $marketId,
+                            $tenantExternalId,
+                            $item,
+                            'contracts',
+                            $now,
+                        );
+                        $tenant = $tenantResolution['tenant'] ?? null;
+
+                        if (($tenantResolution['mode'] ?? 'failed') === 'created') {
+                            $tenantsCreated++;
+                        } elseif (($tenantResolution['mode'] ?? 'failed') === 'matched_inn') {
+                            $tenantsUpdatedByInn++;
+                        }
+
+                        if (! $tenant) {
+                            $skipped++;
+
+                            continue;
+                        }
+
+                        // === Space mapping (safe) ===
+                        $marketSpaceId = null;
+                        $spaceKey = trim((string) ($item['market_space_code'] ?? ''));
+
+                        // Явное разделение на 4 сценария
+                        if ($spaceKey === '') {
+                            // Сценарий 1: missing_space_key — нет ключа в payload
+                            $missingSpaceKey++;
+                            if (count($missingKeysSample) < $samplesLimit) {
+                                $missingKeysSample[] = [
+                                    'contract_external_id' => $contractExternalId,
+                                    'tenant_external_id' => $tenantExternalId,
+                                ];
+                            }
+                        } else {
+                            // Нормализация ключа (trim + uppercase)
+                            $normalizedKey = mb_strtoupper(trim($spaceKey), 'UTF-8');
+
+                            [$resolvedId, $state, $ids] = $this->resolveMarketSpaceId($spaceIndex, $spaceKey);
+
+                            if ($state === 'ok') {
+                                // Сценарий 2: linked — место найдено однозначно
+                                $marketSpaceId = $resolvedId;
+                                $linkedContracts++;
+                            } elseif ($state === 'not_found') {
+                                // Сценарий 3: space_not_found — ключ есть, но место не найдено
+                                $spaceNotFound++;
+                                if (count($notFoundKeysSample) < $samplesLimit) {
+                                    $notFoundKeysSample[] = [
+                                        'contract_external_id' => $contractExternalId,
+                                        'tenant_external_id' => $tenantExternalId,
+                                        'market_space_code' => $spaceKey,
+                                        'normalized_key' => $normalizedKey,
+                                    ];
+                                }
+                            } else { // ambiguous
+                                // Сценарий 4: space_ambiguous — ключ матчится на несколько мест
+                                $spaceAmbiguous++;
+                                if (count($ambiguousKeysSample) < $samplesLimit) {
+                                    $ambiguousKeysSample[] = [
+                                        'contract_external_id' => $contractExternalId,
+                                        'tenant_external_id' => $tenantExternalId,
+                                        'market_space_code' => $spaceKey,
+                                        'matched_space_ids' => $ids,
+                                    ];
+                                }
+
+                                // ВАЖНО: НЕ привязываем (оставляем null), чтобы не повредить данные.
+                                $marketSpaceId = null;
+                            }
+                        }
+
+                        $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
+                        if ($currency === '') {
+                            $currency = 'RUB';
+                        }
+
+                        $status = trim((string) ($item['status'] ?? 'active'));
+                        if ($status === '') {
+                            $status = 'active';
+                        }
+
+                        $isActive = array_key_exists('is_active', $item)
+                            ? (bool) $item['is_active']
+                            : ($status !== 'cancelled');
+
+                        $number = trim((string) ($item['contract_number'] ?? ''));
+                        if ($number === '') {
+                            $number = '1C-'.$contractExternalId;
+                        }
+
+                        // Fallback для signed_at: если 1С не передала дату, извлекаем из contract_number
+                        $signedAt = $item['signed_at'] ?? null;
+                        if ($signedAt === null || $signedAt === '') {
+                            $signedAt = ContractDocumentClassifier::extractDocumentDateFromNumber($number);
+                        }
+
+                        $contract = TenantContract::query()->firstOrNew([
+                            'market_id' => $marketId,
+                            'external_id' => $contractExternalId,
+                        ]);
+
+                        $wasRecentlyCreated = ! $contract->exists;
+                        $currentSpaceMappingMode = $contract->effectiveSpaceMappingMode();
+                        $usesLockedSpaceMapping = ! $wasRecentlyCreated
+                            && $contract->usesLockedSpaceMapping();
+
+                        $contract->fill([
+                            'tenant_id' => (int) $tenant->id,
+                            'number' => $number,
+                            'status' => $status,
+                            'starts_at' => (string) $item['starts_at'],
+                            'ends_at' => $item['ends_at'] ?? null,
+                            'signed_at' => $signedAt,
+                            'monthly_rent' => $item['monthly_rent'] ?? null,
+                            'currency' => $currency,
+                            'is_active' => $isActive,
+                        ]);
+
+                        $contract->space_mapping_mode = $currentSpaceMappingMode;
+
+                        if (
+                            $usesLockedSpaceMapping
+                            && $marketSpaceId !== null
+                            && (int) ($contract->market_space_id ?? 0) !== (int) $marketSpaceId
+                        ) {
+                            $manualSpaceMappingsPreserved++;
+                        }
+
+                        // Respect manually locked local mapping. In auto mode 1C may still
+                        // update the place link when it provides a reliable market_space_code.
+                        if (! $usesLockedSpaceMapping && ($marketSpaceId !== null || $wasRecentlyCreated)) {
+                            $contract->market_space_id = $marketSpaceId;
+                        }
+
+                        $contract->save();
+
+                        $duplicateWarning = $this->detectSuspiciousCurrentDuplicate($contract, $classifier);
+                        if ($duplicateWarning !== null) {
+                            $signature = $duplicateWarning['signature'];
+
+                            if (! isset($seenDuplicateSignatures[$signature])) {
+                                $seenDuplicateSignatures[$signature] = true;
+                                $suspectedCurrentDuplicateGroups++;
+                                $suspectedCurrentDuplicateRows += $duplicateWarning['duplicate_rows'];
+
+                                if (count($suspectedCurrentDuplicateSamples) < $samplesLimit) {
+                                    unset($duplicateWarning['signature']);
+                                    $suspectedCurrentDuplicateSamples[] = $duplicateWarning;
+                                }
+                            }
+                        }
+
+                        // Safe auto-link for contracts without market_space_id
+                        if ($contract->market_space_id === null) {
+                            $linkResult = $safeLinker->link($contract);
+                            if ($linkResult['state'] === 'matched') {
+                                $safeLinker->apply($contract, $linkResult);
+                                $safeLinkedContracts++;
+                                if ($linkResult['source'] === 'bridge') {
+                                    $safeLinkedByBridge++;
+                                } elseif ($linkResult['source'] === 'number') {
+                                    $safeLinkedByNumber++;
+                                }
+                            }
+                        }
+
+                        if ($wasRecentlyCreated) {
+                            $created++;
+                        } else {
+                            $updated++;
+                        }
+                    }
+
+                    DB::commit();
+
+                    $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
+
+                    // Итоговая статистика по 4 сценариям
+                    $linkageStats = [
+                        'total_contracts' => $received,
+                        'linked_contracts' => $linkedContracts,
+                        'contracts_without_space_key' => $missingSpaceKey,
+                        'contracts_space_not_found' => $spaceNotFound,
+                        'contracts_space_ambiguous' => $spaceAmbiguous,
+                        'linkage_rate_percent' => $received > 0 ? round(($linkedContracts / $received) * 100, 2) : 0,
+                    ];
+
+                    // Примеры проблемных ключей
+                    $diagnostics = [];
+                    if ($missingSpaceKey > 0) {
+                        $diagnostics['missing_space_key'] = [
+                            'count' => $missingSpaceKey,
+                            'samples' => $missingKeysSample,
                         ];
                     }
-                } else {
-                    // Нормализация ключа (trim + uppercase)
-                    $normalizedKey = mb_strtoupper(trim($spaceKey), 'UTF-8');
-                    
-                    [$resolvedId, $state, $ids] = $this->resolveMarketSpaceId($spaceIndex, $spaceKey);
-
-                    if ($state === 'ok') {
-                        // Сценарий 2: linked — место найдено однозначно
-                        $marketSpaceId = $resolvedId;
-                        $linkedContracts++;
-                    } elseif ($state === 'not_found') {
-                        // Сценарий 3: space_not_found — ключ есть, но место не найдено
-                        $spaceNotFound++;
-                        if (count($notFoundKeysSample) < $samplesLimit) {
-                            $notFoundKeysSample[] = [
-                                'contract_external_id' => $contractExternalId,
-                                'tenant_external_id' => $tenantExternalId,
-                                'market_space_code' => $spaceKey,
-                                'normalized_key' => $normalizedKey,
-                            ];
-                        }
-                    } else { // ambiguous
-                        // Сценарий 4: space_ambiguous — ключ матчится на несколько мест
-                        $spaceAmbiguous++;
-                        if (count($ambiguousKeysSample) < $samplesLimit) {
-                            $ambiguousKeysSample[] = [
-                                'contract_external_id' => $contractExternalId,
-                                'tenant_external_id' => $tenantExternalId,
-                                'market_space_code' => $spaceKey,
-                                'matched_space_ids' => $ids,
-                            ];
-                        }
-
-                        // ВАЖНО: НЕ привязываем (оставляем null), чтобы не повредить данные.
-                        $marketSpaceId = null;
+                    if ($spaceNotFound > 0) {
+                        $diagnostics['space_not_found'] = [
+                            'count' => $spaceNotFound,
+                            'samples' => $notFoundKeysSample,
+                        ];
                     }
-                }
-
-                $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
-                if ($currency === '') {
-                    $currency = 'RUB';
-                }
-
-                $status = trim((string) ($item['status'] ?? 'active'));
-                if ($status === '') {
-                    $status = 'active';
-                }
-
-                $isActive = array_key_exists('is_active', $item)
-                    ? (bool) $item['is_active']
-                    : ($status !== 'cancelled');
-
-                $number = trim((string) ($item['contract_number'] ?? ''));
-                if ($number === '') {
-                    $number = '1C-' . $contractExternalId;
-                }
-
-                // Fallback для signed_at: если 1С не передала дату, извлекаем из contract_number
-                $signedAt = $item['signed_at'] ?? null;
-                if ($signedAt === null || $signedAt === '') {
-                    $signedAt = ContractDocumentClassifier::extractDocumentDateFromNumber($number);
-                }
-
-                $contract = TenantContract::query()->firstOrNew([
-                    'market_id' => $marketId,
-                    'external_id' => $contractExternalId,
-                ]);
-
-                $wasRecentlyCreated = ! $contract->exists;
-                $currentSpaceMappingMode = $contract->effectiveSpaceMappingMode();
-                $usesLockedSpaceMapping = ! $wasRecentlyCreated
-                    && $contract->usesLockedSpaceMapping();
-
-                $contract->fill([
-                    'tenant_id' => (int) $tenant->id,
-                    'number' => $number,
-                    'status' => $status,
-                    'starts_at' => (string) $item['starts_at'],
-                    'ends_at' => $item['ends_at'] ?? null,
-                    'signed_at' => $signedAt,
-                    'monthly_rent' => $item['monthly_rent'] ?? null,
-                    'currency' => $currency,
-                    'is_active' => $isActive,
-                ]);
-
-                $contract->space_mapping_mode = $currentSpaceMappingMode;
-
-                if (
-                    $usesLockedSpaceMapping
-                    && $marketSpaceId !== null
-                    && (int) ($contract->market_space_id ?? 0) !== (int) $marketSpaceId
-                ) {
-                    $manualSpaceMappingsPreserved++;
-                }
-
-                // Respect manually locked local mapping. In auto mode 1C may still
-                // update the place link when it provides a reliable market_space_code.
-                if (! $usesLockedSpaceMapping && ($marketSpaceId !== null || $wasRecentlyCreated)) {
-                    $contract->market_space_id = $marketSpaceId;
-                }
-
-                $contract->save();
-
-                $duplicateWarning = $this->detectSuspiciousCurrentDuplicate($contract, $classifier);
-                if ($duplicateWarning !== null) {
-                    $signature = $duplicateWarning['signature'];
-
-                    if (! isset($seenDuplicateSignatures[$signature])) {
-                        $seenDuplicateSignatures[$signature] = true;
-                        $suspectedCurrentDuplicateGroups++;
-                        $suspectedCurrentDuplicateRows += $duplicateWarning['duplicate_rows'];
-
-                        if (count($suspectedCurrentDuplicateSamples) < $samplesLimit) {
-                            unset($duplicateWarning['signature']);
-                            $suspectedCurrentDuplicateSamples[] = $duplicateWarning;
-                        }
+                    if ($spaceAmbiguous > 0) {
+                        $diagnostics['space_ambiguous'] = [
+                            'count' => $spaceAmbiguous,
+                            'samples' => $ambiguousKeysSample,
+                        ];
                     }
-                }
 
-                // Safe auto-link for contracts without market_space_id
-                if ($contract->market_space_id === null) {
-                    $linkResult = $safeLinker->link($contract);
-                    if ($linkResult['state'] === 'matched') {
-                        $safeLinker->apply($contract, $linkResult);
-                        $safeLinkedContracts++;
-                        if ($linkResult['source'] === 'bridge') {
-                            $safeLinkedByBridge++;
-                        } elseif ($linkResult['source'] === 'number') {
-                            $safeLinkedByNumber++;
-                        }
+                    $warnings = [
+                        'spaces_not_found' => $spaceNotFound,
+                        'spaces_ambiguous' => $spaceAmbiguous,
+                        'contracts_without_space' => $missingSpaceKey,
+                        'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
+                        'space_key_collisions' => $keysWithCollisions,
+                        'suspected_current_duplicate_contract_groups' => $suspectedCurrentDuplicateGroups,
+                        'suspected_current_duplicate_contract_rows' => $suspectedCurrentDuplicateRows,
+                        'linkage_stats' => $linkageStats,
+                        'safe_auto_link' => [
+                            'linked_total' => $safeLinkedContracts,
+                            'linked_by_bridge' => $safeLinkedByBridge,
+                            'linked_by_number' => $safeLinkedByNumber,
+                        ],
+                    ];
+
+                    if ($diagnostics !== []) {
+                        $warnings['diagnostics'] = $diagnostics;
                     }
-                }
 
-                if ($wasRecentlyCreated) {
-                    $created++;
-                } else {
-                    $updated++;
-                }
-            }
+                    if ($suspectedCurrentDuplicateSamples !== []) {
+                        $warnings['suspected_current_duplicate_contracts'] = [
+                            'count' => $suspectedCurrentDuplicateGroups,
+                            'rows' => $suspectedCurrentDuplicateRows,
+                            'samples' => $suspectedCurrentDuplicateSamples,
+                        ];
+                    }
 
-            DB::commit();
+                    $response = [
+                        'status' => 'ok',
+                        'market_id' => $marketId,
+                        'received' => $received,
+                        'created' => $created,
+                        'updated' => $updated,
+                        'skipped' => $skipped,
+                        'calculated_at' => $calculatedAt,
+                        'linkage_stats' => $linkageStats,
+                        'warnings' => $warnings,
+                    ];
 
-            $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
+                    $this->writeImportLog([
+                        'status' => 'ok',
+                        'endpoint' => self::ENDPOINT,
+                        'http_status' => Response::HTTP_OK,
+                        'market_id' => $marketId,
+                        'integration_id' => (int) $integration->id,
+                        'received' => $received,
+                        'inserted' => $created,
+                        'skipped' => $skipped,
+                        'calculated_at' => $calculatedAt,
+                        'duration_ms' => $durationMs,
+                        'meta' => array_merge($linkageStats, [
+                            'created' => $created,
+                            'updated' => $updated,
+                            'tenants_created' => $tenantsCreated,
+                            'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                            'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
+                            'suspected_current_duplicate_contract_groups' => $suspectedCurrentDuplicateGroups,
+                            'suspected_current_duplicate_contract_rows' => $suspectedCurrentDuplicateRows,
+                            'ip' => $request->ip(),
+                        ]),
+                    ]);
 
-            // Итоговая статистика по 4 сценариям
-            $linkageStats = [
-                'total_contracts' => $received,
-                'linked_contracts' => $linkedContracts,
-                'contracts_without_space_key' => $missingSpaceKey,
-                'contracts_space_not_found' => $spaceNotFound,
-                'contracts_space_ambiguous' => $spaceAmbiguous,
-                'linkage_rate_percent' => $received > 0 ? round(($linkedContracts / $received) * 100, 2) : 0,
-            ];
+                    // Финализируем exchange = ok
+                    if ($exchange) {
+                        $exchange->status = IntegrationExchange::STATUS_OK;
+                        $exchange->finished_at = now();
+                        $exchange->error = null;
+                        $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                            'status' => 'ok',
+                            'http_status' => Response::HTTP_OK,
+                            'calculated_at' => $calculatedAt,
+                            'received' => $received,
+                            'created' => $created,
+                            'updated' => $updated,
+                            'skipped' => $skipped,
+                            'duration_ms' => $durationMs,
+                            'tenants_created' => $tenantsCreated,
+                            'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                            'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
+                            'linkage_stats' => $linkageStats,
+                            'warnings' => $warnings,
+                        ]);
+                        $exchange->save();
+                    }
 
-            // Примеры проблемных ключей
-            $diagnostics = [];
-            if ($missingSpaceKey > 0) {
-                $diagnostics['missing_space_key'] = [
-                    'count' => $missingSpaceKey,
-                    'samples' => $missingKeysSample,
-                ];
-            }
-            if ($spaceNotFound > 0) {
-                $diagnostics['space_not_found'] = [
-                    'count' => $spaceNotFound,
-                    'samples' => $notFoundKeysSample,
-                ];
-            }
-            if ($spaceAmbiguous > 0) {
-                $diagnostics['space_ambiguous'] = [
-                    'count' => $spaceAmbiguous,
-                    'samples' => $ambiguousKeysSample,
-                ];
-            }
-
-            $warnings = [
-                'spaces_not_found' => $spaceNotFound,
-                'spaces_ambiguous' => $spaceAmbiguous,
-                'contracts_without_space' => $missingSpaceKey,
-                'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
-                'space_key_collisions' => $keysWithCollisions,
-                'suspected_current_duplicate_contract_groups' => $suspectedCurrentDuplicateGroups,
-                'suspected_current_duplicate_contract_rows' => $suspectedCurrentDuplicateRows,
-                'linkage_stats' => $linkageStats,
-                'safe_auto_link' => [
-                    'linked_total' => $safeLinkedContracts,
-                    'linked_by_bridge' => $safeLinkedByBridge,
-                    'linked_by_number' => $safeLinkedByNumber,
-                ],
-            ];
-
-            if ($diagnostics !== []) {
-                $warnings['diagnostics'] = $diagnostics;
-            }
-
-            if ($suspectedCurrentDuplicateSamples !== []) {
-                $warnings['suspected_current_duplicate_contracts'] = [
-                    'count' => $suspectedCurrentDuplicateGroups,
-                    'rows' => $suspectedCurrentDuplicateRows,
-                    'samples' => $suspectedCurrentDuplicateSamples,
-                ];
-            }
-
-            $response = [
-                'status' => 'ok',
-                'market_id' => $marketId,
-                'received' => $received,
-                'created' => $created,
-                'updated' => $updated,
-                'skipped' => $skipped,
-                'calculated_at' => $calculatedAt,
-                'linkage_stats' => $linkageStats,
-                'warnings' => $warnings,
-            ];
-
-            $this->writeImportLog([
-                'status' => 'ok',
-                'endpoint' => self::ENDPOINT,
-                'http_status' => Response::HTTP_OK,
-                'market_id' => $marketId,
-                'integration_id' => (int) $integration->id,
-                'received' => $received,
-                'inserted' => $created,
-                'skipped' => $skipped,
-                'calculated_at' => $calculatedAt,
-                'duration_ms' => $durationMs,
-                'meta' => array_merge($linkageStats, [
-                    'created' => $created,
-                    'updated' => $updated,
-                    'tenants_created' => $tenantsCreated,
-                    'tenants_updated_by_inn' => $tenantsUpdatedByInn,
-                    'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
-                    'suspected_current_duplicate_contract_groups' => $suspectedCurrentDuplicateGroups,
-                    'suspected_current_duplicate_contract_rows' => $suspectedCurrentDuplicateRows,
-                    'ip' => $request->ip(),
-                ]),
-            ]);
-
-            // Финализируем exchange = ok
-            if ($exchange) {
-                $exchange->status = IntegrationExchange::STATUS_OK;
-                $exchange->finished_at = now();
-                $exchange->error = null;
-                $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
-                    'status' => 'ok',
-                    'http_status' => Response::HTTP_OK,
-                    'calculated_at' => $calculatedAt,
-                    'received' => $received,
-                    'created' => $created,
-                    'updated' => $updated,
-                    'skipped' => $skipped,
-                    'duration_ms' => $durationMs,
-                    'tenants_created' => $tenantsCreated,
-                    'tenants_updated_by_inn' => $tenantsUpdatedByInn,
-                    'manual_space_mappings_preserved' => $manualSpaceMappingsPreserved,
-                    'linkage_stats' => $linkageStats,
-                    'warnings' => $warnings,
-                ]);
-                $exchange->save();
-            }
-
-            return response()->json($response);
+                    return response()->json($response);
+                },
+            );
         } catch (Throwable $e) {
             try {
                 DB::rollBack();

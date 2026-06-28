@@ -7,6 +7,9 @@ namespace Tests\Feature;
 use App\Models\Market;
 use App\Models\MarketIntegration;
 use App\Models\Tenant;
+use App\Services\Tenants\OneCTenantResolver;
+use App\Support\MarketContext;
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -16,6 +19,7 @@ class OneCContractDebtImportTest extends TestCase
     use RefreshDatabase;
 
     private Market $market;
+
     private string $token;
 
     protected function setUp(): void
@@ -27,7 +31,7 @@ class OneCContractDebtImportTest extends TestCase
             'slug' => 'test-market',
         ]);
 
-        $this->token = 'test-1c-debt-token-' . uniqid();
+        $this->token = 'test-1c-debt-token-'.uniqid();
 
         MarketIntegration::query()->create([
             'market_id' => (int) $this->market->id,
@@ -85,7 +89,7 @@ class OneCContractDebtImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -107,5 +111,61 @@ class OneCContractDebtImportTest extends TestCase
             'account' => '62',
             'debt_amount' => '1000.00',
         ]);
+    }
+
+    public function test_contract_debt_import_sets_market_context_from_integration_token(): void
+    {
+        Tenant::query()->create([
+            'market_id' => (int) $this->market->id,
+            'name' => 'Context tenant',
+            'external_id' => 'tenant-context',
+        ]);
+
+        $observedMarketId = null;
+
+        $this->app->bind(OneCTenantResolver::class, function () use (&$observedMarketId): OneCTenantResolver {
+            return new class($observedMarketId) extends OneCTenantResolver
+            {
+                private mixed $observedMarketId;
+
+                public function __construct(mixed &$observedMarketId)
+                {
+                    $this->observedMarketId = &$observedMarketId;
+                }
+
+                public function resolve(
+                    int $marketId,
+                    string $tenantExternalId,
+                    array $payload,
+                    string $source,
+                    CarbonInterface $now,
+                    array $options = [],
+                ): array {
+                    $this->observedMarketId = app(MarketContext::class)->currentMarketId();
+
+                    return parent::resolve($marketId, $tenantExternalId, $payload, $source, $now, $options);
+                }
+            };
+        });
+
+        $this->postJson(route('api.1c.contract-debts.store'), [
+            'calculated_at' => '2026-06-04 13:56:51',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-context',
+                    'contract_external_id' => 'contract-context',
+                    'accrued_amount' => 1000,
+                    'paid_amount' => 250,
+                    'debt_amount' => 750,
+                    'period' => '2026-06',
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer '.$this->token,
+            'Accept' => 'application/json',
+        ])->assertOk();
+
+        $this->assertSame((int) $this->market->id, $observedMarketId);
     }
 }

@@ -1,5 +1,6 @@
 <?php
-# app/Http/Controllers/Api/OneC/ContractDebtController.php
+
+// app/Http/Controllers/Api/OneC/ContractDebtController.php
 
 declare(strict_types=1);
 
@@ -7,11 +8,12 @@ namespace App\Http\Controllers\Api\OneC;
 
 use App\Http\Controllers\Controller;
 use App\Models\IntegrationExchange;
-use App\Models\MarketSpace;
 use App\Models\MarketIntegration;
+use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantContract;
 use App\Services\Tenants\OneCTenantResolver;
+use App\Support\MarketContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +25,7 @@ use Throwable;
 class ContractDebtController extends Controller
 {
     private const ENDPOINT = '/api/1c/contract-debts';
+
     private const ENTITY_TYPE = 'contract_debts';
 
     /**
@@ -97,307 +100,315 @@ class ContractDebtController extends Controller
 
             $marketId = (int) $integration->market_id;
 
-            // Создаём каноническую запись обмена как можно раньше (до validate),
-            // чтобы даже validation_error/exception попадали в /admin/integration-exchanges.
-            $exchange = new IntegrationExchange();
-            $exchange->market_id = $marketId;
-            $exchange->direction = IntegrationExchange::DIRECTION_IN;
-            $exchange->entity_type = self::ENTITY_TYPE;
-            $exchange->status = IntegrationExchange::STATUS_IN_PROGRESS;
-            $exchange->created_by = null; // входящий обмен из 1С — обычно без пользователя
-            $exchange->started_at = $startedAt;
-            $exchange->finished_at = null;
-            $exchange->payload = [
-                'endpoint' => self::ENDPOINT,
-                'market_integration_id' => (int) $integration->id,
-                'request_meta' => [
-                    'ip' => $request->ip(),
-                    'user_agent' => (string) $request->userAgent(),
-                ],
-            ];
-            $exchange->save();
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                function () use ($request, $tenantResolver, $integration, $marketId, $startedAt, &$exchange): JsonResponse {
 
-            try {
-                $validated = $request->validate([
-                    'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
-                    'items' => ['required', 'array', 'min:1'],
-
-                    'items.*.contract_external_id' => ['required', 'string', 'max:255'],
-                    'items.*.tenant_external_id'   => ['required', 'string', 'max:255'],
-                    'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
-                    'items.*.organization_name' => ['nullable', 'string', 'max:255'],
-                    'items.*.account' => ['nullable', 'string', 'max:64'],
-
-                    // fallback-поля (если external_id в нашей БД ещё не был проставлен)
-                    'items.*.inn'         => ['nullable', 'string', 'max:32'],
-                    'items.*.kpp'         => ['nullable', 'string', 'max:32'],
-                    'items.*.tenant_name' => ['nullable', 'string', 'max:255'],
-
-                    'items.*.accrued_amount' => ['required', 'numeric'],
-                    'items.*.paid_amount'    => ['required', 'numeric'],
-                    'items.*.debt_amount'    => ['required', 'numeric'],
-                    'items.*.period'         => ['required', 'string', 'size:7'], // YYYY-MM
-                    'items.*.currency'       => ['nullable', 'string', 'size:3'],
-                ]);
-            } catch (ValidationException $e) {
-                $items = $request->input('items');
-                $received = is_array($items) ? count($items) : 0;
-                $calculatedAt = is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null;
-
-                $this->writeImportLog([
-                    'status' => 'validation_error',
-                    'endpoint' => self::ENDPOINT,
-                    'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                    'market_id' => $marketId,
-                    'integration_id' => (int) $integration->id,
-                    'received' => $received,
-                    'inserted' => 0,
-                    'skipped' => 0,
-                    'calculated_at' => $calculatedAt,
-                    'error_message' => 'Validation failed',
-                    'meta' => [
-                        'errors' => $e->errors(),
-                        'ip' => $request->ip(),
-                    ],
-                ]);
-
-                // фиксируем exchange = error
-                if ($exchange) {
-                    $exchange->status = IntegrationExchange::STATUS_ERROR;
-                    $exchange->error = 'Validation failed';
-                    $exchange->finished_at = now();
-                    $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
-                        'status' => 'validation_error',
-                        'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
-                        'calculated_at' => $calculatedAt,
-                        'received' => $received,
-                        'inserted' => 0,
-                        'skipped' => 0,
-                        'validation_errors' => $e->errors(),
-                        'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
-                    ]);
+                    // Создаём каноническую запись обмена как можно раньше (до validate),
+                    // чтобы даже validation_error/exception попадали в /admin/integration-exchanges.
+                    $exchange = new IntegrationExchange;
+                    $exchange->market_id = $marketId;
+                    $exchange->direction = IntegrationExchange::DIRECTION_IN;
+                    $exchange->entity_type = self::ENTITY_TYPE;
+                    $exchange->status = IntegrationExchange::STATUS_IN_PROGRESS;
+                    $exchange->created_by = null; // входящий обмен из 1С — обычно без пользователя
+                    $exchange->started_at = $startedAt;
+                    $exchange->finished_at = null;
+                    $exchange->payload = [
+                        'endpoint' => self::ENDPOINT,
+                        'market_integration_id' => (int) $integration->id,
+                        'request_meta' => [
+                            'ip' => $request->ip(),
+                            'user_agent' => (string) $request->userAgent(),
+                        ],
+                    ];
                     $exchange->save();
-                }
 
-                throw $e; // Laravel сам вернёт 422
-            }
+                    try {
+                        $validated = $request->validate([
+                            'calculated_at' => ['required', 'date_format:Y-m-d H:i:s'],
+                            'items' => ['required', 'array', 'min:1'],
 
-            $now = now();
-            $calculatedAt = (string) $validated['calculated_at'];
+                            'items.*.contract_external_id' => ['required', 'string', 'max:255'],
+                            'items.*.tenant_external_id' => ['required', 'string', 'max:255'],
+                            'items.*.organization_external_id' => ['nullable', 'string', 'max:255'],
+                            'items.*.organization_name' => ['nullable', 'string', 'max:255'],
+                            'items.*.account' => ['nullable', 'string', 'max:64'],
 
-            $rows = [];
-            $skipped = 0;
-            $metadataUpdated = 0;
-            $notFoundTenants = [];
-            $tenantsCreated = 0;
-            $tenantsUpdatedByInn = 0;
-            $hasActiveSpaceFlag = Schema::hasColumn('market_spaces', 'is_active');
-            $hasUpdatedAtColumn = Schema::hasColumn('contract_debts', 'updated_at');
+                            // fallback-поля (если external_id в нашей БД ещё не был проставлен)
+                            'items.*.inn' => ['nullable', 'string', 'max:32'],
+                            'items.*.kpp' => ['nullable', 'string', 'max:32'],
+                            'items.*.tenant_name' => ['nullable', 'string', 'max:255'],
 
-            foreach ($validated['items'] as $item) {
-                $tenantExternalId = trim((string) $item['tenant_external_id']);
-                $contractExternalId = trim((string) $item['contract_external_id']);
-                $period = trim((string) $item['period']);
-                $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
-                $organizationName = trim((string) ($item['organization_name'] ?? ''));
-                $account = trim((string) ($item['account'] ?? ''));
+                            'items.*.accrued_amount' => ['required', 'numeric'],
+                            'items.*.paid_amount' => ['required', 'numeric'],
+                            'items.*.debt_amount' => ['required', 'numeric'],
+                            'items.*.period' => ['required', 'string', 'size:7'], // YYYY-MM
+                            'items.*.currency' => ['nullable', 'string', 'size:3'],
+                        ]);
+                    } catch (ValidationException $e) {
+                        $items = $request->input('items');
+                        $received = is_array($items) ? count($items) : 0;
+                        $calculatedAt = is_string($request->input('calculated_at')) ? (string) $request->input('calculated_at') : null;
 
-                $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
-                if ($currency === '') {
-                    $currency = 'RUB';
-                }
+                        $this->writeImportLog([
+                            'status' => 'validation_error',
+                            'endpoint' => self::ENDPOINT,
+                            'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                            'market_id' => $marketId,
+                            'integration_id' => (int) $integration->id,
+                            'received' => $received,
+                            'inserted' => 0,
+                            'skipped' => 0,
+                            'calculated_at' => $calculatedAt,
+                            'error_message' => 'Validation failed',
+                            'meta' => [
+                                'errors' => $e->errors(),
+                                'ip' => $request->ip(),
+                            ],
+                        ]);
 
-                // Нормализуем суммы в строку с 2 знаками после запятой — детерминированно для hash/сравнений
-                $accruedAmount = $this->normalizeMoney($item['accrued_amount']);
-                $paidAmount = $this->normalizeMoney($item['paid_amount']);
-                $debtAmount = $this->normalizeMoney($item['debt_amount']);
-
-                $tenantResolution = $tenantResolver->resolve(
-                    $marketId,
-                    $tenantExternalId,
-                    $item,
-                    'contract_debts',
-                    $now,
-                );
-                $tenant = $tenantResolution['tenant'] ?? null;
-
-                if (($tenantResolution['mode'] ?? 'failed') === 'created') {
-                    $tenantsCreated++;
-                } elseif (($tenantResolution['mode'] ?? 'failed') === 'matched_inn') {
-                    $tenantsUpdatedByInn++;
-                }
-
-                if (! $tenant) {
-                    $notFoundTenants[] = $tenantExternalId;
-                    $skipped++;
-                    continue;
-                }
-
-                $this->ensureSingleSpaceContractBridge(
-                    $marketId,
-                    $tenant,
-                    $contractExternalId,
-                    $period,
-                    $hasActiveSpaceFlag
-                );
-
-                /**
-                 * Идемпотентность:
-                 * Считаем "стабильный" hash без calculated_at.
-                 * Дополнительно: перед вставкой проверяем, есть ли уже строка с такими же данными,
-                 * чтобы не плодить дубликаты даже если ранее hash считался иначе.
-                 */
-                $hash = $this->makeDebtHash(
-                    $marketId,
-                    $tenantExternalId,
-                    $contractExternalId,
-                    $period,
-                    $organizationExternalId,
-                    $organizationName,
-                    $account,
-                    $currency,
-                    $accruedAmount,
-                    $paidAmount,
-                    $debtAmount
-                );
-
-                $existingNaturalRow = DB::table('contract_debts')
-                    ->where('market_id', $marketId)
-                    ->where('tenant_external_id', $tenantExternalId)
-                    ->where('contract_external_id', $contractExternalId)
-                    ->where('period', $period)
-                    ->where('currency', $currency)
-                    ->where('accrued_amount', $accruedAmount)
-                    ->where('paid_amount', $paidAmount)
-                    ->where('debt_amount', $debtAmount)
-                    ->first(['id', 'organization_external_id', 'organization_name', 'account']);
-
-                if ($existingNaturalRow !== null) {
-                    $metadataUpdates = [];
-
-                    if ($organizationExternalId !== '' && (string) ($existingNaturalRow->organization_external_id ?? '') !== $organizationExternalId) {
-                        $metadataUpdates['organization_external_id'] = $organizationExternalId;
-                    }
-
-                    if ($organizationName !== '' && (string) ($existingNaturalRow->organization_name ?? '') !== $organizationName) {
-                        $metadataUpdates['organization_name'] = $organizationName;
-                    }
-
-                    if ($account !== '' && (string) ($existingNaturalRow->account ?? '') !== $account) {
-                        $metadataUpdates['account'] = $account;
-                    }
-
-                    if ($metadataUpdates !== []) {
-                        $metadataUpdates['raw_payload'] = $this->safeJsonEncode($item);
-                        if ($hasUpdatedAtColumn) {
-                            $metadataUpdates['updated_at'] = $now;
+                        // фиксируем exchange = error
+                        if ($exchange) {
+                            $exchange->status = IntegrationExchange::STATUS_ERROR;
+                            $exchange->error = 'Validation failed';
+                            $exchange->finished_at = now();
+                            $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                                'status' => 'validation_error',
+                                'http_status' => Response::HTTP_UNPROCESSABLE_ENTITY,
+                                'calculated_at' => $calculatedAt,
+                                'received' => $received,
+                                'inserted' => 0,
+                                'skipped' => 0,
+                                'validation_errors' => $e->errors(),
+                                'duration_ms' => (int) max(0, $startedAt->diffInMilliseconds(now())),
+                            ]);
+                            $exchange->save();
                         }
 
-                        DB::table('contract_debts')
-                            ->where('id', $existingNaturalRow->id)
-                            ->update($metadataUpdates);
-
-                        $metadataUpdated++;
+                        throw $e; // Laravel сам вернёт 422
                     }
 
-                    $skipped++;
-                    continue;
-                }
+                    $now = now();
+                    $calculatedAt = (string) $validated['calculated_at'];
 
-                $row = [
-                    'market_id' => $marketId,
-                    'tenant_id' => $tenant->id,
-                    'tenant_external_id' => $tenantExternalId,
-                    'contract_external_id' => $contractExternalId,
-                    'period' => $period,
-                    'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
-                    'organization_name' => $organizationName !== '' ? $organizationName : null,
-                    'account' => $account !== '' ? $account : null,
-                    'accrued_amount' => $accruedAmount,
-                    'paid_amount' => $paidAmount,
-                    'debt_amount' => $debtAmount,
-                    'calculated_at' => $calculatedAt,
-                    'source' => '1c',
-                    'market_external_id' => 'VDNH',
-                    'currency' => $currency,
-                    'hash' => $hash,
-                    'raw_payload' => $this->safeJsonEncode($item),
-                    'created_at' => $now,
-                ];
+                    $rows = [];
+                    $skipped = 0;
+                    $metadataUpdated = 0;
+                    $notFoundTenants = [];
+                    $tenantsCreated = 0;
+                    $tenantsUpdatedByInn = 0;
+                    $hasActiveSpaceFlag = Schema::hasColumn('market_spaces', 'is_active');
+                    $hasUpdatedAtColumn = Schema::hasColumn('contract_debts', 'updated_at');
 
-                if ($hasUpdatedAtColumn) {
-                    $row['updated_at'] = $now;
-                }
+                    foreach ($validated['items'] as $item) {
+                        $tenantExternalId = trim((string) $item['tenant_external_id']);
+                        $contractExternalId = trim((string) $item['contract_external_id']);
+                        $period = trim((string) $item['period']);
+                        $organizationExternalId = trim((string) ($item['organization_external_id'] ?? ''));
+                        $organizationName = trim((string) ($item['organization_name'] ?? ''));
+                        $account = trim((string) ($item['account'] ?? ''));
 
-                $rows[] = $row;
-            }
+                        $currency = strtoupper(trim((string) ($item['currency'] ?? 'RUB')));
+                        if ($currency === '') {
+                            $currency = 'RUB';
+                        }
 
-            $inserted = 0;
-            if (! empty($rows)) {
-                $inserted = DB::table('contract_debts')->insertOrIgnore($rows);
-            }
+                        // Нормализуем суммы в строку с 2 знаками после запятой — детерминированно для hash/сравнений
+                        $accruedAmount = $this->normalizeMoney($item['accrued_amount']);
+                        $paidAmount = $this->normalizeMoney($item['paid_amount']);
+                        $debtAmount = $this->normalizeMoney($item['debt_amount']);
 
-            $response = [
-                'status' => 'ok',
-                'market_id' => $marketId,
-                'received' => count($validated['items']),
-                'inserted' => $inserted,
-                'skipped' => $skipped,
-                'metadata_updated' => $metadataUpdated,
-                'calculated_at' => $calculatedAt,
-            ];
+                        $tenantResolution = $tenantResolver->resolve(
+                            $marketId,
+                            $tenantExternalId,
+                            $item,
+                            'contract_debts',
+                            $now,
+                        );
+                        $tenant = $tenantResolution['tenant'] ?? null;
 
-            if (! empty($notFoundTenants)) {
-                $response['warnings'] = [
-                    'message' => 'Some tenants not found by external_id',
-                    'not_found_external_ids' => array_values(array_unique($notFoundTenants)),
-                ];
-            }
+                        if (($tenantResolution['mode'] ?? 'failed') === 'created') {
+                            $tenantsCreated++;
+                        } elseif (($tenantResolution['mode'] ?? 'failed') === 'matched_inn') {
+                            $tenantsUpdatedByInn++;
+                        }
 
-            $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
+                        if (! $tenant) {
+                            $notFoundTenants[] = $tenantExternalId;
+                            $skipped++;
 
-            $this->writeImportLog([
-                'status' => 'ok',
-                'endpoint' => self::ENDPOINT,
-                'http_status' => Response::HTTP_OK,
-                'market_id' => $marketId,
-                'integration_id' => (int) $integration->id,
-                'received' => count($validated['items']),
-                'inserted' => $inserted,
-                'skipped' => $skipped,
-                'calculated_at' => $calculatedAt,
-                'duration_ms' => $durationMs,
-                'meta' => [
-                    'metadata_updated' => $metadataUpdated,
-                    'tenants_created' => $tenantsCreated,
-                    'tenants_updated_by_inn' => $tenantsUpdatedByInn,
-                    'warnings' => $response['warnings'] ?? null,
-                    'ip' => $request->ip(),
-                ],
-            ]);
+                            continue;
+                        }
 
-            // Финализируем exchange = ok
-            if ($exchange) {
-                $exchange->status = IntegrationExchange::STATUS_OK;
-                $exchange->finished_at = now();
-                $exchange->error = null;
-                $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
-                    'status' => 'ok',
-                    'http_status' => Response::HTTP_OK,
-                    'calculated_at' => $calculatedAt,
-                    'received' => count($validated['items']),
-                    'inserted' => $inserted,
-                    'skipped' => $skipped,
-                    'metadata_updated' => $metadataUpdated,
-                    'duration_ms' => $durationMs,
-                    'tenants_created' => $tenantsCreated,
-                    'tenants_updated_by_inn' => $tenantsUpdatedByInn,
-                    'warnings' => $response['warnings'] ?? null,
-                ]);
-                $exchange->save();
-            }
+                        $this->ensureSingleSpaceContractBridge(
+                            $marketId,
+                            $tenant,
+                            $contractExternalId,
+                            $period,
+                            $hasActiveSpaceFlag
+                        );
 
-            return response()->json($response);
+                        /**
+                         * Идемпотентность:
+                         * Считаем "стабильный" hash без calculated_at.
+                         * Дополнительно: перед вставкой проверяем, есть ли уже строка с такими же данными,
+                         * чтобы не плодить дубликаты даже если ранее hash считался иначе.
+                         */
+                        $hash = $this->makeDebtHash(
+                            $marketId,
+                            $tenantExternalId,
+                            $contractExternalId,
+                            $period,
+                            $organizationExternalId,
+                            $organizationName,
+                            $account,
+                            $currency,
+                            $accruedAmount,
+                            $paidAmount,
+                            $debtAmount
+                        );
+
+                        $existingNaturalRow = DB::table('contract_debts')
+                            ->where('market_id', $marketId)
+                            ->where('tenant_external_id', $tenantExternalId)
+                            ->where('contract_external_id', $contractExternalId)
+                            ->where('period', $period)
+                            ->where('currency', $currency)
+                            ->where('accrued_amount', $accruedAmount)
+                            ->where('paid_amount', $paidAmount)
+                            ->where('debt_amount', $debtAmount)
+                            ->first(['id', 'organization_external_id', 'organization_name', 'account']);
+
+                        if ($existingNaturalRow !== null) {
+                            $metadataUpdates = [];
+
+                            if ($organizationExternalId !== '' && (string) ($existingNaturalRow->organization_external_id ?? '') !== $organizationExternalId) {
+                                $metadataUpdates['organization_external_id'] = $organizationExternalId;
+                            }
+
+                            if ($organizationName !== '' && (string) ($existingNaturalRow->organization_name ?? '') !== $organizationName) {
+                                $metadataUpdates['organization_name'] = $organizationName;
+                            }
+
+                            if ($account !== '' && (string) ($existingNaturalRow->account ?? '') !== $account) {
+                                $metadataUpdates['account'] = $account;
+                            }
+
+                            if ($metadataUpdates !== []) {
+                                $metadataUpdates['raw_payload'] = $this->safeJsonEncode($item);
+                                if ($hasUpdatedAtColumn) {
+                                    $metadataUpdates['updated_at'] = $now;
+                                }
+
+                                DB::table('contract_debts')
+                                    ->where('id', $existingNaturalRow->id)
+                                    ->update($metadataUpdates);
+
+                                $metadataUpdated++;
+                            }
+
+                            $skipped++;
+
+                            continue;
+                        }
+
+                        $row = [
+                            'market_id' => $marketId,
+                            'tenant_id' => $tenant->id,
+                            'tenant_external_id' => $tenantExternalId,
+                            'contract_external_id' => $contractExternalId,
+                            'period' => $period,
+                            'organization_external_id' => $organizationExternalId !== '' ? $organizationExternalId : null,
+                            'organization_name' => $organizationName !== '' ? $organizationName : null,
+                            'account' => $account !== '' ? $account : null,
+                            'accrued_amount' => $accruedAmount,
+                            'paid_amount' => $paidAmount,
+                            'debt_amount' => $debtAmount,
+                            'calculated_at' => $calculatedAt,
+                            'source' => '1c',
+                            'market_external_id' => 'VDNH',
+                            'currency' => $currency,
+                            'hash' => $hash,
+                            'raw_payload' => $this->safeJsonEncode($item),
+                            'created_at' => $now,
+                        ];
+
+                        if ($hasUpdatedAtColumn) {
+                            $row['updated_at'] = $now;
+                        }
+
+                        $rows[] = $row;
+                    }
+
+                    $inserted = 0;
+                    if (! empty($rows)) {
+                        $inserted = DB::table('contract_debts')->insertOrIgnore($rows);
+                    }
+
+                    $response = [
+                        'status' => 'ok',
+                        'market_id' => $marketId,
+                        'received' => count($validated['items']),
+                        'inserted' => $inserted,
+                        'skipped' => $skipped,
+                        'metadata_updated' => $metadataUpdated,
+                        'calculated_at' => $calculatedAt,
+                    ];
+
+                    if (! empty($notFoundTenants)) {
+                        $response['warnings'] = [
+                            'message' => 'Some tenants not found by external_id',
+                            'not_found_external_ids' => array_values(array_unique($notFoundTenants)),
+                        ];
+                    }
+
+                    $durationMs = (int) max(0, $startedAt->diffInMilliseconds(now()));
+
+                    $this->writeImportLog([
+                        'status' => 'ok',
+                        'endpoint' => self::ENDPOINT,
+                        'http_status' => Response::HTTP_OK,
+                        'market_id' => $marketId,
+                        'integration_id' => (int) $integration->id,
+                        'received' => count($validated['items']),
+                        'inserted' => $inserted,
+                        'skipped' => $skipped,
+                        'calculated_at' => $calculatedAt,
+                        'duration_ms' => $durationMs,
+                        'meta' => [
+                            'metadata_updated' => $metadataUpdated,
+                            'tenants_created' => $tenantsCreated,
+                            'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                            'warnings' => $response['warnings'] ?? null,
+                            'ip' => $request->ip(),
+                        ],
+                    ]);
+
+                    // Финализируем exchange = ok
+                    if ($exchange) {
+                        $exchange->status = IntegrationExchange::STATUS_OK;
+                        $exchange->finished_at = now();
+                        $exchange->error = null;
+                        $exchange->payload = array_merge((array) ($exchange->payload ?? []), [
+                            'status' => 'ok',
+                            'http_status' => Response::HTTP_OK,
+                            'calculated_at' => $calculatedAt,
+                            'received' => count($validated['items']),
+                            'inserted' => $inserted,
+                            'skipped' => $skipped,
+                            'metadata_updated' => $metadataUpdated,
+                            'duration_ms' => $durationMs,
+                            'tenants_created' => $tenantsCreated,
+                            'tenants_updated_by_inn' => $tenantsUpdatedByInn,
+                            'warnings' => $response['warnings'] ?? null,
+                        ]);
+                        $exchange->save();
+                    }
+
+                    return response()->json($response);
+                },
+            );
         } catch (Throwable $e) {
             $items = $request->input('items');
 
@@ -543,6 +554,7 @@ class ContractDebtController extends Controller
             $contract->market_space_id = $spaceId;
             $contract->notes = $notes;
             $contract->save();
+
             return;
         }
 
@@ -593,7 +605,7 @@ class ContractDebtController extends Controller
             return $text;
         }
 
-        return $text . "\n" . $marker;
+        return $text."\n".$marker;
     }
 
     private function normalizePeriodStartDate(string $period): string
@@ -601,7 +613,7 @@ class ContractDebtController extends Controller
         $period = trim($period);
 
         if (preg_match('/^\d{4}-\d{2}$/', $period) === 1) {
-            return $period . '-01';
+            return $period.'-01';
         }
 
         return now()->toDateString();

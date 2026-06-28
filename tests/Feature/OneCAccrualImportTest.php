@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Models\IntegrationExchange;
 use App\Models\Market;
 use App\Models\MarketIntegration;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
-use App\Models\IntegrationExchange;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
+use App\Services\Tenants\OneCTenantResolver;
+use App\Support\MarketContext;
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -22,7 +25,9 @@ class OneCAccrualImportTest extends TestCase
     use RefreshDatabase;
 
     private Market $market;
+
     private MarketIntegration $integration;
+
     private string $token;
 
     protected function setUp(): void
@@ -34,7 +39,7 @@ class OneCAccrualImportTest extends TestCase
             'slug' => 'test-market',
         ]);
 
-        $this->token = 'test-1c-accrual-token-' . uniqid();
+        $this->token = 'test-1c-accrual-token-'.uniqid();
 
         $this->integration = MarketIntegration::create([
             'market_id' => $this->market->id,
@@ -103,7 +108,7 @@ class OneCAccrualImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ]);
 
@@ -178,7 +183,7 @@ class OneCAccrualImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ])
             ->assertOk()
@@ -243,7 +248,7 @@ class OneCAccrualImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ])
             ->assertOk()
@@ -314,7 +319,7 @@ class OneCAccrualImportTest extends TestCase
         ];
 
         $headers = [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ];
 
@@ -421,7 +426,7 @@ class OneCAccrualImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ])
             ->assertOk()
@@ -462,7 +467,7 @@ class OneCAccrualImportTest extends TestCase
         ]);
 
         $headers = [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ];
 
@@ -606,7 +611,7 @@ class OneCAccrualImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ])
             ->assertOk()
@@ -651,7 +656,7 @@ class OneCAccrualImportTest extends TestCase
         ]);
 
         $headers = [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ];
 
@@ -758,7 +763,7 @@ class OneCAccrualImportTest extends TestCase
                 ],
             ],
         ], [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ])
             ->assertOk()
@@ -784,7 +789,7 @@ class OneCAccrualImportTest extends TestCase
         ]);
 
         $headers = [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ];
 
@@ -853,7 +858,7 @@ class OneCAccrualImportTest extends TestCase
         ]);
 
         $headers = [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ];
 
@@ -916,7 +921,7 @@ class OneCAccrualImportTest extends TestCase
         });
 
         $headers = [
-            'Authorization' => 'Bearer ' . $this->token,
+            'Authorization' => 'Bearer '.$this->token,
             'Accept' => 'application/json',
         ];
 
@@ -960,5 +965,62 @@ class OneCAccrualImportTest extends TestCase
                 ->where('status', IntegrationExchange::STATUS_IN_PROGRESS)
                 ->count()
         );
+    }
+
+    public function test_accrual_import_sets_market_context_from_integration_token(): void
+    {
+        Tenant::query()->create([
+            'market_id' => (int) $this->market->id,
+            'external_id' => 'tenant-context',
+            'name' => 'Context tenant',
+        ]);
+
+        $observedMarketId = null;
+
+        $this->app->bind(OneCTenantResolver::class, function () use (&$observedMarketId): OneCTenantResolver {
+            return new class($observedMarketId) extends OneCTenantResolver
+            {
+                private mixed $observedMarketId;
+
+                public function __construct(mixed &$observedMarketId)
+                {
+                    $this->observedMarketId = &$observedMarketId;
+                }
+
+                public function resolve(
+                    int $marketId,
+                    string $tenantExternalId,
+                    array $payload,
+                    string $source,
+                    CarbonInterface $now,
+                    array $options = [],
+                ): array {
+                    $this->observedMarketId = app(MarketContext::class)->currentMarketId();
+
+                    return parent::resolve($marketId, $tenantExternalId, $payload, $source, $now, $options);
+                }
+            };
+        });
+
+        $this->postJson(route('api.1c.accruals.store'), [
+            'calculated_at' => '2026-06-04 13:56:51',
+            'items' => [
+                [
+                    'tenant_external_id' => 'tenant-context',
+                    'contract_external_id' => 'contract-context',
+                    'period' => '2026-06',
+                    'service_name' => 'Rent',
+                    'line_description' => 'Rent for June 2026',
+                    'total_no_vat' => 1000,
+                    'total_with_vat' => 1000,
+                    'currency' => 'RUB',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer '.$this->token,
+            'Accept' => 'application/json',
+        ])->assertOk();
+
+        $this->assertSame((int) $this->market->id, $observedMarketId);
     }
 }
