@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Models\Tenant;
 use App\Services\Cabinet\TenantCabinetUserService;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 
 class EnsureTenantCabinetUsers extends Command
@@ -19,13 +20,30 @@ class EnsureTenantCabinetUsers extends Command
 
     public function handle(TenantCabinetUserService $cabinetUsers): int
     {
-        $marketId = $this->option('market');
+        $rawMarketId = $this->option('market');
+        $marketId = filled($rawMarketId) ? (int) $rawMarketId : null;
         $limit = max(0, (int) ($this->option('limit') ?? 0));
         $execute = (bool) $this->option('execute');
 
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->ensureCabinetUsers($cabinetUsers, $marketId, $limit, $execute),
+            );
+        }
+
+        return $this->ensureCabinetUsers($cabinetUsers, null, $limit, $execute);
+    }
+
+    private function ensureCabinetUsers(
+        TenantCabinetUserService $cabinetUsers,
+        ?int $marketId,
+        int $limit,
+        bool $execute,
+    ): int {
         $query = Tenant::query()->orderBy('id');
-        if (filled($marketId)) {
-            $query->where('market_id', (int) $marketId);
+        if ($marketId !== null) {
+            $query->where('market_id', $marketId);
         }
         if ($limit > 0) {
             $query->limit($limit);
@@ -38,9 +56,9 @@ class EnsureTenantCabinetUsers extends Command
         $created = 0;
         $total = $tenants->count();
 
-        $this->line('mode=' . ($execute ? 'EXECUTE' : 'DRY-RUN'));
-        $this->line('scope=' . (filled($marketId) ? ('market_id=' . (int) $marketId) : 'all'));
-        $this->line('tenants=' . $total);
+        $this->line('mode='.($execute ? 'EXECUTE' : 'DRY-RUN'));
+        $this->line('scope='.($marketId !== null ? ('market_id='.$marketId) : 'all'));
+        $this->line('tenants='.$total);
 
         foreach ($tenants as $tenant) {
             $primary = $cabinetUsers->resolvePrimaryUser($tenant);
@@ -89,9 +107,9 @@ class EnsureTenantCabinetUsers extends Command
 
         $this->newLine();
         $this->info('Summary:');
-        $this->line(' missing_primary=' . $missing);
-        $this->line(' role_issues=' . $fixedRole);
-        $this->line(' created=' . $created);
+        $this->line(' missing_primary='.$missing);
+        $this->line(' role_issues='.$fixedRole);
+        $this->line(' created='.$created);
 
         if (! $execute) {
             $this->warn('DRY RUN: no changes applied. Use --execute to apply.');
@@ -100,4 +118,3 @@ class EnsureTenantCabinetUsers extends Command
         return self::SUCCESS;
     }
 }
-
