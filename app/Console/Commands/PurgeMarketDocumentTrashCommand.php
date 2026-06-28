@@ -15,12 +15,22 @@ class PurgeMarketDocumentTrashCommand extends Command
 {
     protected $signature = 'market-documents:purge-trash
         {--days= : Override the trash retention period in days}
-        {--dry-run : Count files without deleting them}';
+        {--dry-run : Run in dry-run mode}
+        {--execute : Delete documents and files (default: dry-run)}';
 
     protected $description = 'Permanently delete market documents that stayed in trash longer than the retention period.';
 
     public function handle(): int
     {
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
+
         $days = $this->retentionDays();
 
         if ($days < 1) {
@@ -34,8 +44,9 @@ class PurgeMarketDocumentTrashCommand extends Command
             ->whereNotNull('archived_at')
             ->where('archived_at', '<=', $cutoff);
 
-        if ($this->option('dry-run')) {
-            $this->info((string) $query->count());
+        if ($dryRun) {
+            $this->info('Would delete: '.$query->count());
+            $this->warn('DRY RUN: no documents or files were deleted. Use --execute to apply.');
 
             return self::SUCCESS;
         }
