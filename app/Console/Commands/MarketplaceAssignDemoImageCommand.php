@@ -6,8 +6,8 @@ namespace App\Console\Commands;
 
 use App\Models\Market;
 use App\Models\MarketplaceProduct;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Builder;
 
 class MarketplaceAssignDemoImageCommand extends Command
 {
@@ -15,15 +15,25 @@ class MarketplaceAssignDemoImageCommand extends Command
         {--market= : Market id or slug}
         {--profile= : Demo profile key to target}
         {--path= : Image path to assign}
-        {--limit=5 : Number of demo products to update}';
+        {--limit=5 : Number of demo products to update}
+        {--dry-run : Run in dry-run mode}
+        {--execute : Apply image assignment (default: dry-run)}';
 
     protected $description = 'Assign a known-good image path to a limited set of demo products for quick visual repair';
 
     public function handle(): int
     {
-        $market = $this->resolveMarket();
-        if ($market === null) {
-            $this->error('Market not found.');
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
+
+        if (trim((string) $this->option('market')) === '') {
+            $this->error('Option --market is required.');
 
             return self::FAILURE;
         }
@@ -44,6 +54,21 @@ class MarketplaceAssignDemoImageCommand extends Command
             return self::FAILURE;
         }
 
+        $market = $this->resolveMarket();
+        if ($market === null) {
+            $this->error('Market not found.');
+
+            return self::FAILURE;
+        }
+
+        return app(MarketContext::class)->withMarket(
+            (int) $market->id,
+            fn (): int => $this->assignDemoImages($market, $profile, $path, $limit, $dryRun),
+        );
+    }
+
+    private function assignDemoImages(Market $market, string $profile, string $path, int $limit, bool $dryRun): int
+    {
         $products = MarketplaceProduct::query()
             ->where('market_id', (int) $market->id)
             ->where('is_demo', true)
@@ -64,13 +89,24 @@ class MarketplaceAssignDemoImageCommand extends Command
                 ->values()
                 ->all();
 
-            $product->images = array_values(array_unique(array_merge([$path], $images)));
-            $product->save();
+            if (! $dryRun) {
+                $product->images = array_values(array_unique(array_merge([$path], $images)));
+                $product->save();
+            }
 
             $this->line(sprintf('#%d %s', (int) $product->id, (string) $product->title));
         }
 
-        $this->info(sprintf('Updated %d demo products in market %s.', $products->count(), (string) $market->slug));
+        $this->info(sprintf(
+            '%s %d demo products in market %s.',
+            $dryRun ? 'Would update' : 'Updated',
+            $products->count(),
+            (string) $market->slug,
+        ));
+
+        if ($dryRun) {
+            $this->warn('DRY RUN: no changes applied. Use --execute to apply.');
+        }
 
         return self::SUCCESS;
     }
