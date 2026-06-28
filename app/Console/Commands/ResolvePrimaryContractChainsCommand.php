@@ -7,8 +7,8 @@ namespace App\Console\Commands;
 use App\Models\TenantContract;
 use App\Services\MarketSpaces\MarketSpaceTenantBindingRecorder;
 use App\Services\TenantContracts\ContractDocumentClassifier;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
-use Illuminate\Support\Collection;
 
 class ResolvePrimaryContractChainsCommand extends Command
 {
@@ -26,6 +26,20 @@ class ResolvePrimaryContractChainsCommand extends Command
         $marketId = max(1, (int) $this->option('market'));
         $limit = max(0, (int) $this->option('limit'));
         $apply = (bool) $this->option('apply');
+
+        return app(MarketContext::class)->withMarket(
+            $marketId,
+            fn (): int => $this->resolveChains($classifier, $recorder, $marketId, $limit, $apply),
+        );
+    }
+
+    private function resolveChains(
+        ContractDocumentClassifier $classifier,
+        MarketSpaceTenantBindingRecorder $recorder,
+        int $marketId,
+        int $limit,
+        bool $apply,
+    ): int {
         $now = now();
 
         $contracts = TenantContract::query()
@@ -67,7 +81,7 @@ class ResolvePrimaryContractChainsCommand extends Command
                 continue;
             }
 
-            $key = (int) $contract->tenant_id . ':' . (int) $contract->market_space_id;
+            $key = (int) $contract->tenant_id.':'.(int) $contract->market_space_id;
             $groups[$key] ??= [
                 'tenant_id' => (int) $contract->tenant_id,
                 'market_space_id' => (int) $contract->market_space_id,
@@ -125,6 +139,7 @@ class ResolvePrimaryContractChainsCommand extends Command
                 foreach ($historicalContracts as $historical) {
                     if ($historical->excludesFromSpaceMapping()) {
                         $stats['unchanged_contracts']++;
+
                         continue;
                     }
 
