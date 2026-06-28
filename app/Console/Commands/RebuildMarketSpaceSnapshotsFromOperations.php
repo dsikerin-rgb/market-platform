@@ -12,16 +12,42 @@ use Illuminate\Console\Command;
 class RebuildMarketSpaceSnapshotsFromOperations extends Command
 {
     protected $signature = 'operations:rebuild-space-snapshots
-        {--market-id= : Ограничить пересчёт одним market_id}
-        {--dry-run : Только показать количество затронутых мест без изменений}';
+        {--market-id= : Limit rebuild to one market id}
+        {--all-markets : Allow --execute to rebuild every market}
+        {--dry-run : Run in dry-run mode}
+        {--execute : Rebuild snapshots (default: dry-run)}';
 
     protected $description = 'Пересчитать snapshot market_spaces по applied операциям (tenant_switch/rent_rate_change/space_attrs_change)';
 
     public function handle(): int
     {
-        $marketId = $this->option('market-id');
-        $marketId = is_numeric($marketId) ? (int) $marketId : null;
-        $dryRun = (bool) $this->option('dry-run');
+        $marketId = $this->marketIdOption();
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($marketId === false) {
+            $this->error('Market ID must be a positive integer.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && $marketId !== null && (bool) $this->option('all-markets')) {
+            $this->error('Use either --market-id or --all-markets with --execute, not both.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && $marketId === null && ! (bool) $this->option('all-markets')) {
+            $this->error('Market ID is required with --execute. Use --market-id=1 or --all-markets.');
+
+            return self::FAILURE;
+        }
 
         $query = Operation::query()
             ->where('entity_type', 'market_space')
@@ -69,7 +95,7 @@ class RebuildMarketSpaceSnapshotsFromOperations extends Command
         $this->info("Найдено торговых мест для пересчёта: {$total}");
 
         if ($dryRun) {
-            $this->warn('DRY-RUN: изменения не применялись.');
+            $this->warn('DRY RUN: no market space snapshots were rebuilt. Use --execute --market-id=... or --execute --all-markets to apply.');
 
             return self::SUCCESS;
         }
@@ -92,5 +118,20 @@ class RebuildMarketSpaceSnapshotsFromOperations extends Command
         $this->info('Готово: snapshot торговых мест пересчитан.');
 
         return self::SUCCESS;
+    }
+
+    private function marketIdOption(): int|false|null
+    {
+        $value = $this->option('market-id');
+
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        $marketId = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        return is_int($marketId) ? $marketId : false;
     }
 }
