@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\TenantContract;
 use App\Services\TenantContracts\SafeContractSpaceLinker;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 class LinkContractSpacesCommand extends Command
 {
@@ -22,11 +22,25 @@ class LinkContractSpacesCommand extends Command
         $limit = max(0, (int) $this->option('limit'));
         $apply = (bool) $this->option('apply');
 
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->linkContracts($linker, $marketId, $limit, $apply),
+            );
+        }
+
+        return $this->linkContracts($linker, null, $limit, $apply);
+    }
+
+    private function linkContracts(SafeContractSpaceLinker $linker, ?int $marketId, int $limit, bool $apply): int
+    {
         $query = TenantContract::query()
             ->whereNull('market_space_id');
 
         if ($marketId) {
             $query->where('market_id', $marketId);
+        } else {
+            $query->withoutMarketScope();
         }
 
         if ($limit > 0) {
@@ -53,7 +67,10 @@ class LinkContractSpacesCommand extends Command
         $skippedSampleLimit = 30;
 
         foreach ($contracts as $contract) {
-            $result = $linker->link($contract);
+            $result = $this->withContractMarket(
+                $contract,
+                fn (): array => $linker->link($contract),
+            );
 
             $sample = [
                 'contract_id' => (int) $contract->id,
@@ -73,7 +90,10 @@ class LinkContractSpacesCommand extends Command
                 }
 
                 if ($apply) {
-                    $linked = $linker->apply($contract, $result);
+                    $linked = $this->withContractMarket(
+                        $contract,
+                        fn (): bool => $linker->apply($contract, $result),
+                    );
                     $sample['applied'] = $linked;
                 } else {
                     $sample['applied'] = null;
@@ -108,18 +128,18 @@ class LinkContractSpacesCommand extends Command
         $this->output->writeln('');
         $this->output->writeln('=== SAFE CONTRACT-SPACE LINKING ===');
         $this->output->writeln('');
-        $this->output->writeln('Mode: ' . ($apply ? 'APPLY' : 'PREVIEW'));
+        $this->output->writeln('Mode: '.($apply ? 'APPLY' : 'PREVIEW'));
         $this->output->writeln('');
         $this->output->writeln('## Stats');
-        $this->output->writeln('total_contracts=' . $stats['total']);
-        $this->output->writeln('linked_by_bridge=' . $stats['linked_by_bridge']);
-        $this->output->writeln('linked_by_number=' . $stats['linked_by_number']);
-        $this->output->writeln('skipped_non_primary=' . $stats['skipped_non_primary']);
-        $this->output->writeln('skipped_ambiguous=' . $stats['skipped_ambiguous']);
-        $this->output->writeln('skipped_no_match=' . $stats['skipped_no_match']);
-        $this->output->writeln('skipped_multi_primary=' . $stats['skipped_multi_primary']);
-        $this->output->writeln('skipped_multi_place=' . $stats['skipped_multi_place']);
-        $this->output->writeln('skipped_already_linked=' . $stats['skipped_already_linked']);
+        $this->output->writeln('total_contracts='.$stats['total']);
+        $this->output->writeln('linked_by_bridge='.$stats['linked_by_bridge']);
+        $this->output->writeln('linked_by_number='.$stats['linked_by_number']);
+        $this->output->writeln('skipped_non_primary='.$stats['skipped_non_primary']);
+        $this->output->writeln('skipped_ambiguous='.$stats['skipped_ambiguous']);
+        $this->output->writeln('skipped_no_match='.$stats['skipped_no_match']);
+        $this->output->writeln('skipped_multi_primary='.$stats['skipped_multi_primary']);
+        $this->output->writeln('skipped_multi_place='.$stats['skipped_multi_place']);
+        $this->output->writeln('skipped_already_linked='.$stats['skipped_already_linked']);
         $this->output->writeln('');
 
         $totalLinked = $stats['linked_by_bridge'] + $stats['linked_by_number'];
@@ -141,12 +161,23 @@ class LinkContractSpacesCommand extends Command
 
         if ($apply && $totalLinked > 0) {
             $this->output->writeln('## Result');
-            $this->output->writeln('Successfully linked ' . $totalLinked . ' contracts to market_spaces.');
-        } elseif (!$apply && $totalLinked > 0) {
+            $this->output->writeln('Successfully linked '.$totalLinked.' contracts to market_spaces.');
+        } elseif (! $apply && $totalLinked > 0) {
             $this->output->writeln('## Next Step');
-            $this->output->writeln('Run with --apply to actually link ' . $totalLinked . ' contracts.');
+            $this->output->writeln('Run with --apply to actually link '.$totalLinked.' contracts.');
         }
 
         return self::SUCCESS;
+    }
+
+    private function withContractMarket(TenantContract $contract, callable $callback): mixed
+    {
+        $marketId = (int) $contract->market_id;
+
+        if ($marketId <= 0) {
+            return $callback();
+        }
+
+        return app(MarketContext::class)->withMarket($marketId, $callback);
     }
 }

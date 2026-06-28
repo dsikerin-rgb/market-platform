@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Models\TenantContract;
 use App\Services\MarketSpaces\MarketSpaceTenantBindingRecorder;
 use App\Services\TenantContracts\ContractDocumentClassifier;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 
 class SyncTenantContractBindingsCommand extends Command
@@ -33,15 +34,55 @@ class SyncTenantContractBindingsCommand extends Command
             ->filter(static fn (int $value): bool => $value > 0)
             ->values();
 
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->syncBindings(
+                    $recorder,
+                    $classifier,
+                    $marketId,
+                    $limit,
+                    $apply,
+                    $serviceShadowedOnly,
+                    $contractIds->all(),
+                ),
+            );
+        }
+
+        return $this->syncBindings(
+            $recorder,
+            $classifier,
+            null,
+            $limit,
+            $apply,
+            $serviceShadowedOnly,
+            $contractIds->all(),
+        );
+    }
+
+    /**
+     * @param  list<int>  $contractIds
+     */
+    private function syncBindings(
+        MarketSpaceTenantBindingRecorder $recorder,
+        ContractDocumentClassifier $classifier,
+        ?int $marketId,
+        int $limit,
+        bool $apply,
+        bool $serviceShadowedOnly,
+        array $contractIds,
+    ): int {
         $query = TenantContract::query()
             ->orderBy('id');
 
         if ($marketId) {
             $query->where('market_id', $marketId);
+        } else {
+            $query->withoutMarketScope();
         }
 
-        if ($contractIds->isNotEmpty()) {
-            $query->whereIn('id', $contractIds->all());
+        if ($contractIds !== []) {
+            $query->whereIn('id', $contractIds);
         }
 
         if ($limit > 0) {
@@ -73,11 +114,21 @@ class SyncTenantContractBindingsCommand extends Command
         $sampleLimit = 30;
 
         foreach ($contracts as $contract) {
-            $classification = $classifier->classify((string) ($contract->number ?? ''));
-            $isServiceShadowed = $this->isShadowedServiceDocument($contract, $classifier, $classification['category'] ?? null);
+            [$classification, $isServiceShadowed] = $this->withContractMarket(
+                $contract,
+                function () use ($classifier, $contract): array {
+                    $classification = $classifier->classify((string) ($contract->number ?? ''));
+
+                    return [
+                        $classification,
+                        $this->isShadowedServiceDocument($contract, $classifier, $classification['category'] ?? null),
+                    ];
+                },
+            );
 
             if ($serviceShadowedOnly && ! $isServiceShadowed) {
                 $stats['skipped']++;
+
                 continue;
             }
 
@@ -101,7 +152,12 @@ class SyncTenantContractBindingsCommand extends Command
             ];
 
             if ($apply) {
-                $recorder->syncFromContract($contract);
+                $this->withContractMarket(
+                    $contract,
+                    function () use ($recorder, $contract): void {
+                        $recorder->syncFromContract($contract);
+                    },
+                );
                 $stats['written']++;
             }
 
@@ -116,6 +172,17 @@ class SyncTenantContractBindingsCommand extends Command
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
         return self::SUCCESS;
+    }
+
+    private function withContractMarket(TenantContract $contract, callable $callback): mixed
+    {
+        $marketId = (int) $contract->market_id;
+
+        if ($marketId <= 0) {
+            return $callback();
+        }
+
+        return app(MarketContext::class)->withMarket($marketId, $callback);
     }
 
     private function isShadowedServiceDocument(
