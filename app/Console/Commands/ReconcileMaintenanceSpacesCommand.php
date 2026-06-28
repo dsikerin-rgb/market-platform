@@ -1,11 +1,13 @@
 <?php
-# app/Console/Commands/ReconcileMaintenanceSpacesCommand.php
+
+// app/Console/Commands/ReconcileMaintenanceSpacesCommand.php
 
 declare(strict_types=1);
 
 namespace App\Console\Commands;
 
 use App\Models\MarketSpace;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +25,18 @@ class ReconcileMaintenanceSpacesCommand extends Command
         $marketId = max(0, (int) ($this->option('market') ?? 0));
         $apply = (bool) $this->option('apply');
 
+        if ($marketId > 0) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->reconcileMaintenanceSpaces($marketId, $apply),
+            );
+        }
+
+        return $this->reconcileMaintenanceSpaces(null, $apply);
+    }
+
+    private function reconcileMaintenanceSpaces(?int $marketId, bool $apply): int
+    {
         $spaces = $this->loadAnomalousSpaces($marketId);
 
         if ($spaces->isEmpty()) {
@@ -94,10 +108,10 @@ class ReconcileMaintenanceSpacesCommand extends Command
     /**
      * @return Collection<int, MarketSpace>
      */
-    private function loadAnomalousSpaces(int $marketId): Collection
+    private function loadAnomalousSpaces(?int $marketId): Collection
     {
         return MarketSpace::query()
-            ->when($marketId > 0, fn ($query) => $query->where('market_id', $marketId))
+            ->when($marketId !== null, fn ($query) => $query->where('market_id', $marketId))
             ->where('status', 'maintenance')
             ->where(function ($query): void {
                 $query->whereNotNull('tenant_id')
