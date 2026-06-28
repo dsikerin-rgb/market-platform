@@ -3,33 +3,55 @@
 namespace App\Console\Commands;
 
 use App\Models\Tenant;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 
 class TenantsResetDebtStatus extends Command
 {
     protected $signature = 'tenants:reset-debt-status 
                             {--market= : Market ID (optional)}
-                            {--dry-run : Run in dry-run mode}';
+                            {--dry-run : Run in dry-run mode}
+                            {--execute : Apply changes (default: dry-run)}';
 
     protected $description = 'Сбросить ручной статус задолженности у арендаторов (переключить на авто из 1С)';
 
     public function handle(): int
     {
-        $marketId = $this->option('market');
-        $dryRun = $this->option('dry-run');
+        $rawMarketId = $this->option('market');
+        $marketId = filled($rawMarketId) ? (int) $rawMarketId : null;
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
 
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
+
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->resetDebtStatus($marketId, $dryRun),
+            );
+        }
+
+        return $this->resetDebtStatus(null, $dryRun);
+    }
+
+    private function resetDebtStatus(?int $marketId, bool $dryRun): int
+    {
         $query = Tenant::query()
             ->whereNotNull('debt_status');
 
-        if ($marketId) {
-            $query->where('market_id', (int) $marketId);
+        if ($marketId !== null) {
+            $query->where('market_id', $marketId);
         }
 
         $count = $query->count();
 
         if ($count === 0) {
             $this->info('Нет арендаторов с ручным статусом задолженности.');
+
             return self::SUCCESS;
         }
 
@@ -41,8 +63,9 @@ class TenantsResetDebtStatus extends Command
                 $this->line("  - ID:{$t->id} | {$t->name} | текущий: {$t->debt_status}");
             });
             if ($count > 10) {
-                $this->line("  ... и ещё " . ($count - 10) . " арендаторов");
+                $this->line('  ... и ещё '.($count - 10).' арендаторов');
             }
+
             return self::SUCCESS;
         }
 
