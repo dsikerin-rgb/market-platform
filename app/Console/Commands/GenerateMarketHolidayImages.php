@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Models\Market;
 use App\Models\MarketHoliday;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -18,12 +19,29 @@ class GenerateMarketHolidayImages extends Command
         {--market= : Market id or slug}
         {--from= : Start date (Y-m-d), defaults to today}
         {--to= : End date (Y-m-d), defaults to +1 year}
-        {--overwrite : Regenerate even if cover_image is already set}';
+        {--overwrite : Regenerate even if cover_image is already set}
+        {--dry-run : Run in dry-run mode}
+        {--execute : Generate files and update holidays (default: dry-run)}';
 
     protected $description = 'Generate branded event cover images for market holidays and promotions';
 
     public function handle(): int
     {
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && trim((string) $this->option('market')) === '') {
+            $this->error('Market ID or slug is required with --execute. Use --market=1.');
+
+            return self::FAILURE;
+        }
+
         $markets = $this->resolveMarkets();
 
         if ($markets->isEmpty()) {
@@ -42,42 +60,25 @@ class GenerateMarketHolidayImages extends Command
         foreach ($markets as $market) {
             $this->line(sprintf('Market: %s (#%d)', $market->name, (int) $market->id));
 
-            $holidays = MarketHoliday::query()
-                ->where('market_id', (int) $market->id)
-                ->whereDate('starts_at', '>=', $from->toDateString())
-                ->whereDate('starts_at', '<=', $to->toDateString())
-                ->orderBy('starts_at')
-                ->get(['id', 'market_id', 'title', 'starts_at', 'ends_at', 'source', 'cover_image']);
+            [$marketGenerated, $marketSkipped] = app(MarketContext::class)->withMarket(
+                (int) $market->id,
+                fn (): array => $this->generateImagesForMarket($market, $from, $to, $overwrite, $dryRun),
+            );
 
-            foreach ($holidays as $holiday) {
-                if (! $overwrite && filled($holiday->cover_image)) {
-                    $skipped++;
-                    continue;
-                }
-
-                $fileName = sprintf(
-                    'market-holidays/generated/m%d-h%d-%s.svg',
-                    (int) $holiday->market_id,
-                    (int) $holiday->id,
-                    Str::slug((string) $holiday->title) ?: 'event'
-                );
-
-                $svg = $this->buildSvg(
-                    title: (string) $holiday->title,
-                    marketName: (string) $market->name,
-                    startDate: optional($holiday->starts_at)->format('d.m.Y') ?: '',
-                    endDate: optional($holiday->ends_at)->format('d.m.Y'),
-                    source: (string) ($holiday->source ?? ''),
-                );
-
-                Storage::disk('public')->put($fileName, $svg);
-
-                $holiday->forceFill(['cover_image' => $fileName])->save();
-                $generated++;
-            }
+            $generated += $marketGenerated;
+            $skipped += $marketSkipped;
         }
 
-        $this->info(sprintf('Done. generated=%d skipped=%d', $generated, $skipped));
+        $this->info(sprintf(
+            '%s. generated=%d skipped=%d',
+            $dryRun ? 'Dry-run done' : 'Done',
+            $generated,
+            $skipped,
+        ));
+
+        if ($dryRun) {
+            $this->warn('DRY RUN: no files or holidays were changed. Use --execute --market=... to apply.');
+        }
 
         return self::SUCCESS;
     }
@@ -102,6 +103,60 @@ class GenerateMarketHolidayImages extends Command
         }
 
         return $query->get();
+    }
+
+    /**
+     * @return array{0: int, 1: int}
+     */
+    private function generateImagesForMarket(
+        Market $market,
+        Carbon $from,
+        Carbon $to,
+        bool $overwrite,
+        bool $dryRun
+    ): array {
+        $generated = 0;
+        $skipped = 0;
+
+        $holidays = MarketHoliday::query()
+            ->where('market_id', (int) $market->id)
+            ->whereDate('starts_at', '>=', $from->toDateString())
+            ->whereDate('starts_at', '<=', $to->toDateString())
+            ->orderBy('starts_at')
+            ->get(['id', 'market_id', 'title', 'starts_at', 'ends_at', 'source', 'cover_image']);
+
+        foreach ($holidays as $holiday) {
+            if (! $overwrite && filled($holiday->cover_image)) {
+                $skipped++;
+
+                continue;
+            }
+
+            $fileName = sprintf(
+                'market-holidays/generated/m%d-h%d-%s.svg',
+                (int) $holiday->market_id,
+                (int) $holiday->id,
+                Str::slug((string) $holiday->title) ?: 'event'
+            );
+
+            if (! $dryRun) {
+                $svg = $this->buildSvg(
+                    title: (string) $holiday->title,
+                    marketName: (string) $market->name,
+                    startDate: optional($holiday->starts_at)->format('d.m.Y') ?: '',
+                    endDate: optional($holiday->ends_at)->format('d.m.Y'),
+                    source: (string) ($holiday->source ?? ''),
+                );
+
+                Storage::disk('public')->put($fileName, $svg);
+
+                $holiday->forceFill(['cover_image' => $fileName])->save();
+            }
+
+            $generated++;
+        }
+
+        return [$generated, $skipped];
     }
 
     private function resolveDate(string $value): ?Carbon
@@ -129,7 +184,7 @@ class GenerateMarketHolidayImages extends Command
         [$fromColor, $toColor, $accentColor] = $this->paletteForSource($source);
         $title = $this->escapeXml($title);
         $marketName = $this->escapeXml($marketName);
-        $dateLabel = $this->escapeXml($startDate . ($endDate ? (' - ' . $endDate) : ''));
+        $dateLabel = $this->escapeXml($startDate.($endDate ? (' - '.$endDate) : ''));
 
         return <<<SVG
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
@@ -172,4 +227,3 @@ SVG;
         return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
     }
 }
-
