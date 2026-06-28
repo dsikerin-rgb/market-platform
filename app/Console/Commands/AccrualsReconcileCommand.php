@@ -1014,6 +1014,10 @@ class AccrualsReconcileCommand extends Command
                 $flags[] = 'tenant_level_amount_mismatch';
             }
 
+            if ($basis === 'market_space' && $diff >= 0.01) {
+                $flags[] = 'market_space_amount_mismatch';
+            }
+
             if ($basis === 'contract' && $rows1c === $rowsCsv && $diff >= 0.01) {
                 $flags[] = 'contract_amount_mismatch';
             }
@@ -1054,6 +1058,7 @@ class AccrualsReconcileCommand extends Command
             'fixed_step_delta_525',
             'tenant_level_aggregation_gap',
             'tenant_level_amount_mismatch',
+            'market_space_amount_mismatch',
             'contract_amount_mismatch',
             'only_1c_contract_bucket',
             'missing_place_code_on_1c_side',
@@ -1173,6 +1178,7 @@ class AccrualsReconcileCommand extends Command
             'fixed_step_delta_525',
             'tenant_level_aggregation_gap',
             'tenant_level_amount_mismatch',
+            'market_space_amount_mismatch',
             'only_csv_contract_bucket',
             'only_1c_contract_bucket',
         ], true)) {
