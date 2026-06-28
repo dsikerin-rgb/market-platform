@@ -24,7 +24,9 @@ class GenerateCalendarTasks extends Command
         {--from= : Start date (Y-m-d)}
         {--to= : End date (Y-m-d)}
         {--market_id= : Only one market id}
-        {--dry-run : Show changes without write}';
+        {--all-markets : Allow --execute to affect every market}
+        {--dry-run : Run in dry-run mode}
+        {--execute : Generate or update tasks (default: dry-run)}';
 
     protected $description = 'Generate or update calendar-driven tasks (idempotent, without duplicates).';
 
@@ -35,6 +37,34 @@ class GenerateCalendarTasks extends Command
 
     public function handle(SystemAgentService $systemAgentService): int
     {
+        $marketId = $this->marketIdOption();
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($marketId === false) {
+            $this->error('Market ID must be a positive integer.');
+
+            return Command::FAILURE;
+        }
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return Command::FAILURE;
+        }
+
+        if ($execute && $marketId !== null && (bool) $this->option('all-markets')) {
+            $this->error('Use either --market_id or --all-markets with --execute, not both.');
+
+            return Command::FAILURE;
+        }
+
+        if ($execute && $marketId === null && ! (bool) $this->option('all-markets')) {
+            $this->error('Market ID is required with --execute. Use --market_id=1 or --all-markets.');
+
+            return Command::FAILURE;
+        }
+
         $fromDate = $this->parseDate($this->option('from')) ?? now()->startOfDay();
         $toDate = $this->parseDate($this->option('to')) ?? $fromDate->copy()->addYear();
 
@@ -44,11 +74,10 @@ class GenerateCalendarTasks extends Command
             return Command::FAILURE;
         }
 
-        $dryRun = (bool) $this->option('dry-run');
         $this->info($dryRun ? 'mode=DRY-RUN' : 'mode=EXECUTE');
         $this->line(sprintf('scope=%s..%s', $fromDate->toDateString(), $toDate->toDateString()));
 
-        $marketIds = $this->resolveMarketIds();
+        $marketIds = $this->resolveMarketIds($marketId);
         if ($marketIds === []) {
             $this->warn('No markets selected.');
 
@@ -140,17 +169,20 @@ class GenerateCalendarTasks extends Command
             $errors,
         ));
 
+        if ($dryRun) {
+            $this->warn('DRY RUN: no tasks were generated or updated. Use --execute --market_id=... or --execute --all-markets to apply.');
+        }
+
         return $errors > 0 ? Command::FAILURE : Command::SUCCESS;
     }
 
     /**
      * @return list<int>
      */
-    private function resolveMarketIds(): array
+    private function resolveMarketIds(?int $marketId): array
     {
-        $marketId = $this->option('market_id');
-        if (filled($marketId) && is_numeric($marketId)) {
-            return [(int) $marketId];
+        if ($marketId !== null) {
+            return [$marketId];
         }
 
         return Market::query()
@@ -158,6 +190,21 @@ class GenerateCalendarTasks extends Command
             ->pluck('id')
             ->map(fn ($id): int => (int) $id)
             ->all();
+    }
+
+    private function marketIdOption(): int|false|null
+    {
+        $value = $this->option('market_id');
+
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        $marketId = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        return is_int($marketId) ? $marketId : false;
     }
 
     private function parseDate(mixed $value): ?Carbon

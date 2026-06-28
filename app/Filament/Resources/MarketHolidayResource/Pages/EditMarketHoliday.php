@@ -1,5 +1,6 @@
 <?php
-# app/Filament/Resources/MarketHolidayResource/Pages/EditMarketHoliday.php
+
+// app/Filament/Resources/MarketHolidayResource/Pages/EditMarketHoliday.php
 
 declare(strict_types=1);
 
@@ -61,6 +62,7 @@ class EditMarketHoliday extends BaseEditRecord
                         '--market_id' => (int) $record->market_id,
                         '--from' => $date,
                         '--to' => $date,
+                        '--execute' => true,
                     ]);
 
                     Notification::make()
