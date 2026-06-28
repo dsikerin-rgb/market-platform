@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceGroupEpisode;
+use App\Support\MarketContext;
 use App\Support\TenantContracts\TenantContractOperationalActivity;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -42,6 +43,23 @@ class ExpireStaleMarketSpaceGroupsCommand extends Command
         $limit = max(1, (int) ($this->option('limit') ?? 50));
         $apply = (bool) $this->option('apply');
 
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->expireStaleGroups($marketId, $effectiveDate, $months, $limit, $apply),
+            );
+        }
+
+        return $this->expireStaleGroups(null, $effectiveDate, $months, $limit, $apply);
+    }
+
+    private function expireStaleGroups(
+        ?int $marketId,
+        CarbonImmutable $effectiveDate,
+        int $months,
+        int $limit,
+        bool $apply,
+    ): int {
         $stats = [
             'mode' => $apply ? 'apply' : 'dry-run',
             'market_id' => $marketId,
