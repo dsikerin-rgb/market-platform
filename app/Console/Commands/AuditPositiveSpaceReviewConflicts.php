@@ -9,6 +9,7 @@ use App\Domain\Operations\SpaceReviewDecision;
 use App\Domain\Operations\SpaceReviewStateMachine;
 use App\Models\MarketSpace;
 use App\Models\Operation;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -31,7 +32,20 @@ class AuditPositiveSpaceReviewConflicts extends Command
         $limit = max(1, (int) ($this->option('limit') ?? 100));
         $apply = (bool) $this->option('apply');
         $maxAutoCloses = max(1, (int) ($this->option('max-auto-closes') ?? 10));
+        $json = (bool) $this->option('json');
 
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->auditPositiveConflicts($marketId, $limit, $apply, $maxAutoCloses, $json),
+            );
+        }
+
+        return $this->auditPositiveConflicts(null, $limit, $apply, $maxAutoCloses, $json);
+    }
+
+    private function auditPositiveConflicts(?int $marketId, int $limit, bool $apply, int $maxAutoCloses, bool $json): int
+    {
         $candidates = $this->candidates($marketId, $limit);
         $applied = [];
 
@@ -50,15 +64,15 @@ class AuditPositiveSpaceReviewConflicts extends Command
             'applied' => $applied,
         ];
 
-        if ((bool) $this->option('json')) {
+        if ($json) {
             $this->line(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
             return self::SUCCESS;
         }
 
-        $this->info('Positive conflict candidates: ' . $candidates->count());
+        $this->info('Positive conflict candidates: '.$candidates->count());
         if ($apply) {
-            $this->info('Applied closures: ' . count($applied));
+            $this->info('Applied closures: '.count($applied));
         }
 
         if ($candidates->isNotEmpty()) {
