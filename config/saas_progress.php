@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Перевести market:holidays:notify на безопасный dry-run по умолчанию, сохранив штатное расписание через явный --execute.',
-    'next_step' => 'Дальше разбирать оставшиеся write-capable команды отдельными пакетами: task reminders, backfill, cleanup, seed, marketplace и AI сценарии.',
+    'current_focus' => 'Перевести tasks:send-reminders на безопасный dry-run по умолчанию, сохранив штатное расписание через явный --execute.',
+    'next_step' => 'Дальше разбирать оставшиеся write-capable команды отдельными пакетами: holiday sync, notification health, backfill, cleanup, seed, marketplace и AI сценарии.',
     'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
         [
