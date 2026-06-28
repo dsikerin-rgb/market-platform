@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\TenantContract;
+use App\Support\MarketContext;
 use App\Support\TenantContracts\TenantContractOperationalActivity;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 
 class ArchiveStaleTenantContractsCommand extends Command
 {
@@ -30,6 +32,27 @@ class ArchiveStaleTenantContractsCommand extends Command
             ->filter(static fn (int $value): bool => $value > 0)
             ->values();
 
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->archiveStaleContracts($activity, $marketId, $months, $limit, $apply, $contractIds),
+            );
+        }
+
+        return $this->archiveStaleContracts($activity, null, $months, $limit, $apply, $contractIds);
+    }
+
+    /**
+     * @param  Collection<int, int>  $contractIds
+     */
+    private function archiveStaleContracts(
+        TenantContractOperationalActivity $activity,
+        ?int $marketId,
+        int $months,
+        int $limit,
+        bool $apply,
+        Collection $contractIds,
+    ): int {
         $query = TenantContract::query()
             ->where('is_active', true)
             ->whereNotIn('status', ['terminated', 'archived', 'cancelled'])
@@ -61,6 +84,7 @@ class ArchiveStaleTenantContractsCommand extends Command
 
                 if (! $activity->shouldArchiveAsStale($contract, $months)) {
                     $stats['skipped']++;
+
                     continue;
                 }
 
@@ -115,6 +139,6 @@ class ArchiveStaleTenantContractsCommand extends Command
             return $notes;
         }
 
-        return $notes . PHP_EOL . $line;
+        return $notes.PHP_EOL.$line;
     }
 }
