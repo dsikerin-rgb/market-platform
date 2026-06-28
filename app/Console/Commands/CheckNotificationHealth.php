@@ -8,6 +8,7 @@ use App\Models\Market;
 use App\Models\NotificationDelivery;
 use App\Models\User;
 use App\Notifications\NotificationHealthAlert;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -32,6 +33,24 @@ class CheckNotificationHealth extends Command
         $maxFailedDeliveries = max(0, (int) $this->option('max-failed-deliveries'));
         $maxFailedJobs = max(0, (int) $this->option('max-failed-jobs'));
         $notify = (bool) $this->option('notify');
+
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->checkHealth($hours, $marketId, $maxFailedDeliveries, $maxFailedJobs, $notify),
+            );
+        }
+
+        return $this->checkHealth($hours, null, $maxFailedDeliveries, $maxFailedJobs, $notify);
+    }
+
+    private function checkHealth(
+        int $hours,
+        ?int $marketId,
+        int $maxFailedDeliveries,
+        int $maxFailedJobs,
+        bool $notify
+    ): int {
         $telegramEnabled = (bool) config('services.telegram.enabled', false);
         $telegramIssues = $this->resolveTelegramConfigIssues();
 
@@ -71,15 +90,15 @@ class CheckNotificationHealth extends Command
         $this->line('--- Notifications Health Check ---');
         $this->line("Window: last {$hours}h");
         $this->line("Scope: {$scope}");
-        $this->line('telegram_enabled=' . ($telegramEnabled ? 'true' : 'false'));
-        $this->line('telegram_config=' . ($hasTelegramConfigIssues ? 'ALERT' : 'OK'));
+        $this->line('telegram_enabled='.($telegramEnabled ? 'true' : 'false'));
+        $this->line('telegram_config='.($hasTelegramConfigIssues ? 'ALERT' : 'OK'));
         foreach ($telegramIssues as $issue) {
-            $this->line(' - ' . $issue);
+            $this->line(' - '.$issue);
         }
         $this->line("failed_deliveries={$failedDeliveries} (threshold={$maxFailedDeliveries})"
-            . ($isDeliveryTableMissing ? ' [skipped]' : ''));
+            .($isDeliveryTableMissing ? ' [skipped]' : ''));
         $this->line("failed_jobs={$failedJobs} (threshold={$maxFailedJobs})");
-        $this->line('status=' . ($isCritical ? 'ALERT' : 'OK'));
+        $this->line('status='.($isCritical ? 'ALERT' : 'OK'));
 
         if ($isCritical && $notify) {
             $this->notifyAdmins(
@@ -109,7 +128,7 @@ class CheckNotificationHealth extends Command
      * @param  list<string>  $telegramIssues
      */
     private function notifyAdmins(
-        int|null $marketId,
+        ?int $marketId,
         int $hours,
         int $failedDeliveries,
         int $failedJobs,
@@ -126,7 +145,7 @@ class CheckNotificationHealth extends Command
         $title = 'Сбой доставки уведомлений';
         $body = "Окно: {$hours}ч, {$scope}. Ошибки доставки: {$failedDeliveries}, failed_jobs: {$failedJobs}.";
         if ($telegramIssues !== []) {
-            $body .= ' Telegram: ' . implode('; ', $telegramIssues) . '.';
+            $body .= ' Telegram: '.implode('; ', $telegramIssues).'.';
         }
         $url = url('/admin');
 
@@ -138,7 +157,7 @@ class CheckNotificationHealth extends Command
             implode(';', $telegramIssues),
         ]));
 
-        $cacheKey = 'notifications-health-alert:' . ($marketId ?? 'all');
+        $cacheKey = 'notifications-health-alert:'.($marketId ?? 'all');
         $lastFingerprint = Cache::get($cacheKey);
         if ($lastFingerprint === $fingerprint) {
             $this->line('Alert suppressed (same fingerprint already sent recently).');
@@ -151,7 +170,7 @@ class CheckNotificationHealth extends Command
         }
 
         Cache::put($cacheKey, $fingerprint, now()->addMinutes(30));
-        $this->line('Alert sent to recipients: ' . $recipients->count());
+        $this->line('Alert sent to recipients: '.$recipients->count());
     }
 
     /**
