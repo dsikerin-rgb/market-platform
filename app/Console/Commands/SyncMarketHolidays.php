@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Market;
 use App\Models\MarketHoliday;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -31,7 +32,7 @@ class SyncMarketHolidays extends Command
         $path = database_path('data/market_holidays_ru_2026_2027.csv');
 
         if (! is_readable($path)) {
-            $this->error('CSV файл с праздниками не найден: ' . $path);
+            $this->error('CSV файл с праздниками не найден: '.$path);
 
             return Command::FAILURE;
         }
@@ -55,64 +56,66 @@ class SyncMarketHolidays extends Command
         $totalUpserts = 0;
 
         foreach ($marketIds as $marketId) {
-            $market = Market::query()->select(['id', 'settings'])->find($marketId);
+            $totalUpserts += app(MarketContext::class)->withMarket((int) $marketId, function () use ($marketId, $rows, $fromDate, $toDate): int {
+                $market = Market::query()->select(['id', 'settings'])->find($marketId);
 
-            if (! $market) {
-                continue;
-            }
-
-            $defaultNotifyDays = $this->resolveDefaultNotifyDays($market);
-
-            $payload = [];
-
-            foreach ($rows as $row) {
-                $start = $this->parseDate($row['starts_at'] ?? null);
-
-                if (! $start) {
-                    continue;
+                if (! $market) {
+                    return 0;
                 }
 
-                $end = $this->parseDate($row['ends_at'] ?? null) ?? $start->copy();
+                $defaultNotifyDays = $this->resolveDefaultNotifyDays($market);
 
-                if ($start->greaterThan($toDate) || $end->lessThan($fromDate)) {
-                    continue;
+                $payload = [];
+
+                foreach ($rows as $row) {
+                    $start = $this->parseDate($row['starts_at'] ?? null);
+
+                    if (! $start) {
+                        continue;
+                    }
+
+                    $end = $this->parseDate($row['ends_at'] ?? null) ?? $start->copy();
+
+                    if ($start->greaterThan($toDate) || $end->lessThan($fromDate)) {
+                        continue;
+                    }
+
+                    $notifyBeforeDays = is_numeric($row['notify_before_days'] ?? null)
+                        ? (int) $row['notify_before_days']
+                        : null;
+
+                    $effectiveNotifyDays = $notifyBeforeDays ?? $defaultNotifyDays;
+                    $notifyAt = $effectiveNotifyDays !== null
+                        ? $start->copy()->startOfDay()->subDays($effectiveNotifyDays)
+                        : null;
+
+                    $payload[] = [
+                        'market_id' => $marketId,
+                        'title' => (string) ($row['title'] ?? ''),
+                        'starts_at' => $start->toDateString(),
+                        'ends_at' => ($row['ends_at'] ?? null) ? $end->toDateString() : null,
+                        'all_day' => $this->truthy($row['all_day'] ?? null),
+                        'description' => $this->nullableString($row['description'] ?? null),
+                        'notify_before_days' => $notifyBeforeDays,
+                        'notify_at' => $notifyAt,
+                        'source' => 'file',
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ];
                 }
 
-                $notifyBeforeDays = is_numeric($row['notify_before_days'] ?? null)
-                    ? (int) $row['notify_before_days']
-                    : null;
+                if (empty($payload)) {
+                    return 0;
+                }
 
-                $effectiveNotifyDays = $notifyBeforeDays ?? $defaultNotifyDays;
-                $notifyAt = $effectiveNotifyDays !== null
-                    ? $start->copy()->startOfDay()->subDays($effectiveNotifyDays)
-                    : null;
+                MarketHoliday::query()->upsert(
+                    $payload,
+                    ['market_id', 'title', 'starts_at'],
+                    ['ends_at', 'all_day', 'description', 'notify_before_days', 'notify_at', 'source', 'updated_at']
+                );
 
-                $payload[] = [
-                    'market_id' => $marketId,
-                    'title' => (string) ($row['title'] ?? ''),
-                    'starts_at' => $start->toDateString(),
-                    'ends_at' => ($row['ends_at'] ?? null) ? $end->toDateString() : null,
-                    'all_day' => $this->truthy($row['all_day'] ?? null),
-                    'description' => $this->nullableString($row['description'] ?? null),
-                    'notify_before_days' => $notifyBeforeDays,
-                    'notify_at' => $notifyAt,
-                    'source' => 'file',
-                    'updated_at' => now(),
-                    'created_at' => now(),
-                ];
-            }
-
-            if (empty($payload)) {
-                continue;
-            }
-
-            MarketHoliday::query()->upsert(
-                $payload,
-                ['market_id', 'title', 'starts_at'],
-                ['ends_at', 'all_day', 'description', 'notify_before_days', 'notify_at', 'source', 'updated_at']
-            );
-
-            $totalUpserts += count($payload);
+                return count($payload);
+            });
         }
 
         if ($totalUpserts === 0) {

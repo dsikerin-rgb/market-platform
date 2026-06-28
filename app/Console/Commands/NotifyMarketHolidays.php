@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\MarketHoliday;
 use App\Models\User;
 use App\Notifications\MarketHolidayNotification;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 
@@ -36,18 +37,21 @@ class NotifyMarketHolidays extends Command
 
             if (! $market) {
                 $holiday->forceFill(['notified_at' => $now])->save();
+
                 continue;
             }
 
-            $recipients = $this->resolveRecipients($market->id, $market->settings ?? []);
+            app(MarketContext::class)->withMarket((int) $market->id, function () use ($holiday, $market, $now): void {
+                $recipients = $this->resolveRecipients((int) $market->id, $market->settings ?? []);
 
-            if ($recipients->isNotEmpty()) {
-                foreach ($recipients as $recipient) {
-                    $recipient->notify(new MarketHolidayNotification($holiday, $market));
+                if ($recipients->isNotEmpty()) {
+                    foreach ($recipients as $recipient) {
+                        $recipient->notify(new MarketHolidayNotification($holiday, $market));
+                    }
                 }
-            }
 
-            $holiday->forceFill(['notified_at' => $now])->save();
+                $holiday->forceFill(['notified_at' => $now])->save();
+            });
         }
 
         $this->info(sprintf('Уведомления отправлены: %d.', $holidays->count()));
@@ -56,7 +60,7 @@ class NotifyMarketHolidays extends Command
     }
 
     /**
-     * @param array<string, mixed> $settings
+     * @param  array<string, mixed>  $settings
      */
     private function resolveRecipients(int $marketId, array $settings): Collection
     {

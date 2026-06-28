@@ -10,6 +10,7 @@ use App\Models\MarketHolidayTaskLink;
 use App\Models\Task;
 use App\Models\TaskParticipant;
 use App\Models\User;
+use App\Support\MarketContext;
 use App\Support\SystemAgentService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -84,35 +85,48 @@ class GenerateCalendarTasks extends Command
             $market = Market::query()->find((int) $holiday->market_id);
             if (! $market) {
                 $skipped++;
+
                 continue;
             }
 
-            $scenarios = $this->buildScenarios($holiday, $market);
-            foreach ($scenarios as $scenario) {
-                try {
-                    $result = $this->processScenario(
-                        holiday: $holiday,
-                        market: $market,
-                        scenario: $scenario,
-                        dryRun: $dryRun,
-                        systemAgentService: $systemAgentService,
-                    );
+            app(MarketContext::class)->withMarket((int) $market->id, function () use (
+                $holiday,
+                $market,
+                $dryRun,
+                $systemAgentService,
+                &$created,
+                &$updated,
+                &$linked,
+                &$skipped,
+                &$errors,
+            ): void {
+                $scenarios = $this->buildScenarios($holiday, $market);
+                foreach ($scenarios as $scenario) {
+                    try {
+                        $result = $this->processScenario(
+                            holiday: $holiday,
+                            market: $market,
+                            scenario: $scenario,
+                            dryRun: $dryRun,
+                            systemAgentService: $systemAgentService,
+                        );
 
-                    $created += $result['created'];
-                    $updated += $result['updated'];
-                    $linked += $result['linked'];
-                    $skipped += $result['skipped'];
-                } catch (\Throwable $e) {
-                    $errors++;
-                    report($e);
-                    $this->error(sprintf(
-                        '[holiday=%d scenario=%s] %s',
-                        (int) $holiday->id,
-                        (string) ($scenario['key'] ?? 'unknown'),
-                        $e->getMessage(),
-                    ));
+                        $created += $result['created'];
+                        $updated += $result['updated'];
+                        $linked += $result['linked'];
+                        $skipped += $result['skipped'];
+                    } catch (\Throwable $e) {
+                        $errors++;
+                        report($e);
+                        $this->error(sprintf(
+                            '[holiday=%d scenario=%s] %s',
+                            (int) $holiday->id,
+                            (string) ($scenario['key'] ?? 'unknown'),
+                            $e->getMessage(),
+                        ));
+                    }
                 }
-            }
+            });
         }
 
         $this->newLine();
@@ -205,7 +219,7 @@ class GenerateCalendarTasks extends Command
 
             if ($scenarioNote !== '') {
                 $descriptionLines[] = '';
-                $descriptionLines[] = 'Комментарий: ' . $scenarioNote;
+                $descriptionLines[] = 'Комментарий: '.$scenarioNote;
             }
 
             return [[
@@ -235,13 +249,13 @@ class GenerateCalendarTasks extends Command
                 'Подготовить коммуникационный план:',
                 '- Информирование арендаторов.',
                 '- Информирование покупателей.',
-                '- Каналы: ' . $channelsText . '.',
+                '- Каналы: '.$channelsText.'.',
                 '- Ответственные и сроки публикаций.',
             ];
 
             if ($scenarioNote !== '') {
                 $descriptionLines[] = '';
-                $descriptionLines[] = 'Комментарий: ' . $scenarioNote;
+                $descriptionLines[] = 'Комментарий: '.$scenarioNote;
             }
 
             $scenarios[] = [
@@ -279,7 +293,7 @@ class GenerateCalendarTasks extends Command
 
             if ($scenarioNote !== '') {
                 $descriptionLines[] = '';
-                $descriptionLines[] = 'Комментарий: ' . $scenarioNote;
+                $descriptionLines[] = 'Комментарий: '.$scenarioNote;
             }
 
             $scenarios[] = [
@@ -301,7 +315,7 @@ class GenerateCalendarTasks extends Command
     }
 
     /**
-     * @param array<string,mixed> $settings
+     * @param  array<string,mixed>  $settings
      * @return list<int>
      */
     private function configuredHolidayRecipients(array $settings): array
@@ -324,7 +338,7 @@ class GenerateCalendarTasks extends Command
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     private function configBool(array $config, string $key, bool $default): bool
     {
@@ -336,7 +350,7 @@ class GenerateCalendarTasks extends Command
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     private function configInt(array $config, string $key): ?int
     {
@@ -350,7 +364,7 @@ class GenerateCalendarTasks extends Command
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      * @return list<int>
      */
     private function configIntList(array $config, string $key): array
@@ -368,7 +382,7 @@ class GenerateCalendarTasks extends Command
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      * @return list<string>
      */
     private function configStringList(array $config, string $key): array
@@ -384,6 +398,7 @@ class GenerateCalendarTasks extends Command
             static fn (string $value): bool => $value !== '',
         ));
     }
+
     private function processScenario(
         MarketHoliday $holiday,
         Market $market,
@@ -448,7 +463,7 @@ class GenerateCalendarTasks extends Command
             $linked = 0;
 
             if (! $task) {
-                $task = new Task();
+                $task = new Task;
                 $created++;
             } else {
                 $updated++;
@@ -518,7 +533,7 @@ class GenerateCalendarTasks extends Command
     }
 
     /**
-     * @param list<int> $coexecutorIds
+     * @param  list<int>  $coexecutorIds
      */
     private function syncCoexecutors(Task $task, array $coexecutorIds, ?int $assigneeId): void
     {
@@ -638,7 +653,7 @@ class GenerateCalendarTasks extends Command
             ->where('market_id', (int) $holiday->market_id)
             ->where('source_type', MarketHoliday::class)
             ->where('source_id', (int) $holiday->id)
-            ->where('description', 'like', '%calendar_scenario=' . $scenarioKey . '%')
+            ->where('description', 'like', '%calendar_scenario='.$scenarioKey.'%')
             ->orderBy('id')
             ->first();
     }

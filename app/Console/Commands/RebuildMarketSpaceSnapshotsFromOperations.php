@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Domain\Operations\OperationType;
 use App\Models\Operation;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 
 class RebuildMarketSpaceSnapshotsFromOperations extends Command
@@ -61,6 +62,7 @@ class RebuildMarketSpaceSnapshotsFromOperations extends Command
 
         if ($total === 0) {
             $this->info('Нечего пересчитывать: подходящие операции не найдены.');
+
             return self::SUCCESS;
         }
 
@@ -68,6 +70,7 @@ class RebuildMarketSpaceSnapshotsFromOperations extends Command
 
         if ($dryRun) {
             $this->warn('DRY-RUN: изменения не применялись.');
+
             return self::SUCCESS;
         }
 
@@ -75,10 +78,12 @@ class RebuildMarketSpaceSnapshotsFromOperations extends Command
         $bar->start();
 
         foreach ($pairs as $pair) {
-            Operation::rebuildMarketSpaceSnapshot(
-                (int) $pair['market_id'],
-                (int) $pair['space_id'],
-            );
+            app(MarketContext::class)->withMarket((int) $pair['market_id'], function () use ($pair): void {
+                Operation::rebuildMarketSpaceSnapshot(
+                    (int) $pair['market_id'],
+                    (int) $pair['space_id'],
+                );
+            });
             $bar->advance();
         }
 
