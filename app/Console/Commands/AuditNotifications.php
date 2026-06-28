@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\NotificationDelivery;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -20,16 +21,28 @@ class AuditNotifications extends Command
 
     public function handle(): int
     {
+        $hours = max(1, (int) $this->option('hours'));
+        $limit = max(1, (int) $this->option('limit'));
+        $marketId = $this->option('market');
+        $marketId = is_numeric($marketId) ? (int) $marketId : null;
+
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->auditNotifications($hours, $limit, $marketId),
+            );
+        }
+
+        return $this->auditNotifications($hours, $limit, null);
+    }
+
+    private function auditNotifications(int $hours, int $limit, ?int $marketId): int
+    {
         if (! Schema::hasTable('notification_deliveries')) {
             $this->error('Table notification_deliveries is missing. Run migrations first.');
 
             return Command::FAILURE;
         }
-
-        $hours = max(1, (int) $this->option('hours'));
-        $limit = max(1, (int) $this->option('limit'));
-        $marketId = $this->option('market');
-        $marketId = is_numeric($marketId) ? (int) $marketId : null;
 
         $to = now();
         $from = (clone $to)->subHours($hours);
@@ -46,9 +59,9 @@ class AuditNotifications extends Command
         $failed = (clone $base)->where('status', NotificationDelivery::STATUS_FAILED)->count();
 
         $this->line('--- Notifications Audit ---');
-        $this->line('Window: last ' . $hours . 'h');
-        $this->line('Range: ' . $from->toDateTimeString() . ' .. ' . $to->toDateTimeString());
-        $this->line('Scope: ' . ($marketId !== null ? "market_id={$marketId}" : 'all markets'));
+        $this->line('Window: last '.$hours.'h');
+        $this->line('Range: '.$from->toDateTimeString().' .. '.$to->toDateTimeString());
+        $this->line('Scope: '.($marketId !== null ? "market_id={$marketId}" : 'all markets'));
         $this->line("Total: {$total} | sent: {$sent} | failed: {$failed}");
         $this->newLine();
 

@@ -1,5 +1,6 @@
 <?php
-# app/Console/Commands/AuditTenantContractDocumentTypesCommand.php
+
+// app/Console/Commands/AuditTenantContractDocumentTypesCommand.php
 
 declare(strict_types=1);
 
@@ -8,6 +9,7 @@ namespace App\Console\Commands;
 use App\Models\MarketIntegration;
 use App\Models\TenantContract;
 use App\Services\TenantContracts\ContractDocumentClassifier;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 
 class AuditTenantContractDocumentTypesCommand extends Command
@@ -25,6 +27,18 @@ class AuditTenantContractDocumentTypesCommand extends Command
         $limit = max(0, (int) $this->option('limit'));
         $includeAll = (bool) $this->option('all');
 
+        return app(MarketContext::class)->withMarket(
+            $marketId,
+            fn (): int => $this->auditDocumentTypes($classifier, $marketId, $limit, $includeAll),
+        );
+    }
+
+    private function auditDocumentTypes(
+        ContractDocumentClassifier $classifier,
+        int $marketId,
+        int $limit,
+        bool $includeAll
+    ): int {
         $query = TenantContract::query()
             ->where('market_id', $marketId)
             ->orderBy('id');
@@ -97,7 +111,7 @@ class AuditTenantContractDocumentTypesCommand extends Command
         }
 
         $this->info("market_id={$marketId}");
-        $this->info('scope=' . ($includeAll ? 'all_contracts' : 'unmatched_non_inferred'));
+        $this->info('scope='.($includeAll ? 'all_contracts' : 'unmatched_non_inferred'));
         $this->line(json_encode([
             'stats' => $stats,
             'samples' => $samples,

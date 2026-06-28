@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Models\MarketIntegration;
 use App\Models\TenantContract;
 use App\Services\TenantContracts\ContractDocumentClassifier;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 
 class AuditCurrentDuplicateContractsCommand extends Command
@@ -24,6 +25,18 @@ class AuditCurrentDuplicateContractsCommand extends Command
         $limit = max(0, (int) $this->option('limit'));
         $minCount = max(2, (int) $this->option('min-count'));
 
+        return app(MarketContext::class)->withMarket(
+            $marketId,
+            fn (): int => $this->auditDuplicates($classifier, $marketId, $limit, $minCount),
+        );
+    }
+
+    private function auditDuplicates(
+        ContractDocumentClassifier $classifier,
+        int $marketId,
+        int $limit,
+        int $minCount
+    ): int {
         $contracts = TenantContract::query()
             ->where('market_id', $marketId)
             ->whereNotNull('tenant_id')

@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Models\MarketIntegration;
 use App\Models\TenantContract;
 use App\Services\TenantContracts\ContractDocumentClassifier;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 
@@ -31,6 +32,29 @@ class AuditPrimaryContractChainsCommand extends Command
         $onlyAmbiguous = (bool) $this->option('only-ambiguous');
         $includeTest = (bool) $this->option('include-test');
 
+        return app(MarketContext::class)->withMarket(
+            $marketId,
+            fn (): int => $this->auditChains(
+                $classifier,
+                $marketId,
+                $limit,
+                $minCount,
+                $onlyAuto,
+                $onlyAmbiguous,
+                $includeTest,
+            ),
+        );
+    }
+
+    private function auditChains(
+        ContractDocumentClassifier $classifier,
+        int $marketId,
+        int $limit,
+        int $minCount,
+        bool $onlyAuto,
+        bool $onlyAmbiguous,
+        bool $includeTest
+    ): int {
         $contracts = TenantContract::query()
             ->where('market_id', $marketId)
             ->whereNotNull('tenant_id')
@@ -83,7 +107,7 @@ class AuditPrimaryContractChainsCommand extends Command
                 continue;
             }
 
-            $key = (int) $contract->tenant_id . ':' . (int) $contract->market_space_id;
+            $key = (int) $contract->tenant_id.':'.(int) $contract->market_space_id;
             $groups[$key] ??= [
                 'tenant_id' => (int) $contract->tenant_id,
                 'market_space_id' => (int) $contract->market_space_id,
