@@ -1,5 +1,6 @@
 <?php
-# routes/console.php
+
+// routes/console.php
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -25,7 +26,7 @@ Schedule::command('market:calendar:generate-sanitary')->dailyAt('03:15')->withou
 Schedule::command('market:calendar:generate-tasks')->everyThirtyMinutes()->withoutOverlapping();
 Schedule::command('market:holidays:notify')->everyThirtyMinutes();
 Schedule::command('operations:rebuild-space-snapshots')->everyThirtyMinutes()->withoutOverlapping();
-Schedule::command('marketplace:repair-demo-asset-permissions')->dailyAt('03:25')->withoutOverlapping();
+Schedule::command('marketplace:repair-demo-asset-permissions --execute')->dailyAt('03:25')->withoutOverlapping();
 Schedule::command('ops:postgres-backup --rotate')
     ->dailyAt('03:30')
     ->withoutOverlapping();
