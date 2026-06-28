@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Domain\Operations\SpaceReviewDecision;
 use App\Models\MarketSpaceTenantBinding;
 use App\Models\Operation;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -29,8 +30,20 @@ class SpaceReviewReconcileCommand extends Command
         $apply = (bool) $this->option('apply');
         $maxAutoCloses = (int) ($this->option('max-auto-closes') ?? 10);
 
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->reconcileSpaceReviews($marketId, $limit, $json, $apply, $maxAutoCloses),
+            );
+        }
+
+        return $this->reconcileSpaceReviews(null, $limit, $json, $apply, $maxAutoCloses);
+    }
+
+    private function reconcileSpaceReviews(?int $marketId, int $limit, bool $json, bool $apply, int $maxAutoCloses): int
+    {
         if ($apply) {
-            $this->warn("⚠️  WARNING: --apply is enabled. This WILL write to the database.");
+            $this->warn('⚠️  WARNING: --apply is enabled. This WILL write to the database.');
             $this->warn("   Max auto-closes: {$maxAutoCloses}");
             $this->newLine();
         }
@@ -53,7 +66,7 @@ class SpaceReviewReconcileCommand extends Command
             $this->line("Market ID: {$marketId}");
         }
         $this->line("Limit: {$limit}");
-        $this->line("Mode: " . ($apply ? "APPLY (will write to DB)" : "read-only"));
+        $this->line('Mode: '.($apply ? 'APPLY (will write to DB)' : 'read-only'));
         if ($apply) {
             $this->line("Max auto-closes: {$maxAutoCloses}");
         }
@@ -64,6 +77,7 @@ class SpaceReviewReconcileCommand extends Command
 
         if ($total === 0) {
             $this->info('No observed tenant_changed_on_site operations found.');
+
             return;
         }
 
@@ -147,7 +161,7 @@ class SpaceReviewReconcileCommand extends Command
             ]
         );
 
-        if (count($candidates) > 0 && !$apply) {
+        if (count($candidates) > 0 && ! $apply) {
             $this->newLine();
             $this->info("✓ {$matched} candidate(s) found. Run with --apply to close them.");
         }
@@ -250,11 +264,11 @@ class SpaceReviewReconcileCommand extends Command
             ->where('binding_type', 'exact')
             ->where(function ($query) {
                 $query->whereNull('ended_at')
-                      ->orWhere('resolution_reason', 'superseded_by_contract_binding');
+                    ->orWhere('resolution_reason', 'superseded_by_contract_binding');
             })
             ->whereHas('tenant', function ($query) use ($obsNorm) {
                 $query->whereRaw('LOWER(REPLACE(REPLACE(REPLACE(LOWER(name), \' \', \'\'), \'.\', \'\'), \',\', \'\')) = ?', [$obsNorm])
-                      ->orWhereRaw('LOWER(REPLACE(REPLACE(REPLACE(LOWER(name), \' \', \'\'), \'.\', \'\'), \',\', \'\')) LIKE ?', ["%{$obsNorm}%"]);
+                    ->orWhereRaw('LOWER(REPLACE(REPLACE(REPLACE(LOWER(name), \' \', \'\'), \'.\', \'\'), \',\', \'\')) LIKE ?', ["%{$obsNorm}%"]);
             })
             ->first();
     }
@@ -322,4 +336,3 @@ class SpaceReviewReconcileCommand extends Command
         });
     }
 }
-
