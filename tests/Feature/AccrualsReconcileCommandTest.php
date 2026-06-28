@@ -157,10 +157,10 @@ class AccrualsReconcileCommandTest extends TestCase
             ->expectsOutputToContain('"status": "only_csv"')
             ->expectsOutputToContain('"primary_diagnostic": "contract_amount_mismatch"')
             ->expectsOutputToContain('"primary_diagnostic": "only_csv_market_space_bucket"')
-            ->expectsOutputToContain('"bucket_label": "contract:' . $contract->id . '"')
-            ->expectsOutputToContain('"bucket_label": "market_space:' . $space->id . '"')
+            ->expectsOutputToContain('"bucket_label": "contract:'.$contract->id.'"')
+            ->expectsOutputToContain('"bucket_label": "market_space:'.$space->id.'"')
             ->expectsOutputToContain('"bucket_label": "place_code:P/3"')
-            ->expectsOutputToContain('"bucket_label": "market_space:' . $onlyCsvSpace->id . '"');
+            ->expectsOutputToContain('"bucket_label": "market_space:'.$onlyCsvSpace->id.'"');
     }
 
     public function test_reconcile_json_respects_tenant_filter_for_overlap_report(): void
@@ -217,7 +217,7 @@ class AccrualsReconcileCommandTest extends TestCase
             '--json' => true,
         ])
             ->assertSuccessful()
-            ->expectsOutputToContain('"tenant_id": ' . $tenantIncluded->id)
+            ->expectsOutputToContain('"tenant_id": '.$tenantIncluded->id)
             ->expectsOutputToContain('"bucket_count_total": 1')
             ->expectsOutputToContain('"bucket_count_mismatch": 1')
             ->doesntExpectOutputToContain('Tenant Excluded')
@@ -278,7 +278,7 @@ class AccrualsReconcileCommandTest extends TestCase
             ->expectsOutputToContain('"bucket_count_in_both": 1')
             ->expectsOutputToContain('"bucket_count_matched": 1')
             ->expectsOutputToContain('"comparison_basis": "contract"')
-            ->expectsOutputToContain('"bucket_label": "contract:' . $contract->id . '"')
+            ->expectsOutputToContain('"bucket_label": "contract:'.$contract->id.'"')
             ->doesntExpectOutputToContain('activity:rent')
             ->doesntExpectOutputToContain('activity:furniture');
     }
@@ -355,7 +355,7 @@ class AccrualsReconcileCommandTest extends TestCase
             ->expectsOutputToContain('"bucket_count_mismatch": 1')
             ->expectsOutputToContain('"comparison_basis": "tenant"')
             ->expectsOutputToContain('"primary_diagnostic": "same_total_different_row_count"')
-            ->expectsOutputToContain('"bucket_label": "tenant:' . $tenant->id . '"')
+            ->expectsOutputToContain('"bucket_label": "tenant:'.$tenant->id.'"')
             ->doesntExpectOutputToContain('"status": "only_1c"')
             ->doesntExpectOutputToContain('"status": "only_csv"');
     }
@@ -437,8 +437,8 @@ class AccrualsReconcileCommandTest extends TestCase
             ->expectsOutputToContain('"filtered_reason_counts": [')
             ->expectsOutputToContain('"diagnostic": "only_csv_market_space_bucket"')
             ->expectsOutputToContain('"filtered_detail_count": 1')
-            ->expectsOutputToContain('"bucket_label": "market_space:' . $csvSpace->id . '"')
-            ->doesntExpectOutputToContain('"bucket_label": "market_space:' . $mismatchSpace->id . '"')
+            ->expectsOutputToContain('"bucket_label": "market_space:'.$csvSpace->id.'"')
+            ->doesntExpectOutputToContain('"bucket_label": "market_space:'.$mismatchSpace->id.'"')
             ->doesntExpectOutputToContain('"primary_diagnostic": "contract_amount_mismatch"');
     }
 
@@ -552,8 +552,8 @@ class AccrualsReconcileCommandTest extends TestCase
             ->expectsOutputToContain('"space_bound_to_same_tenant"')
             ->expectsOutputToContain('"filtered_secondary_counts": [')
             ->expectsOutputToContain('"secondary_diagnostic": "space_bound_to_same_tenant"')
-            ->expectsOutputToContain('"bucket_label": "market_space:' . $sameSpace->id . '"')
-            ->doesntExpectOutputToContain('"bucket_label": "market_space:' . $otherSpace->id . '"')
+            ->expectsOutputToContain('"bucket_label": "market_space:'.$sameSpace->id.'"')
+            ->doesntExpectOutputToContain('"bucket_label": "market_space:'.$otherSpace->id.'"')
             ->doesntExpectOutputToContain('"secondary_diagnostic": "space_bound_to_other_tenant"');
     }
 
@@ -705,10 +705,87 @@ class AccrualsReconcileCommandTest extends TestCase
             ->expectsOutputToContain('"filtered_class_counts": [')
             ->expectsOutputToContain('"cutover_class": "manual_review"')
             ->expectsOutputToContain('"cutover_reason": "contract_amount_mismatch"')
-            ->expectsOutputToContain('"bucket_label": "contract:' . $manualReviewContract->id . '"')
-            ->doesntExpectOutputToContain('"bucket_label": "contract:' . $matchedContract->id . '"')
-            ->doesntExpectOutputToContain('"bucket_label": "contract:' . $missingPlaceContract->id . '"')
-            ->doesntExpectOutputToContain('"bucket_label": "market_space:' . $legacySpace->id . '"');
+            ->expectsOutputToContain('"bucket_label": "contract:'.$manualReviewContract->id.'"')
+            ->doesntExpectOutputToContain('"bucket_label": "contract:'.$matchedContract->id.'"')
+            ->doesntExpectOutputToContain('"bucket_label": "contract:'.$missingPlaceContract->id.'"')
+            ->doesntExpectOutputToContain('"bucket_label": "market_space:'.$legacySpace->id.'"');
+    }
+
+    public function test_reconcile_json_treats_market_space_amount_mismatch_as_manual_review(): void
+    {
+        $market = Market::create(['name' => 'Test Market']);
+
+        $tenant = Tenant::create([
+            'market_id' => $market->id,
+            'name' => 'Tenant Market Space Manual Review',
+        ]);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'P/70',
+            'code' => 'P/70',
+        ]);
+
+        $contract = TenantContract::create([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'number' => 'CONTRACT-SPACE-MANUAL',
+            'status' => 'active',
+            'starts_at' => '2026-01-01',
+            'signed_at' => '2026-01-01',
+            'is_active' => true,
+        ]);
+
+        MarketSpaceTenantBinding::query()->create([
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'tenant_id' => $tenant->id,
+            'tenant_contract_id' => $contract->id,
+            'started_at' => now()->subDay(),
+            'binding_type' => 'contract',
+            'confidence' => 'high',
+            'source' => 'test',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'period' => '2026-01-01',
+            'source' => '1c',
+            'total_with_vat' => 150,
+            'total_no_vat' => 150,
+            'source_place_code' => 'P/70',
+            'source_row_hash' => 'cutover-space-manual-1c',
+        ]);
+
+        $this->createAccrual([
+            'market_id' => $market->id,
+            'tenant_id' => $tenant->id,
+            'market_space_id' => $space->id,
+            'period' => '2026-01-01',
+            'source' => 'excel',
+            'total_with_vat' => 120,
+            'total_no_vat' => 120,
+            'source_place_code' => 'P/70',
+            'source_row_hash' => 'cutover-space-manual-csv',
+        ]);
+
+        $this->artisan('accruals:reconcile', [
+            '--market' => $market->id,
+            '--period' => '2026-01',
+            '--json' => true,
+            '--with-matched-overlap' => true,
+        ])
+            ->assertSuccessful()
+            ->expectsOutputToContain('"ready_for_1c_primary": true')
+            ->expectsOutputToContain('"manual_review_bucket_count": 1')
+            ->expectsOutputToContain('"blocker_bucket_count": 0')
+            ->expectsOutputToContain('"comparison_basis": "market_space"')
+            ->expectsOutputToContain('"primary_diagnostic": "market_space_amount_mismatch"')
+            ->expectsOutputToContain('"cutover_class": "manual_review"')
+            ->expectsOutputToContain('"cutover_reason": "market_space_amount_mismatch"')
+            ->expectsOutputToContain('"bucket_label": "market_space:'.$space->id.'"');
     }
 
     public function test_reconcile_json_marks_unclassified_source_only_bucket_as_cutover_blocker(): void
