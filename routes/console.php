@@ -30,7 +30,7 @@ Schedule::command('marketplace:repair-demo-asset-permissions --execute')->dailyA
 Schedule::command('ops:postgres-backup --rotate')
     ->dailyAt('03:30')
     ->withoutOverlapping();
-Schedule::command('market-documents:purge-trash')
+Schedule::command('market-documents:purge-trash --execute')
     ->dailyAt('03:45')
     ->withoutOverlapping();
 
