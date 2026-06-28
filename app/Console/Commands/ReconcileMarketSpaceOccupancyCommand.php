@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\MarketSpace;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 
 class ReconcileMarketSpaceOccupancyCommand extends Command
@@ -20,11 +21,23 @@ class ReconcileMarketSpaceOccupancyCommand extends Command
         $marketId = (int) ($this->option('market-id') ?? 0);
         $apply = (bool) $this->option('apply');
 
+        if ($marketId > 0) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->reconcileOccupancy($marketId, $apply),
+            );
+        }
+
+        return $this->reconcileOccupancy(null, $apply);
+    }
+
+    private function reconcileOccupancy(?int $marketId, bool $apply): int
+    {
         $query = MarketSpace::query()
             ->with('spaceGroupParent:id,tenant_id,space_group_role')
             ->orderBy('id');
 
-        if ($marketId > 0) {
+        if ($marketId !== null) {
             $query->where('market_id', $marketId);
         }
 

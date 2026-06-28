@@ -10,7 +10,7 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Перевести notification health-check на явный MarketContext для market-filter режима без изменения all-market диагностики.',
+    'current_focus' => 'Перевести market-spaces:reconcile-occupancy на явный MarketContext для --market-id режима без изменения all-market dry-run.',
     'next_step' => 'Дальше разбирать оставшиеся write-capable команды отдельными пакетами: backfill, cleanup, seed, marketplace и AI сценарии.',
     'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
@@ -85,8 +85,8 @@ return [
                 ['title' => 'Dashboard/widgets/Livewire используют единый context: 17 widget + Dashboard page read/write sync + MarketSwitcherWidget sync + StaffLiveFeed + OnlineStaffRail + QuickChatDrawer переведены', 'status' => 'in_progress'],
                 ['title' => 'Карта рынка использует тот же market_id: MapReviewResults + основной экран карты + review Blade partials + AppServiceProvider map-review routes переведены', 'status' => 'done'],
                 ['title' => '1C API выставляет context из integration token: payments + settlements + contract debts + contracts + accruals endpoints подготовлены', 'status' => 'done'],
-                ['title' => 'Jobs/commands получают market_id явно: 1C finance commands, scheduled calendar/snapshot commands, read-only audit/report commands, preview/apply contract maintenance commands и notification health-check подготовлены', 'status' => 'in_progress'],
-                ['title' => 'Smoke matrix для UI/API/jobs: regression guards для API, 1C commands, scheduled commands, audit commands, preview/apply commands, notification health command и 1C reconcile cutover diagnostics добавлены', 'status' => 'in_progress'],
+                ['title' => 'Jobs/commands получают market_id явно: 1C finance commands, scheduled calendar/snapshot commands, read-only audit/report commands, preview/apply contract maintenance commands, notification health-check и occupancy reconcile подготовлены', 'status' => 'in_progress'],
+                ['title' => 'Smoke matrix для UI/API/jobs: regression guards для API, 1C commands, scheduled commands, audit commands, preview/apply commands, notification health command, occupancy reconcile command и 1C reconcile cutover diagnostics добавлены', 'status' => 'in_progress'],
             ],
         ],
         [
