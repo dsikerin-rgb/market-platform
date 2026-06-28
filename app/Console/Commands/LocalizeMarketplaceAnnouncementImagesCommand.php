@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Models\Market;
 use App\Models\MarketHoliday;
 use App\Models\MarketplaceAnnouncement;
+use App\Support\MarketContext;
 use App\Support\MarketplaceAnnouncementImageCatalog;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -15,12 +16,29 @@ class LocalizeMarketplaceAnnouncementImagesCommand extends Command
 {
     protected $signature = 'marketplace:images:localize
         {--market= : Market id or slug}
-        {--overwrite : Force replacing current image even if it is already local}';
+        {--overwrite : Force replacing current image even if it is already local}
+        {--dry-run : Run in dry-run mode}
+        {--execute : Apply image localization (default: dry-run)}';
 
     protected $description = 'Replace mapped holiday/promo cover images with local marketplace assets';
 
     public function handle(): int
     {
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && trim((string) $this->option('market')) === '') {
+            $this->error('Market ID or slug is required with --execute. Use --market=1.');
+
+            return self::FAILURE;
+        }
+
         $markets = $this->resolveMarkets();
 
         if ($markets->isEmpty()) {
@@ -36,15 +54,25 @@ class LocalizeMarketplaceAnnouncementImagesCommand extends Command
         foreach ($markets as $market) {
             $this->line(sprintf('Market: %s (#%d)', $market->name, (int) $market->id));
 
-            $holidayUpdates += $this->localizeHolidays($market, $overwrite);
-            $announcementUpdates += $this->localizeAnnouncements($market, $overwrite);
+            [$marketHolidayUpdates, $marketAnnouncementUpdates] = app(MarketContext::class)->withMarket(
+                (int) $market->id,
+                fn (): array => $this->localizeMarket($market, $overwrite, $dryRun),
+            );
+
+            $holidayUpdates += $marketHolidayUpdates;
+            $announcementUpdates += $marketAnnouncementUpdates;
         }
 
         $this->info(sprintf(
-            'Done. holidays=%d announcements=%d',
+            '%s. holidays=%d announcements=%d',
+            $dryRun ? 'Dry-run done' : 'Done',
             $holidayUpdates,
             $announcementUpdates,
         ));
+
+        if ($dryRun) {
+            $this->warn('DRY RUN: no changes applied. Use --execute --market=... to apply.');
+        }
 
         return self::SUCCESS;
     }
@@ -71,7 +99,18 @@ class LocalizeMarketplaceAnnouncementImagesCommand extends Command
         return $query->get();
     }
 
-    private function localizeHolidays(Market $market, bool $overwrite): int
+    /**
+     * @return array{0: int, 1: int}
+     */
+    private function localizeMarket(Market $market, bool $overwrite, bool $dryRun): array
+    {
+        return [
+            $this->localizeHolidays($market, $overwrite, $dryRun),
+            $this->localizeAnnouncements($market, $overwrite, $dryRun),
+        ];
+    }
+
+    private function localizeHolidays(Market $market, bool $overwrite, bool $dryRun): int
     {
         $updated = 0;
 
@@ -90,14 +129,17 @@ class LocalizeMarketplaceAnnouncementImagesCommand extends Command
                 continue;
             }
 
-            $holiday->forceFill(['cover_image' => $resolved])->save();
+            if (! $dryRun) {
+                $holiday->forceFill(['cover_image' => $resolved])->save();
+            }
+
             $updated++;
         }
 
         return $updated;
     }
 
-    private function localizeAnnouncements(Market $market, bool $overwrite): int
+    private function localizeAnnouncements(Market $market, bool $overwrite, bool $dryRun): int
     {
         $updated = 0;
 
@@ -116,7 +158,10 @@ class LocalizeMarketplaceAnnouncementImagesCommand extends Command
                 continue;
             }
 
-            $announcement->forceFill(['cover_image' => $resolved])->save();
+            if (! $dryRun) {
+                $announcement->forceFill(['cover_image' => $resolved])->save();
+            }
+
             $updated++;
         }
 
