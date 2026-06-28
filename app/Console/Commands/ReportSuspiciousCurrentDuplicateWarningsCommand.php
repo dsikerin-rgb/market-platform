@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Models\IntegrationExchange;
 use App\Models\MarketIntegration;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -27,53 +28,58 @@ class ReportSuspiciousCurrentDuplicateWarningsCommand extends Command
         $includeAll = (bool) $this->option('all');
         $withSamplesOnly = (bool) $this->option('with-samples-only');
 
-        $query = IntegrationExchange::query()
-            ->where('market_id', $marketId)
-            ->where('direction', IntegrationExchange::DIRECTION_IN)
-            ->where('entity_type', 'contracts')
-            ->orderByDesc('started_at')
-            ->orderByDesc('id');
+        return app(MarketContext::class)->withMarket(
+            $marketId,
+            function () use ($marketId, $limit, $includeAll, $withSamplesOnly): int {
+                $query = IntegrationExchange::query()
+                    ->where('market_id', $marketId)
+                    ->where('direction', IntegrationExchange::DIRECTION_IN)
+                    ->where('entity_type', 'contracts')
+                    ->orderByDesc('started_at')
+                    ->orderByDesc('id');
 
-        /** @var Collection<int, IntegrationExchange> $exchanges */
-        $exchanges = $query->get();
+                /** @var Collection<int, IntegrationExchange> $exchanges */
+                $exchanges = $query->get();
 
-        $prepared = $exchanges
-            ->map(fn (IntegrationExchange $exchange): array => $this->prepareExchangeRow($exchange))
-            ->filter(function (array $row) use ($includeAll, $withSamplesOnly): bool {
-                if ($withSamplesOnly) {
-                    return $row['warning_sample_count'] > 0;
-                }
+                $prepared = $exchanges
+                    ->map(fn (IntegrationExchange $exchange): array => $this->prepareExchangeRow($exchange))
+                    ->filter(function (array $row) use ($includeAll, $withSamplesOnly): bool {
+                        if ($withSamplesOnly) {
+                            return $row['warning_sample_count'] > 0;
+                        }
 
-                if ($includeAll) {
-                    return true;
-                }
+                        if ($includeAll) {
+                            return true;
+                        }
 
-                return $row['warning_group_count'] > 0 || $row['warning_row_count'] > 0;
-            })
-            ->values();
+                        return $row['warning_group_count'] > 0 || $row['warning_row_count'] > 0;
+                    })
+                    ->values();
 
-        $reported = $limit > 0
-            ? $prepared->take($limit)->values()
-            : $prepared;
+                $reported = $limit > 0
+                    ? $prepared->take($limit)->values()
+                    : $prepared;
 
-        $stats = [
-            'market_id' => $marketId,
-            'scanned_exchange_count' => $exchanges->count(),
-            'reported_exchange_count' => $reported->count(),
-            'warning_exchange_count' => $reported->filter(
-                static fn (array $row): bool => $row['warning_group_count'] > 0 || $row['warning_row_count'] > 0
-            )->count(),
-            'warning_group_count' => $reported->sum('warning_group_count'),
-            'warning_row_count' => $reported->sum('warning_row_count'),
-            'warning_sample_count' => $reported->sum('warning_sample_count'),
-        ];
+                $stats = [
+                    'market_id' => $marketId,
+                    'scanned_exchange_count' => $exchanges->count(),
+                    'reported_exchange_count' => $reported->count(),
+                    'warning_exchange_count' => $reported->filter(
+                        static fn (array $row): bool => $row['warning_group_count'] > 0 || $row['warning_row_count'] > 0
+                    )->count(),
+                    'warning_group_count' => $reported->sum('warning_group_count'),
+                    'warning_row_count' => $reported->sum('warning_row_count'),
+                    'warning_sample_count' => $reported->sum('warning_sample_count'),
+                ];
 
-        $this->line(json_encode([
-            'stats' => $stats,
-            'exchanges' => $reported->all(),
-        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+                $this->line(json_encode([
+                    'stats' => $stats,
+                    'exchanges' => $reported->all(),
+                ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
-        return self::SUCCESS;
+                return self::SUCCESS;
+            },
+        );
     }
 
     private function resolveMarketId(): int

@@ -1,5 +1,6 @@
 <?php
-# app/Console/Commands/ReportMarketSpaceKeyCollisions.php
+
+// app/Console/Commands/ReportMarketSpaceKeyCollisions.php
 
 declare(strict_types=1);
 
@@ -7,6 +8,7 @@ namespace App\Console\Commands;
 
 use App\Models\MarketIntegration;
 use App\Models\MarketSpace;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 
@@ -22,98 +24,102 @@ class ReportMarketSpaceKeyCollisions extends Command
     {
         $marketId = $this->resolveMarketId();
 
-        $spaces = MarketSpace::query()
-            ->where('market_id', $marketId)
-            ->get(['id', 'number', 'code', 'display_name', 'tenant_id', 'status', 'is_active', 'updated_at']);
+        return app(MarketContext::class)->withMarket($marketId, function () use ($marketId): int {
+            $spaces = MarketSpace::query()
+                ->where('market_id', $marketId)
+                ->get(['id', 'number', 'code', 'display_name', 'tenant_id', 'status', 'is_active', 'updated_at']);
 
-        if ($spaces->isEmpty()) {
-            $this->warn("No market_spaces for market_id={$marketId}");
-            return self::SUCCESS;
-        }
+            if ($spaces->isEmpty()) {
+                $this->warn("No market_spaces for market_id={$marketId}");
 
-        // keyVariant => set(ids)
-        $map = [];
+                return self::SUCCESS;
+            }
 
-        foreach ($spaces as $sp) {
-            foreach ([(string) ($sp->number ?? ''), (string) ($sp->code ?? '')] as $raw) {
-                $raw = trim($raw);
-                if ($raw === '') {
+            // keyVariant => set(ids)
+            $map = [];
+
+            foreach ($spaces as $sp) {
+                foreach ([(string) ($sp->number ?? ''), (string) ($sp->code ?? '')] as $raw) {
+                    $raw = trim($raw);
+                    if ($raw === '') {
+                        continue;
+                    }
+
+                    foreach ($this->spaceKeyVariants($raw) as $v) {
+                        $map[$v] ??= [];
+                        $map[$v][$sp->id] = true;
+                    }
+                }
+            }
+
+            // Сгруппируем коллизии по набору id (чтобы не было мусора вида P51/p51/П-5-1)
+            $groups = []; // idsSignature => ['ids'=>[...], 'keys'=>[...]]
+            foreach ($map as $key => $idsSet) {
+                $ids = array_keys($idsSet);
+                if (count($ids) <= 1) {
                     continue;
                 }
 
-                foreach ($this->spaceKeyVariants($raw) as $v) {
-                    $map[$v] ??= [];
-                    $map[$v][$sp->id] = true;
+                sort($ids);
+                $sig = implode('-', $ids);
+
+                $groups[$sig] ??= ['ids' => $ids, 'keys' => []];
+                $groups[$sig]['keys'][] = $key;
+            }
+
+            // Сортируем: сначала группы с большим числом id, потом по sig
+            uasort($groups, static function (array $a, array $b): int {
+                $c = count($b['ids']) <=> count($a['ids']);
+
+                return $c !== 0 ? $c : (implode('-', $a['ids']) <=> implode('-', $b['ids']));
+            });
+
+            $totalGroups = count($groups);
+            $this->info("market_id={$marketId}");
+            $this->info("collision_groups={$totalGroups}");
+
+            $limit = (int) $this->option('limit');
+            if ($limit < 0) {
+                $limit = 15;
+            }
+
+            $i = 0;
+            foreach ($groups as $sig => $g) {
+                $i++;
+                if ($limit !== 0 && $i > $limit) {
+                    break;
                 }
+
+                $ids = $g['ids'];
+                $keys = array_values(array_unique($g['keys']));
+                sort($keys);
+
+                $this->line(str_repeat('-', 80));
+                $this->line("GROUP #{$i}: ids=[".implode(', ', $ids).']');
+                $this->line('Keys (examples): '.implode(' | ', array_slice($keys, 0, 12)).(count($keys) > 12 ? ' | ...' : ''));
+
+                $rows = $spaces->whereIn('id', $ids)->values()->map(function ($sp) {
+                    return [
+                        'id' => (int) $sp->id,
+                        'number' => $sp->number,
+                        'code' => $sp->code,
+                        'display_name' => $sp->display_name,
+                        'tenant_id' => $sp->tenant_id,
+                        'status' => $sp->status,
+                        'is_active' => $sp->is_active,
+                        'updated_at' => (string) ($sp->updated_at ?? ''),
+                    ];
+                })->all();
+
+                // Простая “подсказка” канона (не автоматическое решение!)
+                $winnerId = $this->suggestWinnerId($rows);
+                $this->line("Suggested canonical id (heuristic): {$winnerId}");
+
+                $this->line(json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             }
-        }
 
-        // Сгруппируем коллизии по набору id (чтобы не было мусора вида P51/p51/П-5-1)
-        $groups = []; // idsSignature => ['ids'=>[...], 'keys'=>[...]]
-        foreach ($map as $key => $idsSet) {
-            $ids = array_keys($idsSet);
-            if (count($ids) <= 1) {
-                continue;
-            }
-
-            sort($ids);
-            $sig = implode('-', $ids);
-
-            $groups[$sig] ??= ['ids' => $ids, 'keys' => []];
-            $groups[$sig]['keys'][] = $key;
-        }
-
-        // Сортируем: сначала группы с большим числом id, потом по sig
-        uasort($groups, static function (array $a, array $b): int {
-            $c = count($b['ids']) <=> count($a['ids']);
-            return $c !== 0 ? $c : (implode('-', $a['ids']) <=> implode('-', $b['ids']));
+            return self::SUCCESS;
         });
-
-        $totalGroups = count($groups);
-        $this->info("market_id={$marketId}");
-        $this->info("collision_groups={$totalGroups}");
-
-        $limit = (int) $this->option('limit');
-        if ($limit < 0) {
-            $limit = 15;
-        }
-
-        $i = 0;
-        foreach ($groups as $sig => $g) {
-            $i++;
-            if ($limit !== 0 && $i > $limit) {
-                break;
-            }
-
-            $ids = $g['ids'];
-            $keys = array_values(array_unique($g['keys']));
-            sort($keys);
-
-            $this->line(str_repeat('-', 80));
-            $this->line("GROUP #{$i}: ids=[" . implode(', ', $ids) . ']');
-            $this->line('Keys (examples): ' . implode(' | ', array_slice($keys, 0, 12)) . (count($keys) > 12 ? ' | ...' : ''));
-
-            $rows = $spaces->whereIn('id', $ids)->values()->map(function ($sp) {
-                return [
-                    'id' => (int) $sp->id,
-                    'number' => $sp->number,
-                    'code' => $sp->code,
-                    'display_name' => $sp->display_name,
-                    'tenant_id' => $sp->tenant_id,
-                    'status' => $sp->status,
-                    'is_active' => $sp->is_active,
-                    'updated_at' => (string) ($sp->updated_at ?? ''),
-                ];
-            })->all();
-
-            // Простая “подсказка” канона (не автоматическое решение!)
-            $winnerId = $this->suggestWinnerId($rows);
-            $this->line("Suggested canonical id (heuristic): {$winnerId}");
-
-            $this->line(json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        }
-
-        return self::SUCCESS;
     }
 
     private function resolveMarketId(): int
@@ -176,7 +182,7 @@ class ReportMarketSpaceKeyCollisions extends Command
      * Подсказка “какой id оставить” — только эвристика для ускорения ручной проверки.
      * Правило: активный > с tenant_id > статус не free > более новый updated_at > меньший id.
      *
-     * @param array<int, array<string,mixed>> $rows
+     * @param  array<int, array<string,mixed>>  $rows
      */
     private function suggestWinnerId(array $rows): int
     {

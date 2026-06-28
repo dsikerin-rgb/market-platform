@@ -5,13 +5,13 @@ declare(strict_types=1);
 return [
     'title' => 'Ход SaaS-перехода',
     'subtitle' => 'Безопасная перестройка Market Platform под SaaS, демо-контур и привлечение новых клиентов.',
-    'last_updated_at' => '2026-06-25',
+    'last_updated_at' => '2026-06-28',
     'access' => [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Подготовить 1C API к MarketContext без включения tenant scope; payments, settlements, contract debts, contracts и accruals endpoints завернуты в context из integration token.',
-    'next_step' => 'Перейти к jobs/commands: явно передавать market_id и не зависеть от session context.',
+    'current_focus' => 'Подготовить jobs/commands к MarketContext без включения tenant scope; первый набор 1C finance commands заворачивается в context из явного market_id.',
+    'next_step' => 'Проверить scheduler/queue сценарии и оставшиеся массовые команды, затем расширить smoke matrix для jobs.',
     'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
         [
@@ -85,8 +85,8 @@ return [
                 ['title' => 'Dashboard/widgets/Livewire используют единый context: 17 widget + Dashboard page read/write sync + MarketSwitcherWidget sync + StaffLiveFeed + OnlineStaffRail + QuickChatDrawer переведены', 'status' => 'in_progress'],
                 ['title' => 'Карта рынка использует тот же market_id: MapReviewResults + основной экран карты + review Blade partials + AppServiceProvider map-review routes переведены', 'status' => 'done'],
                 ['title' => '1C API выставляет context из integration token: payments + settlements + contract debts + contracts + accruals endpoints подготовлены', 'status' => 'done'],
-                ['title' => 'Jobs/commands получают market_id явно', 'status' => 'pending'],
-                ['title' => 'Smoke matrix для UI/API/jobs: regression guard против прямых market session lookup добавлен', 'status' => 'in_progress'],
+                ['title' => 'Jobs/commands получают market_id явно: первый набор 1C finance commands подготовлен', 'status' => 'in_progress'],
+                ['title' => 'Smoke matrix для UI/API/jobs: regression guards для API и первого набора 1C commands добавлены', 'status' => 'in_progress'],
             ],
         ],
         [

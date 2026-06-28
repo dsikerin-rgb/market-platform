@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -39,275 +40,295 @@ class AccrualsReconcileCommand extends Command
         $withMatchedOverlap = (bool) $this->option('with-matched-overlap');
         $json = (bool) $this->option('json');
 
-        if (!$marketId) {
+        if (! $marketId) {
             $this->error('Market ID is required. Use --market=1');
+
             return self::FAILURE;
         }
 
-        if (!$period) {
+        if (! $period) {
             $this->error('Period is required. Use --period=2026-01');
+
             return self::FAILURE;
         }
 
         // Validate period format
-        if (!preg_match('/^\d{4}-\d{2}$/', $period)) {
+        if (! preg_match('/^\d{4}-\d{2}$/', $period)) {
             $this->error('Period must be in YYYY-MM format (e.g. 2026-01)');
+
             return self::FAILURE;
         }
 
-        $periodDate = $period . '-01';
-
-        // Overall summary
-        $summary = $this->getSummary($marketId, $periodDate, $tenantId);
-
-        // Breakdown by tenant
-        $breakdown = $this->getBreakdown($marketId, $periodDate, $tenantId, $limit);
-        $overlap = $this->buildOverlapReport(
+        return app(MarketContext::class)->withMarket(
             $marketId,
-            $periodDate,
-            $tenantId,
-            $overlapLimit,
-            $withMatchedOverlap,
-            $statusFilters,
-            $diagnosticFilters,
-            $subdiagnosticFilters,
-            $cutoverClassFilters,
-        );
+            function () use (
+                $marketId,
+                $period,
+                $tenantId,
+                $statusFilters,
+                $diagnosticFilters,
+                $subdiagnosticFilters,
+                $cutoverClassFilters,
+                $limit,
+                $overlapLimit,
+                $withMatchedOverlap,
+                $json,
+            ): int {
+                $periodDate = $period.'-01';
 
-        if ($json) {
-            $this->line(json_encode([
-                'settings' => [
-                    'market_id' => $marketId,
-                    'period' => $period,
-                    'tenant_id' => $tenantId,
-                    'status_filters' => $statusFilters,
-                    'diagnostic_filters' => $diagnosticFilters,
-                    'subdiagnostic_filters' => $subdiagnosticFilters,
-                    'cutover_class_filters' => $cutoverClassFilters,
-                    'breakdown_limit' => $limit,
-                    'overlap_limit' => $overlapLimit,
-                    'with_matched_overlap' => $withMatchedOverlap,
-                ],
-                'summary' => $summary,
-                'breakdown' => $breakdown->map(fn ($row) => [
-                    'tenant_id' => (int) $row->tenant_id,
-                    'tenant_name' => (string) $row->tenant_name,
-                    'rows_1c' => (int) $row->rows_1c,
-                    'rows_csv' => (int) $row->rows_csv,
-                    'sum_1c' => (float) $row->sum_1c,
-                    'sum_csv' => (float) $row->sum_csv,
-                    'diff_sum' => (float) $row->diff_sum,
-                    'status' => $this->tenantStatus($row),
-                ])->values()->all(),
-                'overlap' => $overlap,
-                'diagnostics' => $overlap['diagnostics'],
-                'cutover' => $overlap['cutover'],
-                'notes' => $this->notes(),
-            ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+                // Overall summary
+                $summary = $this->getSummary($marketId, $periodDate, $tenantId);
 
-            return self::SUCCESS;
-        }
-
-        $this->info('=== ACCRUALS RECONCILIATION REPORT ===');
-        $this->newLine();
-        $this->info('Settings:');
-        $this->line("  market_id: {$marketId}");
-        $this->line("  period: {$period}");
-        if ($tenantId) {
-            $this->line("  tenant_id: {$tenantId}");
-        }
-        if ($statusFilters !== []) {
-            $this->line('  status_filters: ' . implode(', ', $statusFilters));
-        }
-        if ($diagnosticFilters !== []) {
-            $this->line('  diagnostic_filters: ' . implode(', ', $diagnosticFilters));
-        }
-        if ($subdiagnosticFilters !== []) {
-            $this->line('  subdiagnostic_filters: ' . implode(', ', $subdiagnosticFilters));
-        }
-        if ($cutoverClassFilters !== []) {
-            $this->line('  cutover_class_filters: ' . implode(', ', $cutoverClassFilters));
-        }
-        $this->line("  breakdown_limit: {$limit}");
-        $this->line("  overlap_limit: {$overlapLimit}");
-        $this->line('  with_matched_overlap: ' . ($withMatchedOverlap ? 'yes' : 'no'));
-        $this->newLine();
-
-        $this->info('## Summary');
-        $this->table(
-            ['Metric', '1C', 'CSV/Excel', 'Diff', 'Status'],
-            [
-                ['Total Rows', $summary['total_rows_1c'], $summary['total_rows_csv'], $summary['total_rows_diff'], $this->rowStatus($summary['total_rows_diff'] === 0)],
-                ['Total Sum (with VAT)', $this->formatMoney($summary['total_sum_1c']), $this->formatMoney($summary['total_sum_csv']), $this->formatMoney($summary['total_sum_diff']), $this->rowStatus(abs($summary['total_sum_diff']) < 0.01)],
-                ['Matched Tenants', $summary['matched_tenants_count'], '-', '-', 'info'],
-                ['Rows Only in 1C', $summary['rows_only_in_1c'], '-', '-', 'warning'],
-                ['Rows Only in CSV', $summary['rows_only_in_csv'], '-', '-', 'warning'],
-            ]
-        );
-
-        $this->newLine();
-
-        if ($breakdown->isNotEmpty()) {
-            $this->info('## Breakdown by Tenant');
-            $this->table(
-                ['Tenant', 'Rows 1C', 'Rows CSV', 'Sum 1C', 'Sum CSV', 'Diff', 'Status'],
-                $breakdown->map(fn($row) => [
-                    $row->tenant_name,
-                    $row->rows_1c,
-                    $row->rows_csv,
-                    $this->formatMoney($row->sum_1c),
-                    $this->formatMoney($row->sum_csv),
-                    $this->formatMoney($row->diff_sum),
-                    $this->tenantStatus($row),
-                ])->toArray()
-            );
-
-            $this->newLine();
-            $this->info('Status legend:');
-            $this->line('  ok = sums match (diff < 0.01)');
-            $this->line('  mismatch = sums differ');
-            $this->line('  only_1c = tenant has accruals only in 1C');
-            $this->line('  only_csv = tenant has accruals only in CSV');
-        }
-
-        $this->newLine();
-        $this->info('## Overlap Summary');
-        $this->table(
-            ['Metric', 'Value'],
-            [
-                ['Buckets Total', $overlap['stats']['bucket_count_total']],
-                ['Buckets in Both Sources', $overlap['stats']['bucket_count_in_both']],
-                ['Buckets Matched', $overlap['stats']['bucket_count_matched']],
-                ['Buckets Mismatched', $overlap['stats']['bucket_count_mismatch']],
-                ['Buckets Only in 1C', $overlap['stats']['bucket_count_only_in_1c']],
-                ['Buckets Only in CSV', $overlap['stats']['bucket_count_only_in_csv']],
-                ['Rows 1C in Buckets', $overlap['stats']['row_count_1c']],
-                ['Rows CSV in Buckets', $overlap['stats']['row_count_csv']],
-                ['Sum 1C in Buckets', $this->formatMoney((float) $overlap['stats']['sum_1c'])],
-                ['Sum CSV in Buckets', $this->formatMoney((float) $overlap['stats']['sum_csv'])],
-                ['Diff in Buckets', $this->formatMoney((float) $overlap['stats']['diff_sum'])],
-                ['Detailed Rows Reported', $overlap['stats']['reported_detail_count']],
-            ]
-        );
-
-        if ($overlap['has_active_filters']) {
-            $this->newLine();
-            $this->info('## Filtered Overlap Summary');
-            $this->table(
-                ['Metric', 'Value'],
-                [
-                    ['Filtered Buckets Total', $overlap['filtered_stats']['bucket_count_total']],
-                    ['Filtered Buckets in Both Sources', $overlap['filtered_stats']['bucket_count_in_both']],
-                    ['Filtered Buckets Matched', $overlap['filtered_stats']['bucket_count_matched']],
-                    ['Filtered Buckets Mismatched', $overlap['filtered_stats']['bucket_count_mismatch']],
-                    ['Filtered Buckets Only in 1C', $overlap['filtered_stats']['bucket_count_only_in_1c']],
-                    ['Filtered Buckets Only in CSV', $overlap['filtered_stats']['bucket_count_only_in_csv']],
-                    ['Filtered Rows 1C in Buckets', $overlap['filtered_stats']['row_count_1c']],
-                    ['Filtered Rows CSV in Buckets', $overlap['filtered_stats']['row_count_csv']],
-                    ['Filtered Sum 1C in Buckets', $this->formatMoney((float) $overlap['filtered_stats']['sum_1c'])],
-                    ['Filtered Sum CSV in Buckets', $this->formatMoney((float) $overlap['filtered_stats']['sum_csv'])],
-                    ['Filtered Diff in Buckets', $this->formatMoney((float) $overlap['filtered_stats']['diff_sum'])],
-                    ['Filtered Detailed Rows', $overlap['filtered_stats']['filtered_detail_count']],
-                ]
-            );
-        }
-
-        if ($overlap['rows'] !== []) {
-            $this->newLine();
-            $this->info('## Overlap Details');
-            $this->table(
-                ['Tenant', 'Basis', 'Bucket', 'Rows 1C', 'Rows CSV', 'Sum 1C', 'Sum CSV', 'Diff', 'Status', 'Diagnostic', 'Subdiagnostic'],
-                collect($overlap['rows'])->map(fn (array $row) => [
-                    $row['tenant_name'],
-                    $row['comparison_basis'],
-                    $row['bucket_label'],
-                    $row['rows_1c'],
-                    $row['rows_csv'],
-                    $this->formatMoney((float) $row['sum_1c']),
-                    $this->formatMoney((float) $row['sum_csv']),
-                    $this->formatMoney((float) $row['diff_sum']),
-                    $row['status'],
-                    $row['primary_diagnostic'],
-                    $row['secondary_diagnostic'] ?? '-',
-                ])->all()
-            );
-        }
-
-        if (($overlap['diagnostics']['reason_counts'] ?? []) !== []) {
-            $this->newLine();
-            $this->info('## Diagnostic Summary');
-            $this->table(
-                ['Diagnostic', 'Count'],
-                collect($overlap['has_active_filters']
-                    ? ($overlap['diagnostics']['filtered_reason_counts'] ?? [])
-                    : ($overlap['diagnostics']['reason_counts'] ?? []))
-                    ->map(fn (array $row): array => [$row['diagnostic'], $row['count']])
-                    ->all()
-            );
-        }
-
-        $secondarySummary = $overlap['has_active_filters']
-            ? ($overlap['diagnostics']['filtered_secondary_counts'] ?? [])
-            : ($overlap['diagnostics']['secondary_counts'] ?? []);
-
-        if ($secondarySummary !== []) {
-            $this->newLine();
-            $this->info('## Subdiagnostic Summary');
-            $this->table(
-                ['Subdiagnostic', 'Count'],
-                collect($secondarySummary)
-                    ->map(fn (array $row): array => [$row['secondary_diagnostic'], $row['count']])
-                    ->all()
-            );
-        }
-
-        if (($overlap['cutover']['class_counts'] ?? []) !== []) {
-            $this->newLine();
-            $this->info('## 1C Cutover Summary');
-            $this->table(
-                ['Metric', 'Value'],
-                [
-                    ['Policy', (string) ($overlap['cutover']['policy'] ?? '1c_primary_csv_reference')],
-                    ['Ready for 1C-primary workflow', (($overlap['cutover']['ready_for_1c_primary'] ?? false) ? 'yes' : 'no')],
-                    ['Accepted Buckets', (int) ($overlap['cutover']['accepted_bucket_count'] ?? 0)],
-                    ['Reference-only Buckets', (int) ($overlap['cutover']['reference_only_bucket_count'] ?? 0)],
-                    ['Manual-review Buckets', (int) ($overlap['cutover']['manual_review_bucket_count'] ?? 0)],
-                    ['Blocker Buckets', (int) ($overlap['cutover']['blocker_bucket_count'] ?? 0)],
-                ]
-            );
-
-            $this->newLine();
-            $this->table(
-                ['Cutover Class', 'Count'],
-                collect($overlap['has_active_filters']
-                    ? ($overlap['cutover']['filtered_class_counts'] ?? [])
-                    : ($overlap['cutover']['class_counts'] ?? []))
-                    ->map(fn (array $row): array => [$row['cutover_class'], $row['count']])
-                    ->all()
-            );
-
-            $cutoverReasons = $overlap['has_active_filters']
-                ? ($overlap['cutover']['filtered_reason_counts'] ?? [])
-                : ($overlap['cutover']['reason_counts'] ?? []);
-
-            if ($cutoverReasons !== []) {
-                $this->newLine();
-                $this->table(
-                    ['Cutover Reason', 'Count'],
-                    collect($cutoverReasons)
-                        ->map(fn (array $row): array => [$row['cutover_reason'], $row['count']])
-                        ->all()
+                // Breakdown by tenant
+                $breakdown = $this->getBreakdown($marketId, $periodDate, $tenantId, $limit);
+                $overlap = $this->buildOverlapReport(
+                    $marketId,
+                    $periodDate,
+                    $tenantId,
+                    $overlapLimit,
+                    $withMatchedOverlap,
+                    $statusFilters,
+                    $diagnosticFilters,
+                    $subdiagnosticFilters,
+                    $cutoverClassFilters,
                 );
-            }
-        }
 
-        $this->newLine();
-        $this->info('## Notes');
-        foreach ($this->notes() as $note) {
-            $this->line($note);
-        }
+                if ($json) {
+                    $this->line(json_encode([
+                        'settings' => [
+                            'market_id' => $marketId,
+                            'period' => $period,
+                            'tenant_id' => $tenantId,
+                            'status_filters' => $statusFilters,
+                            'diagnostic_filters' => $diagnosticFilters,
+                            'subdiagnostic_filters' => $subdiagnosticFilters,
+                            'cutover_class_filters' => $cutoverClassFilters,
+                            'breakdown_limit' => $limit,
+                            'overlap_limit' => $overlapLimit,
+                            'with_matched_overlap' => $withMatchedOverlap,
+                        ],
+                        'summary' => $summary,
+                        'breakdown' => $breakdown->map(fn ($row) => [
+                            'tenant_id' => (int) $row->tenant_id,
+                            'tenant_name' => (string) $row->tenant_name,
+                            'rows_1c' => (int) $row->rows_1c,
+                            'rows_csv' => (int) $row->rows_csv,
+                            'sum_1c' => (float) $row->sum_1c,
+                            'sum_csv' => (float) $row->sum_csv,
+                            'diff_sum' => (float) $row->diff_sum,
+                            'status' => $this->tenantStatus($row),
+                        ])->values()->all(),
+                        'overlap' => $overlap,
+                        'diagnostics' => $overlap['diagnostics'],
+                        'cutover' => $overlap['cutover'],
+                        'notes' => $this->notes(),
+                    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
-        return self::SUCCESS;
+                    return self::SUCCESS;
+                }
+
+                $this->info('=== ACCRUALS RECONCILIATION REPORT ===');
+                $this->newLine();
+                $this->info('Settings:');
+                $this->line("  market_id: {$marketId}");
+                $this->line("  period: {$period}");
+                if ($tenantId) {
+                    $this->line("  tenant_id: {$tenantId}");
+                }
+                if ($statusFilters !== []) {
+                    $this->line('  status_filters: '.implode(', ', $statusFilters));
+                }
+                if ($diagnosticFilters !== []) {
+                    $this->line('  diagnostic_filters: '.implode(', ', $diagnosticFilters));
+                }
+                if ($subdiagnosticFilters !== []) {
+                    $this->line('  subdiagnostic_filters: '.implode(', ', $subdiagnosticFilters));
+                }
+                if ($cutoverClassFilters !== []) {
+                    $this->line('  cutover_class_filters: '.implode(', ', $cutoverClassFilters));
+                }
+                $this->line("  breakdown_limit: {$limit}");
+                $this->line("  overlap_limit: {$overlapLimit}");
+                $this->line('  with_matched_overlap: '.($withMatchedOverlap ? 'yes' : 'no'));
+                $this->newLine();
+
+                $this->info('## Summary');
+                $this->table(
+                    ['Metric', '1C', 'CSV/Excel', 'Diff', 'Status'],
+                    [
+                        ['Total Rows', $summary['total_rows_1c'], $summary['total_rows_csv'], $summary['total_rows_diff'], $this->rowStatus($summary['total_rows_diff'] === 0)],
+                        ['Total Sum (with VAT)', $this->formatMoney($summary['total_sum_1c']), $this->formatMoney($summary['total_sum_csv']), $this->formatMoney($summary['total_sum_diff']), $this->rowStatus(abs($summary['total_sum_diff']) < 0.01)],
+                        ['Matched Tenants', $summary['matched_tenants_count'], '-', '-', 'info'],
+                        ['Rows Only in 1C', $summary['rows_only_in_1c'], '-', '-', 'warning'],
+                        ['Rows Only in CSV', $summary['rows_only_in_csv'], '-', '-', 'warning'],
+                    ]
+                );
+
+                $this->newLine();
+
+                if ($breakdown->isNotEmpty()) {
+                    $this->info('## Breakdown by Tenant');
+                    $this->table(
+                        ['Tenant', 'Rows 1C', 'Rows CSV', 'Sum 1C', 'Sum CSV', 'Diff', 'Status'],
+                        $breakdown->map(fn ($row) => [
+                            $row->tenant_name,
+                            $row->rows_1c,
+                            $row->rows_csv,
+                            $this->formatMoney($row->sum_1c),
+                            $this->formatMoney($row->sum_csv),
+                            $this->formatMoney($row->diff_sum),
+                            $this->tenantStatus($row),
+                        ])->toArray()
+                    );
+
+                    $this->newLine();
+                    $this->info('Status legend:');
+                    $this->line('  ok = sums match (diff < 0.01)');
+                    $this->line('  mismatch = sums differ');
+                    $this->line('  only_1c = tenant has accruals only in 1C');
+                    $this->line('  only_csv = tenant has accruals only in CSV');
+                }
+
+                $this->newLine();
+                $this->info('## Overlap Summary');
+                $this->table(
+                    ['Metric', 'Value'],
+                    [
+                        ['Buckets Total', $overlap['stats']['bucket_count_total']],
+                        ['Buckets in Both Sources', $overlap['stats']['bucket_count_in_both']],
+                        ['Buckets Matched', $overlap['stats']['bucket_count_matched']],
+                        ['Buckets Mismatched', $overlap['stats']['bucket_count_mismatch']],
+                        ['Buckets Only in 1C', $overlap['stats']['bucket_count_only_in_1c']],
+                        ['Buckets Only in CSV', $overlap['stats']['bucket_count_only_in_csv']],
+                        ['Rows 1C in Buckets', $overlap['stats']['row_count_1c']],
+                        ['Rows CSV in Buckets', $overlap['stats']['row_count_csv']],
+                        ['Sum 1C in Buckets', $this->formatMoney((float) $overlap['stats']['sum_1c'])],
+                        ['Sum CSV in Buckets', $this->formatMoney((float) $overlap['stats']['sum_csv'])],
+                        ['Diff in Buckets', $this->formatMoney((float) $overlap['stats']['diff_sum'])],
+                        ['Detailed Rows Reported', $overlap['stats']['reported_detail_count']],
+                    ]
+                );
+
+                if ($overlap['has_active_filters']) {
+                    $this->newLine();
+                    $this->info('## Filtered Overlap Summary');
+                    $this->table(
+                        ['Metric', 'Value'],
+                        [
+                            ['Filtered Buckets Total', $overlap['filtered_stats']['bucket_count_total']],
+                            ['Filtered Buckets in Both Sources', $overlap['filtered_stats']['bucket_count_in_both']],
+                            ['Filtered Buckets Matched', $overlap['filtered_stats']['bucket_count_matched']],
+                            ['Filtered Buckets Mismatched', $overlap['filtered_stats']['bucket_count_mismatch']],
+                            ['Filtered Buckets Only in 1C', $overlap['filtered_stats']['bucket_count_only_in_1c']],
+                            ['Filtered Buckets Only in CSV', $overlap['filtered_stats']['bucket_count_only_in_csv']],
+                            ['Filtered Rows 1C in Buckets', $overlap['filtered_stats']['row_count_1c']],
+                            ['Filtered Rows CSV in Buckets', $overlap['filtered_stats']['row_count_csv']],
+                            ['Filtered Sum 1C in Buckets', $this->formatMoney((float) $overlap['filtered_stats']['sum_1c'])],
+                            ['Filtered Sum CSV in Buckets', $this->formatMoney((float) $overlap['filtered_stats']['sum_csv'])],
+                            ['Filtered Diff in Buckets', $this->formatMoney((float) $overlap['filtered_stats']['diff_sum'])],
+                            ['Filtered Detailed Rows', $overlap['filtered_stats']['filtered_detail_count']],
+                        ]
+                    );
+                }
+
+                if ($overlap['rows'] !== []) {
+                    $this->newLine();
+                    $this->info('## Overlap Details');
+                    $this->table(
+                        ['Tenant', 'Basis', 'Bucket', 'Rows 1C', 'Rows CSV', 'Sum 1C', 'Sum CSV', 'Diff', 'Status', 'Diagnostic', 'Subdiagnostic'],
+                        collect($overlap['rows'])->map(fn (array $row) => [
+                            $row['tenant_name'],
+                            $row['comparison_basis'],
+                            $row['bucket_label'],
+                            $row['rows_1c'],
+                            $row['rows_csv'],
+                            $this->formatMoney((float) $row['sum_1c']),
+                            $this->formatMoney((float) $row['sum_csv']),
+                            $this->formatMoney((float) $row['diff_sum']),
+                            $row['status'],
+                            $row['primary_diagnostic'],
+                            $row['secondary_diagnostic'] ?? '-',
+                        ])->all()
+                    );
+                }
+
+                if (($overlap['diagnostics']['reason_counts'] ?? []) !== []) {
+                    $this->newLine();
+                    $this->info('## Diagnostic Summary');
+                    $this->table(
+                        ['Diagnostic', 'Count'],
+                        collect($overlap['has_active_filters']
+                            ? ($overlap['diagnostics']['filtered_reason_counts'] ?? [])
+                            : ($overlap['diagnostics']['reason_counts'] ?? []))
+                            ->map(fn (array $row): array => [$row['diagnostic'], $row['count']])
+                            ->all()
+                    );
+                }
+
+                $secondarySummary = $overlap['has_active_filters']
+                    ? ($overlap['diagnostics']['filtered_secondary_counts'] ?? [])
+                    : ($overlap['diagnostics']['secondary_counts'] ?? []);
+
+                if ($secondarySummary !== []) {
+                    $this->newLine();
+                    $this->info('## Subdiagnostic Summary');
+                    $this->table(
+                        ['Subdiagnostic', 'Count'],
+                        collect($secondarySummary)
+                            ->map(fn (array $row): array => [$row['secondary_diagnostic'], $row['count']])
+                            ->all()
+                    );
+                }
+
+                if (($overlap['cutover']['class_counts'] ?? []) !== []) {
+                    $this->newLine();
+                    $this->info('## 1C Cutover Summary');
+                    $this->table(
+                        ['Metric', 'Value'],
+                        [
+                            ['Policy', (string) ($overlap['cutover']['policy'] ?? '1c_primary_csv_reference')],
+                            ['Ready for 1C-primary workflow', (($overlap['cutover']['ready_for_1c_primary'] ?? false) ? 'yes' : 'no')],
+                            ['Accepted Buckets', (int) ($overlap['cutover']['accepted_bucket_count'] ?? 0)],
+                            ['Reference-only Buckets', (int) ($overlap['cutover']['reference_only_bucket_count'] ?? 0)],
+                            ['Manual-review Buckets', (int) ($overlap['cutover']['manual_review_bucket_count'] ?? 0)],
+                            ['Blocker Buckets', (int) ($overlap['cutover']['blocker_bucket_count'] ?? 0)],
+                        ]
+                    );
+
+                    $this->newLine();
+                    $this->table(
+                        ['Cutover Class', 'Count'],
+                        collect($overlap['has_active_filters']
+                            ? ($overlap['cutover']['filtered_class_counts'] ?? [])
+                            : ($overlap['cutover']['class_counts'] ?? []))
+                            ->map(fn (array $row): array => [$row['cutover_class'], $row['count']])
+                            ->all()
+                    );
+
+                    $cutoverReasons = $overlap['has_active_filters']
+                        ? ($overlap['cutover']['filtered_reason_counts'] ?? [])
+                        : ($overlap['cutover']['reason_counts'] ?? []);
+
+                    if ($cutoverReasons !== []) {
+                        $this->newLine();
+                        $this->table(
+                            ['Cutover Reason', 'Count'],
+                            collect($cutoverReasons)
+                                ->map(fn (array $row): array => [$row['cutover_reason'], $row['count']])
+                                ->all()
+                        );
+                    }
+                }
+
+                $this->newLine();
+                $this->info('## Notes');
+                foreach ($this->notes() as $note) {
+                    $this->line($note);
+                }
+
+                return self::SUCCESS;
+            },
+        );
     }
 
     private function getSummary(int $marketId, string $periodDate, ?int $tenantId): array
@@ -334,14 +355,14 @@ class AccrualsReconcileCommand extends Command
 
         // Matched tenants (tenants that have accruals in both sources)
         $matchedTenants = DB::table('tenant_accruals as t1')
-            ->join('tenant_accruals as t2', function($join) use ($marketId, $periodDate) {
+            ->join('tenant_accruals as t2', function ($join) use ($marketId, $periodDate) {
                 $join->on('t1.tenant_id', '=', 't2.tenant_id')
-                     ->where('t1.market_id', '=', $marketId)
-                     ->where('t2.market_id', '=', $marketId)
-                     ->where('t1.period', '=', $periodDate)
-                     ->where('t2.period', '=', $periodDate)
-                     ->where('t1.source', '=', '1c')
-                     ->whereIn('t2.source', ['excel', 'csv']);
+                    ->where('t1.market_id', '=', $marketId)
+                    ->where('t2.market_id', '=', $marketId)
+                    ->where('t1.period', '=', $periodDate)
+                    ->where('t2.period', '=', $periodDate)
+                    ->where('t1.source', '=', '1c')
+                    ->whereIn('t2.source', ['excel', 'csv']);
             })
             ->select('t1.tenant_id')
             ->distinct();
@@ -357,12 +378,12 @@ class AccrualsReconcileCommand extends Command
             ->where('t1.market_id', $marketId)
             ->where('t1.period', $periodDate)
             ->where('t1.source', '1c')
-            ->whereNotIn('t1.tenant_id', function($q) use ($marketId, $periodDate) {
+            ->whereNotIn('t1.tenant_id', function ($q) use ($marketId, $periodDate) {
                 $q->select('tenant_id')
-                  ->from('tenant_accruals')
-                  ->where('market_id', $marketId)
-                  ->where('period', $periodDate)
-                  ->whereIn('source', ['excel', 'csv']);
+                    ->from('tenant_accruals')
+                    ->where('market_id', $marketId)
+                    ->where('period', $periodDate)
+                    ->whereIn('source', ['excel', 'csv']);
             });
 
         if ($tenantId) {
@@ -376,12 +397,12 @@ class AccrualsReconcileCommand extends Command
             ->where('t1.market_id', $marketId)
             ->where('t1.period', $periodDate)
             ->whereIn('t1.source', ['excel', 'csv'])
-            ->whereNotIn('t1.tenant_id', function($q) use ($marketId, $periodDate) {
+            ->whereNotIn('t1.tenant_id', function ($q) use ($marketId, $periodDate) {
                 $q->select('tenant_id')
-                  ->from('tenant_accruals')
-                  ->where('market_id', $marketId)
-                  ->where('period', $periodDate)
-                  ->where('source', '1c');
+                    ->from('tenant_accruals')
+                    ->where('market_id', $marketId)
+                    ->where('period', $periodDate)
+                    ->where('source', '1c');
             });
 
         if ($tenantId) {
@@ -432,8 +453,9 @@ class AccrualsReconcileCommand extends Command
             $query->limit($limit);
         }
 
-        return $query->get()->map(function($row) {
+        return $query->get()->map(function ($row) {
             $row->diff_sum = (float) $row->sum_1c - (float) $row->sum_csv;
+
             return $row;
         });
     }
@@ -592,7 +614,7 @@ class AccrualsReconcileCommand extends Command
 
     private function formatMoney(float $amount): string
     {
-        return number_format(abs($amount), 2, '.', ' ') . ($amount < 0 ? ' (-)' : '');
+        return number_format(abs($amount), 2, '.', ' ').($amount < 0 ? ' (-)' : '');
     }
 
     private function rowStatus(bool $ok): string
@@ -606,11 +628,11 @@ class AccrualsReconcileCommand extends Command
         $hasCsv = (int) $row->rows_csv > 0;
         $diffOk = abs((float) $row->diff_sum) < 0.01;
 
-        if (!$has1c && $hasCsv) {
+        if (! $has1c && $hasCsv) {
             return 'only_csv';
         }
 
-        if ($has1c && !$hasCsv) {
+        if ($has1c && ! $hasCsv) {
             return 'only_1c';
         }
 
@@ -830,19 +852,19 @@ class AccrualsReconcileCommand extends Command
 
         [$comparisonValue, $bucketLabel, $mapped] = match ($basis) {
             'contract' => $contractId > 0
-                ? [(string) $contractId, 'contract:' . $contractId, true]
-                : ['row:' . $rowId, 'contract:unmapped-row:' . $rowId, false],
+                ? [(string) $contractId, 'contract:'.$contractId, true]
+                : ['row:'.$rowId, 'contract:unmapped-row:'.$rowId, false],
             'market_space' => $spaceId > 0
-                ? [(string) $spaceId, 'market_space:' . $spaceId, true]
-                : ['row:' . $rowId, 'market_space:unmapped-row:' . $rowId, false],
+                ? [(string) $spaceId, 'market_space:'.$spaceId, true]
+                : ['row:'.$rowId, 'market_space:unmapped-row:'.$rowId, false],
             'place_code' => $normalizedCode !== ''
-                ? [$normalizedCode, 'place_code:' . $normalizedCode, true]
-                : ['row:' . $rowId, 'place_code:unmapped-row:' . $rowId, false],
+                ? [$normalizedCode, 'place_code:'.$normalizedCode, true]
+                : ['row:'.$rowId, 'place_code:unmapped-row:'.$rowId, false],
             'place_name' => $normalizedName !== ''
-                ? [$normalizedName, 'place_name:' . $normalizedName, true]
-                : ['row:' . $rowId, 'place_name:unmapped-row:' . $rowId, false],
-            'tenant' => [(string) $tenantId, 'tenant:' . $tenantId, true],
-            default => [(string) $tenantId, 'tenant:' . $tenantId, true],
+                ? [$normalizedName, 'place_name:'.$normalizedName, true]
+                : ['row:'.$rowId, 'place_name:unmapped-row:'.$rowId, false],
+            'tenant' => [(string) $tenantId, 'tenant:'.$tenantId, true],
+            default => [(string) $tenantId, 'tenant:'.$tenantId, true],
         };
 
         return [

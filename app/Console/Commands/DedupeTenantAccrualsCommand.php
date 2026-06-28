@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -49,58 +50,63 @@ class DedupeTenantAccrualsCommand extends Command
             return self::FAILURE;
         }
 
-        $periodDate = $period . '-01';
-        $rows = $this->loadRows($marketId, $periodDate, $tenantId);
-        $groups = $this->duplicateGroups($rows);
+        return app(MarketContext::class)->withMarket(
+            $marketId,
+            function () use ($marketId, $period, $tenantId, $limit, $apply, $backup, $json): int {
+                $periodDate = $period.'-01';
+                $rows = $this->loadRows($marketId, $periodDate, $tenantId);
+                $groups = $this->duplicateGroups($rows);
 
-        if ($limit > 0) {
-            $groups = $groups->take($limit)->values();
-        }
+                if ($limit > 0) {
+                    $groups = $groups->take($limit)->values();
+                }
 
-        $deleteIds = $groups
-            ->flatMap(fn (array $group): array => $group['delete_ids'])
-            ->values()
-            ->all();
+                $deleteIds = $groups
+                    ->flatMap(fn (array $group): array => $group['delete_ids'])
+                    ->values()
+                    ->all();
 
-        $deleted = 0;
+                $deleted = 0;
 
-        if ($apply && $deleteIds !== []) {
-            DB::transaction(function () use ($deleteIds, &$deleted): void {
-                $deleted = DB::table('tenant_accruals')
-                    ->whereIn('id', $deleteIds)
-                    ->delete();
-            });
-        }
+                if ($apply && $deleteIds !== []) {
+                    DB::transaction(function () use ($deleteIds, &$deleted): void {
+                        $deleted = DB::table('tenant_accruals')
+                            ->whereIn('id', $deleteIds)
+                            ->delete();
+                    });
+                }
 
-        $result = [
-            'settings' => [
-                'market_id' => $marketId,
-                'period' => $period,
-                'tenant_id' => $tenantId,
-                'mode' => $apply ? 'apply' : 'dry-run',
-                'backup' => $apply ? $backup : null,
-            ],
-            'stats' => [
-                'scanned_rows' => $rows->count(),
-                'duplicate_groups' => $groups->count(),
-                'duplicate_rows' => count($deleteIds),
-                'deleted_rows' => $deleted,
-            ],
-            'groups' => $groups->map(fn (array $group): array => [
-                'key' => $group['key'],
-                'keep_id' => $group['keep_id'],
-                'delete_ids' => $group['delete_ids'],
-                'row_count' => $group['row_count'],
-            ])->values()->all(),
-        ];
+                $result = [
+                    'settings' => [
+                        'market_id' => $marketId,
+                        'period' => $period,
+                        'tenant_id' => $tenantId,
+                        'mode' => $apply ? 'apply' : 'dry-run',
+                        'backup' => $apply ? $backup : null,
+                    ],
+                    'stats' => [
+                        'scanned_rows' => $rows->count(),
+                        'duplicate_groups' => $groups->count(),
+                        'duplicate_rows' => count($deleteIds),
+                        'deleted_rows' => $deleted,
+                    ],
+                    'groups' => $groups->map(fn (array $group): array => [
+                        'key' => $group['key'],
+                        'keep_id' => $group['keep_id'],
+                        'delete_ids' => $group['delete_ids'],
+                        'row_count' => $group['row_count'],
+                    ])->values()->all(),
+                ];
 
-        $this->line(json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+                $this->line(json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
-        if (! $json && ! $apply) {
-            $this->warn('Dry-run only. Re-run with --apply and --backup=/path/to/file.dump to delete duplicate rows.');
-        }
+                if (! $json && ! $apply) {
+                    $this->warn('Dry-run only. Re-run with --apply and --backup=/path/to/file.dump to delete duplicate rows.');
+                }
 
-        return self::SUCCESS;
+                return self::SUCCESS;
+            },
+        );
     }
 
     /**
