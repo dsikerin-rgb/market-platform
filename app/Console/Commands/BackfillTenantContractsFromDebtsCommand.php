@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\TenantContract;
+use App\Support\MarketContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -27,70 +28,77 @@ class BackfillTenantContractsFromDebtsCommand extends Command
         $includeTest = (bool) $this->option('include-test');
         $targetContractExternalId = trim((string) ($this->option('contract-external-id') ?? ''));
 
-        $candidates = $this->collectCandidates($marketId, $includeTest, $targetContractExternalId);
+        return app(MarketContext::class)->withMarket(
+            $marketId,
+            function () use ($marketId, $execute, $includeTest, $targetContractExternalId): int {
+                $candidates = $this->collectCandidates($marketId, $includeTest, $targetContractExternalId);
 
-        $stats = [
-            'market_id' => $marketId,
-            'mode' => $execute ? 'execute' : 'dry-run',
-            'candidates' => $candidates->count(),
-            'created' => 0,
-            'skipped' => 0,
-        ];
+                $stats = [
+                    'market_id' => $marketId,
+                    'mode' => $execute ? 'execute' : 'dry-run',
+                    'candidates' => $candidates->count(),
+                    'created' => 0,
+                    'skipped' => 0,
+                ];
 
-        $samples = [];
+                $samples = [];
 
-        foreach ($candidates as $candidate) {
-            $sample = [
-                'tenant_id' => (int) $candidate->tenant_id,
-                'tenant_name' => (string) $candidate->tenant_name,
-                'tenant_external_id' => (string) $candidate->tenant_external_id,
-                'contract_external_id' => (string) $candidate->contract_external_id,
-                'number' => $this->makePlaceholderNumber((string) $candidate->contract_external_id),
-                'starts_at' => (string) $candidate->first_period_start,
-                'source' => 'contract_debts',
-            ];
+                foreach ($candidates as $candidate) {
+                    $sample = [
+                        'tenant_id' => (int) $candidate->tenant_id,
+                        'tenant_name' => (string) $candidate->tenant_name,
+                        'tenant_external_id' => (string) $candidate->tenant_external_id,
+                        'contract_external_id' => (string) $candidate->contract_external_id,
+                        'number' => $this->makePlaceholderNumber((string) $candidate->contract_external_id),
+                        'starts_at' => (string) $candidate->first_period_start,
+                        'source' => 'contract_debts',
+                    ];
 
-            if (! $execute) {
-                $samples[] = $sample;
-                continue;
-            }
+                    if (! $execute) {
+                        $samples[] = $sample;
 
-            $exists = TenantContract::query()
-                ->where('market_id', $marketId)
-                ->where('external_id', (string) $candidate->contract_external_id)
-                ->exists();
+                        continue;
+                    }
 
-            if ($exists) {
-                $stats['skipped']++;
-                continue;
-            }
+                    $exists = TenantContract::query()
+                        ->where('market_id', $marketId)
+                        ->where('external_id', (string) $candidate->contract_external_id)
+                        ->exists();
 
-            $contract = new TenantContract();
-            $contract->market_id = $marketId;
-            $contract->tenant_id = (int) $candidate->tenant_id;
-            $contract->external_id = (string) $candidate->contract_external_id;
-            $contract->number = $this->makePlaceholderNumber((string) $candidate->contract_external_id);
-            $contract->status = 'active';
-            $contract->starts_at = CarbonImmutable::parse((string) $candidate->first_period_start)->toDateString();
-            $contract->ends_at = null;
-            $contract->signed_at = null;
-            $contract->monthly_rent = null;
-            $contract->currency = null;
-            $contract->is_active = true;
-            $contract->notes = 'Создано автоматически из выгрузки задолженности 1С: карточка договора не пришла в import contracts.';
-            $contract->space_mapping_mode = TenantContract::SPACE_MAPPING_MODE_AUTO;
-            $contract->save();
+                    if ($exists) {
+                        $stats['skipped']++;
 
-            $stats['created']++;
-            $samples[] = $sample + ['tenant_contract_id' => (int) $contract->id];
-        }
+                        continue;
+                    }
 
-        $this->line(json_encode([
-            'stats' => $stats,
-            'samples' => $samples,
-        ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+                    $contract = new TenantContract;
+                    $contract->market_id = $marketId;
+                    $contract->tenant_id = (int) $candidate->tenant_id;
+                    $contract->external_id = (string) $candidate->contract_external_id;
+                    $contract->number = $this->makePlaceholderNumber((string) $candidate->contract_external_id);
+                    $contract->status = 'active';
+                    $contract->starts_at = CarbonImmutable::parse((string) $candidate->first_period_start)->toDateString();
+                    $contract->ends_at = null;
+                    $contract->signed_at = null;
+                    $contract->monthly_rent = null;
+                    $contract->currency = null;
+                    $contract->is_active = true;
+                    $contract->notes = 'Создано автоматически из выгрузки задолженности 1С: карточка договора не пришла в import contracts.';
+                    $contract->space_mapping_mode = TenantContract::SPACE_MAPPING_MODE_AUTO;
+                    $contract->save();
 
-        return self::SUCCESS;
+                    $stats['created']++;
+                    $samples[] = $sample + ['tenant_contract_id' => (int) $contract->id];
+                }
+
+                $this->line(json_encode([
+                    'stats' => $stats,
+                    'samples' => $samples,
+                ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+                return self::SUCCESS;
+            },
+        );
     }
 
     /**
@@ -148,6 +156,6 @@ class BackfillTenantContractsFromDebtsCommand extends Command
 
     private function makePlaceholderNumber(string $contractExternalId): string
     {
-        return mb_substr('[1С долг] ' . $contractExternalId, 0, 50);
+        return mb_substr('[1С долг] '.$contractExternalId, 0, 50);
     }
 }

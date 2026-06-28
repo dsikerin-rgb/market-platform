@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Services\Debt\DebtDecisionPolicy;
 use App\Services\Debt\DebtDecisionPreviewReport;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Schema;
 
@@ -52,34 +53,38 @@ class DraftDebtDecisionsCommand extends Command
             return self::FAILURE;
         }
 
-        if (! Schema::hasTable('tenant_settlement_balances')) {
-            $this->line(json_encode([
-                'error' => 'tenant_settlement_balances table is missing',
-            ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        return app(MarketContext::class)->withMarket(
+            $marketId,
+            function () use ($marketId, $account, $limit, $statusFilter, $onlyMismatches, $agingPolicy, $report): int {
+                if (! Schema::hasTable('tenant_settlement_balances')) {
+                    $this->line(json_encode([
+                        'error' => 'tenant_settlement_balances table is missing',
+                    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
-            return self::FAILURE;
-        }
+                    return self::FAILURE;
+                }
 
-        $result = $report->build(
-            marketId: $marketId,
-            account: $account,
-            agingPolicy: $agingPolicy,
-            currentStatusFilter: $statusFilter !== '' ? $statusFilter : null,
-            onlyMismatches: $onlyMismatches,
+                $result = $report->build(
+                    marketId: $marketId,
+                    account: $account,
+                    agingPolicy: $agingPolicy,
+                    currentStatusFilter: $statusFilter !== '' ? $statusFilter : null,
+                    onlyMismatches: $onlyMismatches,
+                );
+
+                $payload = [
+                    'summary' => $result['summary'],
+                    'samples' => array_slice($result['rows'], 0, $limit),
+                ];
+
+                if (! (bool) $this->option('json')) {
+                    $this->info('Read-only draft. No database rows were changed.');
+                }
+
+                $this->line(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
+                return self::SUCCESS;
+            },
         );
-
-        $payload = [
-            'summary' => $result['summary'],
-            'samples' => array_slice($result['rows'], 0, $limit),
-        ];
-
-        if (! (bool) $this->option('json')) {
-            $this->info('Read-only draft. No database rows were changed.');
-        }
-
-        $this->line(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-
-        return self::SUCCESS;
     }
-
 }
