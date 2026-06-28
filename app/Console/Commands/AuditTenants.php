@@ -2,8 +2,9 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Tenant;
+use App\Support\MarketContext;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 class AuditTenants extends Command
@@ -16,10 +17,22 @@ class AuditTenants extends Command
 
     public function handle(): int
     {
-        $this->info('--- Tenants Audit ---');
-
         $marketId = $this->resolveMarketId();
         $limit = max(1, (int) $this->option('limit'));
+
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->auditTenants($marketId, $limit),
+            );
+        }
+
+        return $this->auditTenants(null, $limit);
+    }
+
+    private function auditTenants(?int $marketId, int $limit): int
+    {
+        $this->info('--- Tenants Audit ---');
 
         $total = Tenant::query()
             ->when($marketId !== null, fn ($q) => $q->where('market_id', $marketId))
@@ -102,7 +115,7 @@ class AuditTenants extends Command
         $groups = DB::select($sql, $bindings);
 
         $this->line('');
-        $this->info($title . ': ' . count($groups));
+        $this->info($title.': '.count($groups));
 
         if ($groups === []) {
             return;
