@@ -11,12 +11,46 @@ use Illuminate\Support\Facades\Log;
 
 class SyncMarketHolidays extends Command
 {
-    protected $signature = 'market:holidays:sync {--from=} {--to=} {--market_id=}';
+    protected $signature = 'market:holidays:sync
+        {--from= : Start date}
+        {--to= : End date}
+        {--market_id= : Market id}
+        {--all-markets : Allow --execute to affect every market}
+        {--dry-run : Run in dry-run mode}
+        {--execute : Upsert holidays from CSV (default: dry-run)}';
 
     protected $description = 'Синхронизация праздников рынка из CSV файла.';
 
     public function handle(): int
     {
+        $marketId = $this->marketIdOption();
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($marketId === false) {
+            $this->error('Market ID must be a positive integer.');
+
+            return Command::FAILURE;
+        }
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return Command::FAILURE;
+        }
+
+        if ($execute && $marketId !== null && (bool) $this->option('all-markets')) {
+            $this->error('Use either --market_id or --all-markets with --execute, not both.');
+
+            return Command::FAILURE;
+        }
+
+        if ($execute && $marketId === null && ! (bool) $this->option('all-markets')) {
+            $this->error('Market ID is required with --execute. Use --market_id=1 or --all-markets.');
+
+            return Command::FAILURE;
+        }
+
         $from = $this->option('from');
         $to = $this->option('to');
 
@@ -45,7 +79,7 @@ class SyncMarketHolidays extends Command
             return Command::SUCCESS;
         }
 
-        $marketIds = $this->resolveMarketIds();
+        $marketIds = $this->resolveMarketIds($marketId);
 
         if (empty($marketIds)) {
             $this->warn('Нет рынков для синхронизации.');
@@ -56,7 +90,7 @@ class SyncMarketHolidays extends Command
         $totalUpserts = 0;
 
         foreach ($marketIds as $marketId) {
-            $totalUpserts += app(MarketContext::class)->withMarket((int) $marketId, function () use ($marketId, $rows, $fromDate, $toDate): int {
+            $totalUpserts += app(MarketContext::class)->withMarket((int) $marketId, function () use ($marketId, $rows, $fromDate, $toDate, $dryRun): int {
                 $market = Market::query()->select(['id', 'settings'])->find($marketId);
 
                 if (! $market) {
@@ -108,11 +142,13 @@ class SyncMarketHolidays extends Command
                     return 0;
                 }
 
-                MarketHoliday::query()->upsert(
-                    $payload,
-                    ['market_id', 'title', 'starts_at'],
-                    ['ends_at', 'all_day', 'description', 'notify_before_days', 'notify_at', 'source', 'updated_at']
-                );
+                if (! $dryRun) {
+                    MarketHoliday::query()->upsert(
+                        $payload,
+                        ['market_id', 'title', 'starts_at'],
+                        ['ends_at', 'all_day', 'description', 'notify_before_days', 'notify_at', 'source', 'updated_at']
+                    );
+                }
 
                 return count($payload);
             });
@@ -126,7 +162,14 @@ class SyncMarketHolidays extends Command
                 'to' => $toDate->toDateString(),
             ]);
         } else {
-            $this->info(sprintf('Праздники синхронизированы: %d записей.', $totalUpserts));
+            $this->info(sprintf(
+                $dryRun ? 'Would synchronize holidays: %d records.' : 'Праздники синхронизированы: %d записей.',
+                $totalUpserts
+            ));
+        }
+
+        if ($dryRun) {
+            $this->warn('DRY RUN: no holidays were upserted. Use --execute --market_id=... or --execute --all-markets to apply.');
         }
 
         return Command::SUCCESS;
@@ -135,17 +178,28 @@ class SyncMarketHolidays extends Command
     /**
      * @return list<int>
      */
-    private function resolveMarketIds(): array
+    private function resolveMarketIds(?int $marketId): array
     {
-        $marketId = $this->option('market_id');
-
-        if (filled($marketId)) {
-            return [
-                (int) $marketId,
-            ];
+        if ($marketId !== null) {
+            return [$marketId];
         }
 
         return Market::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    private function marketIdOption(): int|false|null
+    {
+        $value = $this->option('market_id');
+
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        $marketId = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        return is_int($marketId) ? $marketId : false;
     }
 
     /**

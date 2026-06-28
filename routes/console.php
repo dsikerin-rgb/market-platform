@@ -12,15 +12,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command('tasks:send-reminders --execute')->daily();
 
-Schedule::call(function () {
-    $from = now()->toDateString();
-    $to = now()->addDays(365)->toDateString();
-
-    Artisan::call('market:holidays:sync', [
-        '--from' => $from,
-        '--to' => $to,
-    ]);
-})->dailyAt('03:10');
+Schedule::command('market:holidays:sync --execute --all-markets')->dailyAt('03:10')->withoutOverlapping();
 
 Schedule::command('market:calendar:generate-sanitary --execute --all-markets')->dailyAt('03:15')->withoutOverlapping();
 Schedule::command('market:calendar:generate-tasks --execute --all-markets')->everyThirtyMinutes()->withoutOverlapping();
