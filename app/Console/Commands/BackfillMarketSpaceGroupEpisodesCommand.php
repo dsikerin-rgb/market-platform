@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Models\MarketSpace;
 use App\Models\MarketSpaceGroupEpisode;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,23 @@ class BackfillMarketSpaceGroupEpisodesCommand extends Command
         $includeInactive = (bool) $this->option('include-inactive');
         $apply = (bool) $this->option('apply');
 
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->backfillGroupEpisodes($marketId, $validFrom, $previewLimit, $includeInactive, $apply),
+            );
+        }
+
+        return $this->backfillGroupEpisodes(null, $validFrom, $previewLimit, $includeInactive, $apply);
+    }
+
+    private function backfillGroupEpisodes(
+        ?int $marketId,
+        Carbon $validFrom,
+        int $previewLimit,
+        bool $includeInactive,
+        bool $apply,
+    ): int {
         $stats = [
             'mode' => $apply ? 'apply' : 'dry-run',
             'market_id' => $marketId,
