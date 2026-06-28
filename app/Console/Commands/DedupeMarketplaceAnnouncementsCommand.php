@@ -5,30 +5,63 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\MarketplaceAnnouncement;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class DedupeMarketplaceAnnouncementsCommand extends Command
 {
     protected $signature = 'marketplace:announcements:dedupe
         {--market= : Market id}
-        {--dry-run : Only show what would be deleted}';
+        {--dry-run : Run in dry-run mode}
+        {--execute : Delete duplicate rows (default: dry-run)}';
 
     protected $description = 'Remove duplicate marketplace announcements by market/kind/title/start-date';
 
     public function handle(): int
     {
-        $marketId = $this->option('market');
-        $dryRun = (bool) $this->option('dry-run');
+        $marketId = $this->marketIdOption();
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($marketId === false) {
+            $this->error('Market ID must be a positive integer.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && $marketId === null) {
+            $this->error('Market ID is required with --execute. Use --market=1.');
+
+            return self::FAILURE;
+        }
+
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->dedupeAnnouncements($marketId, $dryRun),
+            );
+        }
+
+        return $this->dedupeAnnouncements(null, $dryRun);
+    }
+
+    private function dedupeAnnouncements(?int $marketId, bool $dryRun): int
+    {
 
         $query = MarketplaceAnnouncement::query()
             ->selectRaw('market_id, kind, title, DATE(starts_at) as starts_on, COUNT(*) as duplicate_count')
             ->groupBy('market_id', 'kind', 'title', 'starts_on')
             ->havingRaw('COUNT(*) > 1');
 
-        if (is_numeric($marketId)) {
-            $query->where('market_id', (int) $marketId);
+        if ($marketId !== null) {
+            $query->where('market_id', $marketId);
         }
 
         /** @var Collection<int, object> $groups */
@@ -36,6 +69,7 @@ class DedupeMarketplaceAnnouncementsCommand extends Command
 
         if ($groups->isEmpty()) {
             $this->info('No duplicates found.');
+
             return self::SUCCESS;
         }
 
@@ -87,6 +121,25 @@ class DedupeMarketplaceAnnouncementsCommand extends Command
             $totalDeleted,
         ));
 
+        if ($dryRun) {
+            $this->warn('DRY RUN: no changes applied. Use --execute --market=... to delete duplicate rows.');
+        }
+
         return self::SUCCESS;
+    }
+
+    private function marketIdOption(): int|false|null
+    {
+        $value = $this->option('market');
+
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        $marketId = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        return is_int($marketId) ? $marketId : false;
     }
 }
