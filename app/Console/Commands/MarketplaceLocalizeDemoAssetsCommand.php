@@ -8,22 +8,41 @@ use App\Models\Market;
 use App\Models\MarketplaceProduct;
 use App\Models\TenantShowcase;
 use App\Models\TenantSpaceShowcase;
+use App\Support\MarketContext;
 use App\Support\MarketplaceDemoAssetLocalizer;
 use App\Support\MarketplaceMediaStorage;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class MarketplaceLocalizeDemoAssetsCommand extends Command
 {
     protected $signature = 'marketplace:localize-demo-assets
         {--market= : Market id or slug}
-        {--limit=0 : Optional max demo products per market to process}';
+        {--limit=0 : Optional max demo products per market to process}
+        {--dry-run : Run in dry-run mode}
+        {--execute : Localize demo assets and update records (default: dry-run)}';
 
     protected $description = 'Localize existing demo product and showcase images into marketplace storage';
 
     public function handle(): int
     {
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && trim((string) $this->option('market')) === '') {
+            $this->error('Market ID or slug is required with --execute. Use --market=1.');
+
+            return self::FAILURE;
+        }
+
         $markets = $this->resolveMarkets();
         if ($markets->isEmpty()) {
             $this->warn('No active markets found for demo asset localization.');
@@ -37,19 +56,38 @@ class MarketplaceLocalizeDemoAssetsCommand extends Command
             $this->line('');
             $this->info(sprintf('Market: %s (#%d)', $market->name, (int) $market->id));
 
-            $productsUpdated = $this->localizeDemoProducts($market, $limit);
-            $showcasesUpdated = $this->localizeTenantShowcases($market);
-            $spaceShowcasesUpdated = $this->localizeSpaceShowcases($market);
+            $stats = app(MarketContext::class)->withMarket(
+                (int) $market->id,
+                fn (): array => $this->localizeMarketDemoAssets($market, $limit, $dryRun),
+            );
 
-            $this->line("  demo products updated: {$productsUpdated}");
-            $this->line("  tenant showcases updated: {$showcasesUpdated}");
-            $this->line("  space showcases updated: {$spaceShowcasesUpdated}");
+            $this->line(sprintf(
+                '  demo products %s: %d',
+                $dryRun ? 'would update' : 'updated',
+                $stats['products'],
+            ));
+            $this->line(sprintf(
+                '  tenant showcases %s: %d',
+                $dryRun ? 'would update' : 'updated',
+                $stats['tenant_showcases'],
+            ));
+            $this->line(sprintf(
+                '  space showcases %s: %d',
+                $dryRun ? 'would update' : 'updated',
+                $stats['space_showcases'],
+            ));
         }
 
-        MarketplaceMediaStorage::normalizeLocalPublicTreePermissions((string) config('marketplace.demo_assets.directory', 'marketplace-demo-assets'));
+        if (! $dryRun) {
+            MarketplaceMediaStorage::normalizeLocalPublicTreePermissions((string) config('marketplace.demo_assets.directory', 'marketplace-demo-assets'));
+        }
 
         $this->line('');
-        $this->info('Demo asset localization completed.');
+        $this->info($dryRun ? 'Demo asset localization dry-run completed.' : 'Demo asset localization completed.');
+
+        if ($dryRun) {
+            $this->warn('DRY RUN: no files or records were changed. Use --execute --market=... to apply.');
+        }
 
         return self::SUCCESS;
     }
@@ -74,7 +112,19 @@ class MarketplaceLocalizeDemoAssetsCommand extends Command
         return $query->get();
     }
 
-    private function localizeDemoProducts(Market $market, int $limit): int
+    /**
+     * @return array{products:int,tenant_showcases:int,space_showcases:int}
+     */
+    private function localizeMarketDemoAssets(Market $market, int $limit, bool $dryRun): array
+    {
+        return [
+            'products' => $this->localizeDemoProducts($market, $limit, $dryRun),
+            'tenant_showcases' => $this->localizeTenantShowcases($market, $dryRun),
+            'space_showcases' => $this->localizeSpaceShowcases($market, $dryRun),
+        ];
+    }
+
+    private function localizeDemoProducts(Market $market, int $limit, bool $dryRun): int
     {
         $updated = 0;
 
@@ -104,23 +154,32 @@ class MarketplaceLocalizeDemoAssetsCommand extends Command
                 $profileKey = 'default';
             }
 
-            $localizedImages = $images
-                ->map(fn (string $path): string => MarketplaceDemoAssetLocalizer::localize($path, 'products/' . $profileKey))
-                ->values()
-                ->all();
+            $localizedImages = $dryRun
+                ? $images->all()
+                : $images
+                    ->map(fn (string $path): string => MarketplaceDemoAssetLocalizer::localize($path, 'products/'.$profileKey))
+                    ->values()
+                    ->all();
 
-            if ($localizedImages === $images->all()) {
+            if ($dryRun && ! $this->hasLocalizableSource($images)) {
                 continue;
             }
 
-            $product->forceFill(['images' => $localizedImages])->save();
+            if (! $dryRun && $localizedImages === $images->all()) {
+                continue;
+            }
+
+            if (! $dryRun) {
+                $product->forceFill(['images' => $localizedImages])->save();
+            }
+
             $updated++;
         }
 
         return $updated;
     }
 
-    private function localizeTenantShowcases(Market $market): int
+    private function localizeTenantShowcases(Market $market, bool $dryRun): int
     {
         $updated = 0;
 
@@ -130,7 +189,7 @@ class MarketplaceLocalizeDemoAssetsCommand extends Command
                 $query->where('market_id', (int) $market->id);
             })
             ->orderBy('id')
-            ->chunkById(50, function (Collection $showcases) use (&$updated): void {
+            ->chunkById(50, function (Collection $showcases) use (&$updated, $dryRun): void {
                 foreach ($showcases as $showcase) {
                     $photos = collect($showcase->photos ?? [])
                         ->filter(static fn ($path): bool => is_string($path) && trim($path) !== '')
@@ -140,16 +199,25 @@ class MarketplaceLocalizeDemoAssetsCommand extends Command
                         continue;
                     }
 
-                    $localizedPhotos = $photos
-                        ->map(fn (string $path): string => MarketplaceDemoAssetLocalizer::localize($path, 'showcases/tenant'))
-                        ->values()
-                        ->all();
+                    $localizedPhotos = $dryRun
+                        ? $photos->all()
+                        : $photos
+                            ->map(fn (string $path): string => MarketplaceDemoAssetLocalizer::localize($path, 'showcases/tenant'))
+                            ->values()
+                            ->all();
 
-                    if ($localizedPhotos === $photos->all()) {
+                    if ($dryRun && ! $this->hasLocalizableSource($photos)) {
                         continue;
                     }
 
-                    $showcase->forceFill(['photos' => $localizedPhotos])->save();
+                    if (! $dryRun && $localizedPhotos === $photos->all()) {
+                        continue;
+                    }
+
+                    if (! $dryRun) {
+                        $showcase->forceFill(['photos' => $localizedPhotos])->save();
+                    }
+
                     $updated++;
                 }
             });
@@ -157,7 +225,7 @@ class MarketplaceLocalizeDemoAssetsCommand extends Command
         return $updated;
     }
 
-    private function localizeSpaceShowcases(Market $market): int
+    private function localizeSpaceShowcases(Market $market, bool $dryRun): int
     {
         $updated = 0;
 
@@ -165,7 +233,7 @@ class MarketplaceLocalizeDemoAssetsCommand extends Command
             ->where('market_id', (int) $market->id)
             ->where('is_demo', true)
             ->orderBy('id')
-            ->chunkById(50, function (Collection $showcases) use (&$updated): void {
+            ->chunkById(50, function (Collection $showcases) use (&$updated, $dryRun): void {
                 foreach ($showcases as $showcase) {
                     $photos = collect($showcase->photos ?? [])
                         ->filter(static fn ($path): bool => is_string($path) && trim($path) !== '')
@@ -175,20 +243,43 @@ class MarketplaceLocalizeDemoAssetsCommand extends Command
                         continue;
                     }
 
-                    $localizedPhotos = $photos
-                        ->map(fn (string $path): string => MarketplaceDemoAssetLocalizer::localize($path, 'showcases/space'))
-                        ->values()
-                        ->all();
+                    $localizedPhotos = $dryRun
+                        ? $photos->all()
+                        : $photos
+                            ->map(fn (string $path): string => MarketplaceDemoAssetLocalizer::localize($path, 'showcases/space'))
+                            ->values()
+                            ->all();
 
-                    if ($localizedPhotos === $photos->all()) {
+                    if ($dryRun && ! $this->hasLocalizableSource($photos)) {
                         continue;
                     }
 
-                    $showcase->forceFill(['photos' => $localizedPhotos])->save();
+                    if (! $dryRun && $localizedPhotos === $photos->all()) {
+                        continue;
+                    }
+
+                    if (! $dryRun) {
+                        $showcase->forceFill(['photos' => $localizedPhotos])->save();
+                    }
+
                     $updated++;
                 }
             });
 
         return $updated;
+    }
+
+    /**
+     * @param  Collection<int, string>  $paths
+     */
+    private function hasLocalizableSource(Collection $paths): bool
+    {
+        if (! (bool) config('marketplace.demo_assets.localize', false)) {
+            return false;
+        }
+
+        return $paths->contains(
+            static fn (string $path): bool => Str::startsWith(trim($path), ['http://', 'https://', '/'])
+        );
     }
 }
