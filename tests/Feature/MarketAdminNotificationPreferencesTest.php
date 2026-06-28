@@ -52,7 +52,10 @@ class MarketAdminNotificationPreferencesTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->artisan('notifications:limit-market-admins-to-messages')
+        $this->artisan('notifications:limit-market-admins-to-messages', [
+            '--market' => (int) $market->id,
+            '--execute' => true,
+        ])
             ->assertExitCode(0);
 
         $admin->refresh();
