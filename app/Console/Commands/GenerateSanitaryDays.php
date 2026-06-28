@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Models\Market;
 use App\Models\MarketHoliday;
+use App\Support\MarketContext;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -35,51 +36,53 @@ class GenerateSanitaryDays extends Command
 
         $rowsTotal = 0;
         foreach ($marketIds as $marketId) {
-            $market = Market::query()->select(['id', 'settings'])->find($marketId);
-            if (! $market) {
-                continue;
-            }
-
-            $settings = (array) ($market->settings ?? []);
-            $notifyBeforeDays = $this->resolveNotifyBeforeDays($settings);
-
-            $rows = [];
-            $cursor = $fromDate->copy()->startOfMonth();
-            $endMonth = $toDate->copy()->startOfMonth();
-
-            while ($cursor->lessThanOrEqualTo($endMonth)) {
-                $firstMonday = $cursor->copy()->firstOfMonth(Carbon::MONDAY)->startOfDay();
-                if ($firstMonday->betweenIncluded($fromDate, $toDate)) {
-                    $rows[] = [
-                        'market_id' => (int) $market->id,
-                        'title' => 'Санитарный день',
-                        'starts_at' => $firstMonday->toDateString(),
-                        'ends_at' => null,
-                        'all_day' => true,
-                        'description' => 'Плановый санитарный день (первый понедельник месяца).',
-                        'notify_before_days' => $notifyBeforeDays,
-                        'notify_at' => $firstMonday->copy()->subDays($notifyBeforeDays)->startOfDay(),
-                        'source' => 'sanitary_auto',
-                        'audience_scope' => 'staff',
-                        'updated_at' => now(),
-                        'created_at' => now(),
-                    ];
+            $rowsTotal += app(MarketContext::class)->withMarket((int) $marketId, function () use ($marketId, $fromDate, $toDate): int {
+                $market = Market::query()->select(['id', 'settings'])->find($marketId);
+                if (! $market) {
+                    return 0;
                 }
 
-                $cursor->addMonth();
-            }
+                $settings = (array) ($market->settings ?? []);
+                $notifyBeforeDays = $this->resolveNotifyBeforeDays($settings);
 
-            if ($rows === []) {
-                continue;
-            }
+                $rows = [];
+                $cursor = $fromDate->copy()->startOfMonth();
+                $endMonth = $toDate->copy()->startOfMonth();
 
-            MarketHoliday::query()->upsert(
-                $rows,
-                ['market_id', 'title', 'starts_at'],
-                ['ends_at', 'all_day', 'description', 'notify_before_days', 'notify_at', 'source', 'audience_scope', 'updated_at']
-            );
+                while ($cursor->lessThanOrEqualTo($endMonth)) {
+                    $firstMonday = $cursor->copy()->firstOfMonth(Carbon::MONDAY)->startOfDay();
+                    if ($firstMonday->betweenIncluded($fromDate, $toDate)) {
+                        $rows[] = [
+                            'market_id' => (int) $market->id,
+                            'title' => 'Санитарный день',
+                            'starts_at' => $firstMonday->toDateString(),
+                            'ends_at' => null,
+                            'all_day' => true,
+                            'description' => 'Плановый санитарный день (первый понедельник месяца).',
+                            'notify_before_days' => $notifyBeforeDays,
+                            'notify_at' => $firstMonday->copy()->subDays($notifyBeforeDays)->startOfDay(),
+                            'source' => 'sanitary_auto',
+                            'audience_scope' => 'staff',
+                            'updated_at' => now(),
+                            'created_at' => now(),
+                        ];
+                    }
 
-            $rowsTotal += count($rows);
+                    $cursor->addMonth();
+                }
+
+                if ($rows === []) {
+                    return 0;
+                }
+
+                MarketHoliday::query()->upsert(
+                    $rows,
+                    ['market_id', 'title', 'starts_at'],
+                    ['ends_at', 'all_day', 'description', 'notify_before_days', 'notify_at', 'source', 'audience_scope', 'updated_at']
+                );
+
+                return count($rows);
+            });
         }
 
         $this->info(sprintf('Санитарные дни синхронизированы: %d записей.', $rowsTotal));
@@ -118,7 +121,7 @@ class GenerateSanitaryDays extends Command
     }
 
     /**
-     * @param array<string,mixed> $settings
+     * @param  array<string,mixed>  $settings
      */
     private function resolveNotifyBeforeDays(array $settings): int
     {

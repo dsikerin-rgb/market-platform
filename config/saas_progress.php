@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Подготовить jobs/commands к MarketContext без включения tenant scope; первый набор 1C finance commands заворачивается в context из явного market_id.',
-    'next_step' => 'Проверить scheduler/queue сценарии и оставшиеся массовые команды, затем расширить smoke matrix для jobs.',
+    'current_focus' => 'Подготовить jobs/commands к MarketContext без включения tenant scope; после первого набора 1C finance commands переводятся scheduled calendar/snapshot commands.',
+    'next_step' => 'Проверить оставшиеся массовые команды и фоновые сценарии, затем расширить smoke matrix для jobs.',
     'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
         [
@@ -85,8 +85,8 @@ return [
                 ['title' => 'Dashboard/widgets/Livewire используют единый context: 17 widget + Dashboard page read/write sync + MarketSwitcherWidget sync + StaffLiveFeed + OnlineStaffRail + QuickChatDrawer переведены', 'status' => 'in_progress'],
                 ['title' => 'Карта рынка использует тот же market_id: MapReviewResults + основной экран карты + review Blade partials + AppServiceProvider map-review routes переведены', 'status' => 'done'],
                 ['title' => '1C API выставляет context из integration token: payments + settlements + contract debts + contracts + accruals endpoints подготовлены', 'status' => 'done'],
-                ['title' => 'Jobs/commands получают market_id явно: первый набор 1C finance commands подготовлен', 'status' => 'in_progress'],
-                ['title' => 'Smoke matrix для UI/API/jobs: regression guards для API и первого набора 1C commands добавлены', 'status' => 'in_progress'],
+                ['title' => 'Jobs/commands получают market_id явно: 1C finance commands и scheduled calendar/snapshot commands подготовлены', 'status' => 'in_progress'],
+                ['title' => 'Smoke matrix для UI/API/jobs: regression guards для API, 1C commands и scheduled commands добавлены', 'status' => 'in_progress'],
             ],
         ],
         [
