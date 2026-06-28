@@ -22,7 +22,7 @@ Schedule::call(function () {
     ]);
 })->dailyAt('03:10');
 
-Schedule::command('market:calendar:generate-sanitary')->dailyAt('03:15')->withoutOverlapping();
+Schedule::command('market:calendar:generate-sanitary --execute --all-markets')->dailyAt('03:15')->withoutOverlapping();
 Schedule::command('market:calendar:generate-tasks')->everyThirtyMinutes()->withoutOverlapping();
 Schedule::command('market:holidays:notify')->everyThirtyMinutes();
 Schedule::command('operations:rebuild-space-snapshots')->everyThirtyMinutes()->withoutOverlapping();
