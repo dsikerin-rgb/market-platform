@@ -1,5 +1,6 @@
 <?php
-# app/Console/Commands/BackfillMarketSpaceGroupsCommand.php
+
+// app/Console/Commands/BackfillMarketSpaceGroupsCommand.php
 
 declare(strict_types=1);
 
@@ -7,6 +8,7 @@ namespace App\Console\Commands;
 
 use App\Models\MarketSpace;
 use App\Services\MarketSpaces\SpaceGroupResolver;
+use App\Support\MarketContext;
 use Illuminate\Console\Command;
 
 class BackfillMarketSpaceGroupsCommand extends Command
@@ -20,12 +22,25 @@ class BackfillMarketSpaceGroupsCommand extends Command
 
     public function handle(SpaceGroupResolver $resolver): int
     {
-        $marketId = $this->option('market');
+        $rawMarketId = $this->option('market');
+        $marketId = filled($rawMarketId) ? (int) $rawMarketId : null;
         $limit = max(1, (int) $this->option('limit'));
         $execute = (bool) $this->option('execute');
 
+        if ($marketId !== null) {
+            return app(MarketContext::class)->withMarket(
+                $marketId,
+                fn (): int => $this->backfillGroups($resolver, $marketId, $limit, $execute),
+            );
+        }
+
+        return $this->backfillGroups($resolver, null, $limit, $execute);
+    }
+
+    private function backfillGroups(SpaceGroupResolver $resolver, ?int $marketId, int $limit, bool $execute): int
+    {
         $query = MarketSpace::query()
-            ->when(filled($marketId), fn ($query) => $query->where('market_id', (int) $marketId))
+            ->when($marketId !== null, fn ($query) => $query->where('market_id', $marketId))
             ->orderBy('id');
 
         $matched = 0;
@@ -61,8 +76,8 @@ class BackfillMarketSpaceGroupsCommand extends Command
                     $examples[] = [
                         'id' => (int) $space->id,
                         'number' => (string) $space->number,
-                        'from' => trim((string) ($space->space_group_token ?? '')) . ' / ' . trim((string) ($space->space_group_slot ?? '')) . ' / ' . ($space->space_group_role ?? 'null'),
-                        'to' => $groupToken . ' / ' . $groupSegments . ' / ' . $spaceGroupRole,
+                        'from' => trim((string) ($space->space_group_token ?? '')).' / '.trim((string) ($space->space_group_slot ?? '')).' / '.($space->space_group_role ?? 'null'),
+                        'to' => $groupToken.' / '.$groupSegments.' / '.$spaceGroupRole,
                     ];
                 }
 
@@ -76,8 +91,8 @@ class BackfillMarketSpaceGroupsCommand extends Command
             }
         });
 
-        $this->info('Распознано мест по шаблону: ' . $matched);
-        $this->info(($execute ? 'Изменено' : 'К изменению') . ': ' . $changed);
+        $this->info('Распознано мест по шаблону: '.$matched);
+        $this->info(($execute ? 'Изменено' : 'К изменению').': '.$changed);
 
         if ($examples !== []) {
             $this->newLine();
