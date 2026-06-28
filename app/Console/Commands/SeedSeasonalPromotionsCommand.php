@@ -6,6 +6,7 @@ namespace App\Console\Commands;
 
 use App\Models\Market;
 use App\Models\MarketHoliday;
+use App\Support\MarketContext;
 use App\Support\MarketplaceAnnouncementImageCatalog;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -15,6 +16,9 @@ class SeedSeasonalPromotionsCommand extends Command
 {
     protected $signature = 'market:holidays:seed-promotions
         {--market= : Market id or slug}
+        {--all-markets : Allow --execute to affect every active market}
+        {--dry-run : Run in dry-run mode}
+        {--execute : Create or update promotions (default: dry-run)}
         {--overwrite : Update existing promotions with same title/date}
         {--overwrite-images : Overwrite existing cover_image values when used with --overwrite}
         {--no-images : Create promotions without external photo urls}';
@@ -23,6 +27,27 @@ class SeedSeasonalPromotionsCommand extends Command
 
     public function handle(): int
     {
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && filled($this->option('market')) && (bool) $this->option('all-markets')) {
+            $this->error('Use either --market or --all-markets with --execute, not both.');
+
+            return self::FAILURE;
+        }
+
+        if ($execute && blank($this->option('market')) && ! (bool) $this->option('all-markets')) {
+            $this->error('Market ID or slug is required with --execute. Use --market=1 or --all-markets.');
+
+            return self::FAILURE;
+        }
+
         $markets = $this->resolveMarkets();
         if ($markets->isEmpty()) {
             $this->warn('No active markets found.');
@@ -34,78 +59,113 @@ class SeedSeasonalPromotionsCommand extends Command
         $overwrite = (bool) $this->option('overwrite');
         $useImages = ! (bool) $this->option('no-images');
 
-        $total = 0;
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
 
         foreach ($markets as $market) {
-            $templates = $this->seasonalTemplates($now);
-            $this->line(sprintf('Market: %s (#%d)', $market->name, (int) $market->id));
+            app(MarketContext::class)->withMarket((int) $market->id, function () use (
+                $market,
+                $now,
+                $overwrite,
+                $useImages,
+                $dryRun,
+                &$created,
+                &$updated,
+                &$skipped,
+            ): void {
+                $templates = $this->seasonalTemplates($now);
+                $this->line(sprintf('Market: %s (#%d)', $market->name, (int) $market->id));
 
-            foreach ($templates as $template) {
-                $start = $this->resolveStartDate($now, (int) $template['offset_days']);
-                $end = $start->copy()->addDays((int) $template['duration_days']);
+                foreach ($templates as $template) {
+                    $start = $this->resolveStartDate($now, (int) $template['offset_days']);
+                    $end = $start->copy()->addDays((int) $template['duration_days']);
 
-                $payload = [
-                    'market_id' => (int) $market->id,
-                    'title' => (string) $template['title'],
-                    'starts_at' => $start->toDateString(),
-                    'ends_at' => $end->toDateString(),
-                    'all_day' => true,
-                    'description' => (string) $template['description'],
-                    'notify_before_days' => (int) ($template['notify_before_days'] ?? 7),
-                    'source' => 'promotion',
-                ];
-                $templateImage = $useImages
-                    ? trim((string) (MarketplaceAnnouncementImageCatalog::pathForTitle((string) $template['title']) ?? ($template['image'] ?? '')))
-                    : '';
-                $overwriteImages = (bool) $this->option('overwrite-images');
+                    $payload = [
+                        'market_id' => (int) $market->id,
+                        'title' => (string) $template['title'],
+                        'starts_at' => $start->toDateString(),
+                        'ends_at' => $end->toDateString(),
+                        'all_day' => true,
+                        'description' => (string) $template['description'],
+                        'notify_before_days' => (int) ($template['notify_before_days'] ?? 7),
+                        'source' => 'promotion',
+                    ];
+                    $templateImage = $useImages
+                        ? trim((string) (MarketplaceAnnouncementImageCatalog::pathForTitle((string) $template['title']) ?? ($template['image'] ?? '')))
+                        : '';
+                    $overwriteImages = (bool) $this->option('overwrite-images');
 
-                if ($overwrite) {
-                    $existing = MarketHoliday::query()
-                        ->where('market_id', (int) $market->id)
-                        ->where('title', (string) $template['title'])
-                        ->whereDate('starts_at', $start->toDateString())
-                        ->where('source', 'promotion')
-                        ->first();
+                    if ($overwrite) {
+                        $existing = MarketHoliday::query()
+                            ->where('market_id', (int) $market->id)
+                            ->where('title', (string) $template['title'])
+                            ->whereDate('starts_at', $start->toDateString())
+                            ->where('source', 'promotion')
+                            ->first();
 
-                    if ($existing) {
-                        $updatePayload = $payload;
+                        if ($existing) {
+                            $updatePayload = $payload;
 
-                        if ($templateImage !== '' && ($overwriteImages || blank($existing->cover_image))) {
-                            $updatePayload['cover_image'] = $templateImage;
+                            if ($templateImage !== '' && ($overwriteImages || blank($existing->cover_image))) {
+                                $updatePayload['cover_image'] = $templateImage;
+                            }
+
+                            if (! $dryRun) {
+                                $existing->fill($updatePayload)->save();
+                            }
+
+                            $updated++;
+                        } else {
+                            if ($templateImage !== '') {
+                                $payload['cover_image'] = $templateImage;
+                            }
+
+                            if (! $dryRun) {
+                                MarketHoliday::query()->create($payload);
+                            }
+
+                            $created++;
+                        }
+                    } else {
+                        $exists = MarketHoliday::query()
+                            ->where('market_id', (int) $market->id)
+                            ->where('title', (string) $template['title'])
+                            ->whereDate('starts_at', $start->toDateString())
+                            ->where('source', 'promotion')
+                            ->exists();
+
+                        if ($exists) {
+                            $skipped++;
+
+                            continue;
                         }
 
-                        $existing->fill($updatePayload)->save();
-                    } else {
                         if ($templateImage !== '') {
                             $payload['cover_image'] = $templateImage;
                         }
 
-                        MarketHoliday::query()->create($payload);
-                    }
-                } else {
-                    $exists = MarketHoliday::query()
-                        ->where('market_id', (int) $market->id)
-                        ->where('title', (string) $template['title'])
-                        ->whereDate('starts_at', $start->toDateString())
-                        ->where('source', 'promotion')
-                        ->exists();
+                        if (! $dryRun) {
+                            MarketHoliday::query()->create($payload);
+                        }
 
-                    if ($exists) {
-                        continue;
+                        $created++;
                     }
-
-                    if ($templateImage !== '') {
-                        $payload['cover_image'] = $templateImage;
-                    }
-
-                    MarketHoliday::query()->create($payload);
                 }
-
-                $total++;
-            }
+            });
         }
 
-        $this->info(sprintf('Seasonal promotions prepared: %d', $total));
+        $this->info(sprintf(
+            '%s created=%d updated=%d skipped=%d',
+            $dryRun ? 'Seasonal promotions dry-run.' : 'Seasonal promotions prepared.',
+            $created,
+            $updated,
+            $skipped,
+        ));
+
+        if ($dryRun) {
+            $this->warn('DRY RUN: no changes applied. Use --execute --market=... or --execute --all-markets to apply.');
+        }
 
         return self::SUCCESS;
     }
