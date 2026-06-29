@@ -6,6 +6,7 @@ namespace App\Support;
 
 use App\Models\Market;
 use App\Models\MarketLocation;
+use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use LogicException;
@@ -233,6 +234,9 @@ class DemoPilotProvisioner
         $locationWrite = $marketWrite['status'] === 'blocked'
             ? ['status' => 'skipped', 'details' => 'market write was blocked']
             : $this->writeLocations($dataSet, (int) $marketWrite['market_id']);
+        $tenantWrite = $marketWrite['status'] === 'blocked' || $locationWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market or location write was blocked']
+            : $this->writeTenants($dataSet, (int) $marketWrite['market_id']);
         $sections = [];
         $issues = [];
 
@@ -243,6 +247,9 @@ class DemoPilotProvisioner
             } elseif ($section['section'] === 'locations') {
                 $section['status'] = $locationWrite['status'];
                 $section['details'] = $locationWrite['details'];
+            } elseif ($section['section'] === 'tenants') {
+                $section['status'] = $tenantWrite['status'];
+                $section['details'] = $tenantWrite['details'];
             } else {
                 $section['status'] = 'skipped';
                 $section['details'] = 'write adapter is not implemented in this package';
@@ -257,6 +264,10 @@ class DemoPilotProvisioner
 
         if ($locationWrite['status'] === 'blocked') {
             $issues[] = $locationWrite['details'];
+        }
+
+        if ($tenantWrite['status'] === 'blocked') {
+            $issues[] = $tenantWrite['details'];
         }
 
         $report['status'] = $issues === [] ? 'partial' : 'blocked';
@@ -431,6 +442,120 @@ class DemoPilotProvisioner
             'parent_id' => null,
             'sort_order' => (int) ($locationPayload['sort_order'] ?? 0),
             'is_active' => (bool) ($locationPayload['is_active'] ?? true),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writeTenants(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'tenants');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'tenants payload is empty'];
+        }
+
+        return DB::transaction(function () use ($records, $marketId): array {
+            $planned = [];
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $attributes = $this->tenantAttributes($record, $marketId);
+                $externalId = $attributes['external_id'];
+                $slug = $attributes['slug'];
+
+                if ($attributes['name'] === '' || $externalId === '' || $slug === '') {
+                    return ['status' => 'blocked', 'details' => 'tenant name, slug, and external_id are required'];
+                }
+
+                $tenant = Tenant::query()
+                    ->where('market_id', $marketId)
+                    ->where('external_id', $externalId)
+                    ->first();
+
+                $slugConflict = Tenant::query()
+                    ->where('slug', $slug)
+                    ->when($tenant !== null, static fn ($query) => $query->whereKeyNot($tenant->getKey()))
+                    ->first();
+
+                if ($slugConflict !== null) {
+                    return [
+                        'status' => 'blocked',
+                        'details' => 'tenant slug [' . $slug . '] already belongs to another tenant',
+                    ];
+                }
+
+                $planned[] = [$attributes, $tenant];
+            }
+
+            foreach ($planned as [$attributes, $tenant]) {
+                if ($tenant === null) {
+                    Tenant::withoutEvents(static function () use ($attributes): void {
+                        Tenant::query()->create($attributes);
+                    });
+
+                    $created++;
+
+                    continue;
+                }
+
+                $tenant->fill($attributes);
+
+                if (! $tenant->isDirty()) {
+                    $unchanged++;
+
+                    continue;
+                }
+
+                Tenant::withoutEvents(static function () use ($tenant): void {
+                    $tenant->save();
+                });
+
+                $updated++;
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] tenants for market id [' . $marketId . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $tenantPayload
+     * @return array{market_id:int, name:string, short_name:string, slug:string, type:string, external_id:string, inn:null, phone:string, email:string, contact_person:string, status:string, is_active:bool, notes:string, one_c_data:array<string, mixed>, debt_status:string|null}
+     */
+    private function tenantAttributes(array $tenantPayload, int $marketId): array
+    {
+        $source = trim((string) ($tenantPayload['synthetic_source'] ?? 'demo_pilot')) ?: 'demo_pilot';
+        $oneCData = is_array($tenantPayload['one_c_data'] ?? null) ? $tenantPayload['one_c_data'] : [];
+        $oneCData['synthetic_source'] = $source;
+        $oneCData['live_1c'] = false;
+
+        return [
+            'market_id' => $marketId,
+            'name' => trim((string) ($tenantPayload['name'] ?? '')),
+            'short_name' => trim((string) ($tenantPayload['short_name'] ?? '')),
+            'slug' => trim((string) ($tenantPayload['slug'] ?? '')),
+            'type' => trim((string) ($tenantPayload['type'] ?? 'llc')) ?: 'llc',
+            'external_id' => trim((string) ($tenantPayload['external_id'] ?? '')),
+            'inn' => null,
+            'phone' => trim((string) ($tenantPayload['phone'] ?? '')),
+            'email' => trim((string) ($tenantPayload['email'] ?? '')),
+            'contact_person' => trim((string) ($tenantPayload['contact_person'] ?? '')),
+            'status' => trim((string) ($tenantPayload['status'] ?? 'active')) ?: 'active',
+            'is_active' => (bool) ($tenantPayload['is_active'] ?? true),
+            'notes' => 'Synthetic demo tenant. Source: ' . $source,
+            'one_c_data' => $oneCData,
+            'debt_status' => in_array($tenantPayload['debt_status'] ?? null, ['green', 'orange', 'red'], true)
+                ? (string) $tenantPayload['debt_status']
+                : null,
         ];
     }
 
