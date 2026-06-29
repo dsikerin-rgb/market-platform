@@ -74,15 +74,17 @@ class DemoProvisionCommand extends Command
             return self::FAILURE;
         }
 
-        $execution = $provisioner->executePreflight($dataSet);
+        $execution = $provisioner->execute($dataSet);
 
         $this->line('Execute adapter write phase: ' . ($execution['writes_enabled'] ? 'enabled' : 'disabled'));
+        $this->line('Provisioning write: ' . $execution['status']);
+        $this->table(['Section', 'Table', 'Records', 'Result'], $this->preflightRows($execution['sections']));
 
         foreach ($execution['issues'] as $issue) {
             $this->error($issue);
         }
 
-        return self::FAILURE;
+        return $execution['issues'] === [] ? self::SUCCESS : self::FAILURE;
     }
 
     private function normalizedOption(string $name, string $fallback): string

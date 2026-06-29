@@ -69,18 +69,35 @@ class DemoPilotProvisionerTest extends TestCase
         self::assertContains('market: schema check failed for [markets]: database unavailable', $report['issues']);
     }
 
-    public function test_execute_preflight_keeps_write_phase_disabled(): void
+    public function test_execute_blocks_when_preflight_has_issues_before_writes(): void
     {
         $this->mockReadySchema();
 
-        $report = app(DemoPilotProvisioner::class)->executePreflight(
+        $dataSet = app(DemoPilotDataBuilder::class)->build();
+        $dataSet['contracts'][0]['tenant_key'] = 'missing-tenant';
+
+        $report = app(DemoPilotProvisioner::class)->execute($dataSet);
+
+        self::assertSame('blocked', $report['status']);
+        self::assertFalse($report['writes_enabled']);
+        self::assertContains(
+            'contracts record [contract-produce] has invalid tenant_key [missing-tenant].',
+            $report['issues'],
+        );
+    }
+
+    public function test_execute_is_blocked_when_write_flags_are_disabled(): void
+    {
+        $this->mockReadySchema();
+
+        $report = app(DemoPilotProvisioner::class)->execute(
             app(DemoPilotDataBuilder::class)->build(),
         );
 
         self::assertSame('blocked', $report['status']);
         self::assertFalse($report['writes_enabled']);
         self::assertContains(
-            'Demo/pilot write phase is intentionally disabled in this package; no database rows were changed.',
+            'Demo/pilot data write is disabled for operation [provision].',
             $report['issues'],
         );
     }

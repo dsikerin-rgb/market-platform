@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Support\DemoPilotSettings;
+use App\Support\DemoPilotProvisioner;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -55,14 +56,55 @@ class DemoProvisionCommandSafetyTest extends TestCase
             ->assertExitCode(1);
     }
 
-    public function test_execute_still_fails_until_write_implementation_exists(): void
+    public function test_execute_runs_first_write_adapter_when_flags_are_enabled(): void
     {
         config()->set('demo_pilot.enabled', true);
         config()->set('demo_pilot.provision_enabled', true);
+        $this->app->instance(DemoPilotProvisioner::class, new class extends DemoPilotProvisioner
+        {
+            /**
+             * @param array<string, mixed> $dataSet
+             * @return array{status:string, writes_enabled:bool, sections:list<array{section:string, table:string, records:int, status:string, details:string}>, issues:list<string>}
+             */
+            public function preflight(array $dataSet): array
+            {
+                return $this->report('ready', false, 'ready', 'all required columns exist');
+            }
+
+            /**
+             * @param array<string, mixed> $dataSet
+             * @return array{status:string, writes_enabled:bool, sections:list<array{section:string, table:string, records:int, status:string, details:string}>, issues:list<string>}
+             */
+            public function execute(array $dataSet): array
+            {
+                return $this->report('partial', true, 'created', 'created market id [1] for slug [demo-market]');
+            }
+
+            /**
+             * @return array{status:string, writes_enabled:bool, sections:list<array{section:string, table:string, records:int, status:string, details:string}>, issues:list<string>}
+             */
+            private function report(string $status, bool $writesEnabled, string $sectionStatus, string $details): array
+            {
+                return [
+                    'status' => $status,
+                    'writes_enabled' => $writesEnabled,
+                    'sections' => [
+                        [
+                            'section' => 'market',
+                            'table' => 'markets',
+                            'records' => 1,
+                            'status' => $sectionStatus,
+                            'details' => $details,
+                        ],
+                    ],
+                    'issues' => [],
+                ];
+            }
+        });
 
         $this->artisan('demo:provision --execute')
-            ->expectsOutput('Execute adapter write phase: disabled')
-            ->expectsOutput('Demo/pilot write phase is intentionally disabled in this package; no database rows were changed.')
-            ->assertExitCode(1);
+            ->expectsOutput('Execute adapter write phase: enabled')
+            ->expectsOutput('Provisioning write: partial')
+            ->assertExitCode(0);
     }
 }

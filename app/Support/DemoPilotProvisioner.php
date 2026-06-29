@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Models\Market;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use LogicException;
 use Throwable;
 
 class DemoPilotProvisioner
@@ -204,14 +207,146 @@ class DemoPilotProvisioner
      * @param array<string, mixed> $dataSet
      * @return array{status:string, writes_enabled:bool, sections:list<array{section:string, table:string, records:int, status:string, details:string}>, issues:list<string>}
      */
-    public function executePreflight(array $dataSet): array
+    public function execute(array $dataSet): array
     {
         $report = $this->preflight($dataSet);
-        $report['status'] = 'blocked';
-        $report['writes_enabled'] = false;
-        $report['issues'][] = 'Demo/pilot write phase is intentionally disabled in this package; no database rows were changed.';
+
+        if ($report['issues'] !== []) {
+            $report['status'] = 'blocked';
+            $report['writes_enabled'] = false;
+
+            return $report;
+        }
+
+        try {
+            app(DemoPilotSettings::class)->assertDataWriteAllowed(DemoPilotSettings::OPERATION_PROVISION);
+        } catch (LogicException $exception) {
+            $report['status'] = 'blocked';
+            $report['writes_enabled'] = false;
+            $report['issues'][] = $exception->getMessage();
+
+            return $report;
+        }
+
+        $marketWrite = $this->writeMarket($dataSet);
+        $sections = [];
+        $issues = [];
+
+        foreach ($report['sections'] as $section) {
+            if ($section['section'] === 'market') {
+                $section['status'] = $marketWrite['status'];
+                $section['details'] = $marketWrite['details'];
+            } else {
+                $section['status'] = 'skipped';
+                $section['details'] = 'write adapter is not implemented in this package';
+            }
+
+            $sections[] = $section;
+        }
+
+        if ($marketWrite['status'] === 'blocked') {
+            $issues[] = $marketWrite['details'];
+        }
+
+        $report['status'] = $issues === [] ? 'partial' : 'blocked';
+        $report['writes_enabled'] = $issues === [];
+        $report['sections'] = $sections;
+        $report['issues'] = $issues;
 
         return $report;
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writeMarket(array $dataSet): array
+    {
+        $marketPayload = $dataSet['market'] ?? null;
+
+        if (! is_array($marketPayload)) {
+            return ['status' => 'blocked', 'details' => 'market payload is missing'];
+        }
+
+        $attributes = $this->marketAttributes($marketPayload);
+        $slug = $attributes['slug'];
+        $code = $attributes['code'];
+        $source = (string) data_get($marketPayload, 'settings.demo_pilot.synthetic_source', 'demo_pilot');
+
+        if ($slug === '' || $code === '') {
+            return ['status' => 'blocked', 'details' => 'market slug and code are required'];
+        }
+
+        return DB::transaction(function () use ($attributes, $slug, $code, $source): array {
+            $market = Market::query()->where('slug', $slug)->first();
+            $codeConflict = Market::query()
+                ->where('code', $code)
+                ->when($market !== null, static fn ($query) => $query->whereKeyNot($market->getKey()))
+                ->first();
+
+            if ($codeConflict !== null) {
+                return [
+                    'status' => 'blocked',
+                    'details' => 'market code [' . $code . '] already belongs to another market',
+                ];
+            }
+
+            if ($market !== null && ! $this->isSyntheticMarket($market, $source)) {
+                return [
+                    'status' => 'blocked',
+                    'details' => 'existing market [' . $slug . '] is not marked as demo/pilot synthetic data',
+                ];
+            }
+
+            if ($market === null) {
+                $market = Market::query()->create($attributes);
+
+                return [
+                    'status' => 'created',
+                    'details' => 'created market id [' . $market->getKey() . '] for slug [' . $slug . ']',
+                ];
+            }
+
+            $market->fill($attributes);
+
+            if (! $market->isDirty()) {
+                return [
+                    'status' => 'unchanged',
+                    'details' => 'market id [' . $market->getKey() . '] already matches demo payload',
+                ];
+            }
+
+            $dirty = array_keys($market->getDirty());
+            $market->save();
+
+            return [
+                'status' => 'updated',
+                'details' => 'updated market id [' . $market->getKey() . '] fields [' . implode(', ', $dirty) . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $marketPayload
+     * @return array{name:string, slug:string, code:string, address:string, timezone:string, is_active:bool, settings:array<string, mixed>, features:array<string, mixed>}
+     */
+    private function marketAttributes(array $marketPayload): array
+    {
+        return [
+            'name' => trim((string) ($marketPayload['name'] ?? 'Demo Market')) ?: 'Demo Market',
+            'slug' => trim((string) ($marketPayload['slug'] ?? '')),
+            'code' => trim((string) ($marketPayload['code'] ?? '')),
+            'address' => trim((string) ($marketPayload['address'] ?? '')),
+            'timezone' => trim((string) ($marketPayload['timezone'] ?? 'Asia/Novosibirsk')) ?: 'Asia/Novosibirsk',
+            'is_active' => (bool) ($marketPayload['is_active'] ?? true),
+            'settings' => is_array($marketPayload['settings'] ?? null) ? $marketPayload['settings'] : [],
+            'features' => is_array($marketPayload['features'] ?? null) ? $marketPayload['features'] : [],
+        ];
+    }
+
+    private function isSyntheticMarket(Market $market, string $source): bool
+    {
+        return data_get($market->settings, 'demo_pilot.synthetic_source') === $source;
     }
 
     /**
