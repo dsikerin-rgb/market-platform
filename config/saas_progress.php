@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Demo provision preflight adapter готовится без записи в БД: payload проверяется по ссылкам, таблицам и обязательным колонкам перед любым будущим write-пакетом.',
-    'next_step' => 'Следующий малый пакет: добавить первый idempotent write adapter только для local/staging и только за флагами; prod data writes останутся под отдельным разрешением.',
+    'current_focus' => 'Первый idempotent write adapter готов: demo:provision может создать или обновить только demo market по slug, остальные секции пока пропускаются; prod data writes остаются закрытыми отдельным флагом.',
+    'next_step' => 'Следующий малый пакет: расширить write adapter на locations/spaces/tenants только для local/staging и только после отдельной проверки; prod data writes останутся под отдельным разрешением.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -114,7 +114,7 @@ return [
                 ['title' => 'Safety flags и prod write barrier для demo/pilot контура', 'status' => 'done'],
                 ['title' => 'demo:provision dry-run план без записи данных', 'status' => 'done'],
                 ['title' => 'demo:provision preflight adapter проверяет payload, таблицы и колонки без записи данных', 'status' => 'done'],
-                ['title' => 'demo:provision idempotent write adapter для local/staging', 'status' => 'pending'],
+                ['title' => 'demo:provision idempotent write adapter для local/staging: первый безопасный write только для demo market', 'status' => 'done'],
                 ['title' => 'demo:reset', 'status' => 'pending'],
                 ['title' => 'Состав синтетических арендаторов, мест, договоров, финансов и marketplace описан в data builder', 'status' => 'done'],
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'pending'],
