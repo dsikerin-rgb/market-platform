@@ -7,10 +7,12 @@ namespace Tests\Unit;
 use App\Models\Market;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceMapShape;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Models\TenantPayment;
+use App\Models\User;
 use App\Support\DemoPilotDataBuilder;
 use App\Support\DemoPilotProvisioner;
 use Illuminate\Database\Schema\Blueprint;
@@ -57,6 +59,41 @@ class DemoPilotProvisionerWriteTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->string('phone')->nullable();
+            $table->string('job_title')->nullable();
+            $table->string('department')->nullable();
+            $table->string('password');
+            $table->unsignedBigInteger('market_id')->nullable();
+            $table->unsignedBigInteger('tenant_id')->nullable();
+            $table->json('notification_preferences')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('roles', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+            $table->timestamps();
+            $table->unique(['name', 'guard_name']);
+        });
+
+        Schema::create('model_has_roles', function (Blueprint $table): void {
+            $table->unsignedBigInteger('role_id');
+            $table->string('model_type');
+            $table->unsignedBigInteger('model_id');
+            $table->primary(['role_id', 'model_id', 'model_type']);
+        });
+
+        Schema::create('model_has_permissions', function (Blueprint $table): void {
+            $table->unsignedBigInteger('permission_id');
+            $table->string('model_type');
+            $table->unsignedBigInteger('model_id');
+        });
+
         Schema::create('tenants', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('market_id');
@@ -98,6 +135,27 @@ class DemoPilotProvisionerWriteTest extends TestCase
             $table->string('status')->default('free');
             $table->boolean('is_active')->default(true);
             $table->text('notes')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('market_space_map_shapes', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('market_id');
+            $table->unsignedBigInteger('market_space_id')->nullable();
+            $table->unsignedInteger('page')->default(1);
+            $table->unsignedInteger('version')->default(1);
+            $table->json('polygon');
+            $table->decimal('bbox_x1', 10, 2);
+            $table->decimal('bbox_y1', 10, 2);
+            $table->decimal('bbox_x2', 10, 2);
+            $table->decimal('bbox_y2', 10, 2);
+            $table->string('fill_color')->nullable();
+            $table->string('stroke_color')->nullable();
+            $table->decimal('fill_opacity', 4, 2)->nullable();
+            $table->decimal('stroke_width', 5, 2)->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->boolean('is_active')->default(true);
+            $table->json('meta')->nullable();
             $table->timestamps();
         });
 
@@ -213,7 +271,9 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('created', $this->sectionStatus($firstReport, 'market'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'locations'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'tenants'));
+        self::assertSame('created', $this->sectionStatus($firstReport, 'users'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'spaces'));
+        self::assertSame('created', $this->sectionStatus($firstReport, 'map_shapes'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'contracts'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'accruals'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'payments'));
@@ -221,14 +281,18 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'market'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'locations'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'tenants'));
+        self::assertSame('unchanged', $this->sectionStatus($secondReport, 'users'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'spaces'));
+        self::assertSame('unchanged', $this->sectionStatus($secondReport, 'map_shapes'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'contracts'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'accruals'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'payments'));
         self::assertSame(1, Market::query()->where('slug', 'demo-market')->count());
         self::assertSame(2, MarketLocation::query()->count());
         self::assertSame(4, Tenant::query()->count());
+        self::assertSame(4, User::query()->count());
         self::assertSame(5, MarketSpace::query()->count());
+        self::assertSame(5, MarketSpaceMapShape::query()->count());
         self::assertSame(4, TenantContract::query()->count());
         self::assertSame(4, TenantAccrual::query()->count());
         self::assertSame(3, TenantPayment::query()->count());
@@ -264,7 +328,9 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertTrue((bool) data_get($market->features, 'marketplace'));
         self::assertSame(2, MarketLocation::query()->where('market_id', $market->getKey())->count());
         self::assertSame(4, Tenant::query()->where('market_id', $market->getKey())->count());
+        self::assertSame(4, User::query()->where('market_id', $market->getKey())->count());
         self::assertSame(5, MarketSpace::query()->where('market_id', $market->getKey())->count());
+        self::assertSame(5, MarketSpaceMapShape::query()->where('market_id', $market->getKey())->count());
         self::assertSame(4, TenantContract::query()->where('market_id', $market->getKey())->count());
         self::assertSame(4, TenantAccrual::query()->where('market_id', $market->getKey())->count());
         self::assertSame(3, TenantPayment::query()->where('market_id', $market->getKey())->count());
@@ -358,6 +424,45 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame(4, Tenant::query()->where('market_id', $market->getKey())->count());
     }
 
+    public function test_execute_updates_existing_demo_users_and_roles(): void
+    {
+        $market = $this->createDemoMarket();
+        $this->createDemoTenant($market, 'tenant-grocery');
+
+        User::query()->create([
+            'market_id' => $market->getKey(),
+            'tenant_id' => null,
+            'name' => 'Old Admin',
+            'email' => 'admin@demo.marketuchet.local',
+            'phone' => '+71111111111',
+            'job_title' => 'Old role',
+            'department' => 'Old department',
+            'password' => 'test',
+            'notification_preferences' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                ],
+            ],
+        ]);
+
+        $report = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        $user = User::query()
+            ->where('email', 'admin@demo.marketuchet.local')
+            ->firstOrFail();
+
+        self::assertSame('partial', $report['status']);
+        self::assertSame('updated', $this->sectionStatus($report, 'users'));
+        self::assertSame('Ирина Смирнова', $user->name);
+        self::assertSame('Администратор', $user->job_title);
+        self::assertSame('Администрация', $user->department);
+        self::assertTrue($user->hasRole('market-admin'));
+        self::assertSame('demo_pilot', data_get($user->notification_preferences, 'demo_pilot.synthetic_source'));
+        self::assertSame(4, User::query()->where('market_id', $market->getKey())->count());
+    }
+
     public function test_execute_updates_existing_demo_spaces(): void
     {
         $market = $this->createDemoMarket();
@@ -405,6 +510,58 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame(5, MarketSpace::query()->where('market_id', $market->getKey())->count());
     }
 
+    public function test_execute_updates_existing_demo_map_shapes(): void
+    {
+        $market = $this->createDemoMarket();
+        $location = $this->createDemoLocation($market, 'main-hall');
+        $tenant = $this->createDemoTenant($market, 'tenant-grocery');
+        $space = $this->createDemoSpace($market, $location, $tenant, 'a-02');
+
+        MarketSpaceMapShape::query()->create([
+            'market_id' => $market->getKey(),
+            'market_space_id' => $space->getKey(),
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+                ['x' => 1, 'y' => 2],
+            ],
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
+            'fill_color' => '#000000',
+            'stroke_color' => '#000000',
+            'fill_opacity' => 0.10,
+            'stroke_width' => 1,
+            'sort_order' => 99,
+            'is_active' => false,
+            'meta' => [],
+        ]);
+
+        $report = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        $shape = MarketSpaceMapShape::query()
+            ->where('market_id', $market->getKey())
+            ->where('market_space_id', $space->getKey())
+            ->where('page', 1)
+            ->where('version', 1)
+            ->firstOrFail();
+
+        self::assertSame('partial', $report['status']);
+        self::assertSame('updated', $this->sectionStatus($report, 'map_shapes'));
+        self::assertSame('#f59e0b', $shape->fill_color);
+        self::assertSame('225.00', number_format((float) $shape->bbox_x1, 2, '.', ''));
+        self::assertSame('375.00', number_format((float) $shape->bbox_x2, 2, '.', ''));
+        self::assertTrue($shape->is_active);
+        self::assertSame('space-a-02', data_get($shape->meta, 'demo_pilot.market_space_key'));
+        self::assertSame(5, MarketSpaceMapShape::query()->where('market_id', $market->getKey())->count());
+    }
+
     public function test_execute_blocks_ambiguous_existing_space_code(): void
     {
         $market = $this->createDemoMarket();
@@ -438,6 +595,74 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('blocked', $report['status']);
         self::assertContains('space code [a-01] matches multiple existing spaces', $report['issues']);
         self::assertSame(2, MarketSpace::query()->where('market_id', $market->getKey())->count());
+    }
+
+    public function test_execute_blocks_non_demo_user_email_conflict(): void
+    {
+        User::query()->create([
+            'market_id' => null,
+            'tenant_id' => null,
+            'name' => 'Real Admin',
+            'email' => 'admin@demo.marketuchet.local',
+            'password' => 'test',
+            'notification_preferences' => [],
+        ]);
+
+        $report = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        self::assertSame('blocked', $report['status']);
+        self::assertContains(
+            'user email [admin@demo.marketuchet.local] already belongs to a non-demo user',
+            $report['issues'],
+        );
+        self::assertSame('blocked', $this->sectionStatus($report, 'users'));
+        self::assertSame(1, User::query()->count());
+    }
+
+    public function test_execute_blocks_ambiguous_existing_map_shape(): void
+    {
+        $market = $this->createDemoMarket();
+        $location = $this->createDemoLocation($market, 'main-hall');
+        $tenant = $this->createDemoTenant($market, 'tenant-produce');
+        $space = $this->createDemoSpace($market, $location, $tenant, 'a-01');
+
+        foreach ([1, 2] as $suffix) {
+            MarketSpaceMapShape::query()->create([
+                'market_id' => $market->getKey(),
+                'market_space_id' => $space->getKey(),
+                'page' => 1,
+                'version' => 1,
+                'polygon' => [
+                    ['x' => $suffix, 'y' => $suffix],
+                    ['x' => $suffix + 1, 'y' => $suffix],
+                    ['x' => $suffix + 1, 'y' => $suffix + 1],
+                    ['x' => $suffix, 'y' => $suffix + 1],
+                ],
+                'bbox_x1' => $suffix,
+                'bbox_y1' => $suffix,
+                'bbox_x2' => $suffix + 1,
+                'bbox_y2' => $suffix + 1,
+                'fill_color' => '#000000',
+                'stroke_color' => '#000000',
+                'fill_opacity' => 0.10,
+                'stroke_width' => 1,
+                'sort_order' => $suffix,
+                'is_active' => true,
+                'meta' => [],
+            ]);
+        }
+
+        $report = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        self::assertSame('blocked', $report['status']);
+        self::assertContains('map shape for space [space-a-01] matches multiple existing shapes', $report['issues']);
+        self::assertSame('blocked', $this->sectionStatus($report, 'map_shapes'));
+        self::assertSame('skipped', $this->sectionStatus($report, 'contracts'));
+        self::assertSame(2, MarketSpaceMapShape::query()->where('market_id', $market->getKey())->count());
     }
 
     public function test_execute_updates_existing_demo_contracts(): void

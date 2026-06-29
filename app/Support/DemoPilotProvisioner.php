@@ -7,13 +7,18 @@ namespace App\Support;
 use App\Models\Market;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceMapShape;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Models\TenantPayment;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use LogicException;
+use Spatie\Permission\Models\Role;
 use Throwable;
 
 class DemoPilotProvisioner
@@ -50,6 +55,27 @@ class DemoPilotProvisioner
                 'type',
                 'status',
                 'is_active',
+            ],
+        ],
+        'map_shapes' => [
+            'table' => 'market_space_map_shapes',
+            'required_columns' => [
+                'market_id',
+                'market_space_id',
+                'page',
+                'version',
+                'polygon',
+                'bbox_x1',
+                'bbox_y1',
+                'bbox_x2',
+                'bbox_y2',
+                'fill_color',
+                'stroke_color',
+                'fill_opacity',
+                'stroke_width',
+                'sort_order',
+                'is_active',
+                'meta',
             ],
         ],
         'tenants' => [
@@ -241,31 +267,50 @@ class DemoPilotProvisioner
         $tenantWrite = $marketWrite['status'] === 'blocked' || $locationWrite['status'] === 'blocked'
             ? ['status' => 'skipped', 'details' => 'market or location write was blocked']
             : $this->writeTenants($dataSet, (int) $marketWrite['market_id']);
-        $spaceWrite = $marketWrite['status'] === 'blocked'
+        $userWrite = $marketWrite['status'] === 'blocked'
             || $locationWrite['status'] === 'blocked'
             || $tenantWrite['status'] === 'blocked'
             ? ['status' => 'skipped', 'details' => 'market, location, or tenant write was blocked']
+            : $this->writeUsers($dataSet, (int) $marketWrite['market_id']);
+        $spaceWrite = $marketWrite['status'] === 'blocked'
+            || $locationWrite['status'] === 'blocked'
+            || $tenantWrite['status'] === 'blocked'
+            || $userWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, or user write was blocked']
             : $this->writeSpaces($dataSet, (int) $marketWrite['market_id']);
+        $mapShapeWrite = $marketWrite['status'] === 'blocked'
+            || $locationWrite['status'] === 'blocked'
+            || $tenantWrite['status'] === 'blocked'
+            || $userWrite['status'] === 'blocked'
+            || $spaceWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, user, or space write was blocked']
+            : $this->writeMapShapes($dataSet, (int) $marketWrite['market_id']);
         $contractWrite = $marketWrite['status'] === 'blocked'
             || $locationWrite['status'] === 'blocked'
             || $tenantWrite['status'] === 'blocked'
+            || $userWrite['status'] === 'blocked'
             || $spaceWrite['status'] === 'blocked'
-            ? ['status' => 'skipped', 'details' => 'market, location, tenant, or space write was blocked']
+            || $mapShapeWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, user, space, or map shape write was blocked']
             : $this->writeContracts($dataSet, (int) $marketWrite['market_id']);
         $accrualWrite = $marketWrite['status'] === 'blocked'
             || $locationWrite['status'] === 'blocked'
             || $tenantWrite['status'] === 'blocked'
+            || $userWrite['status'] === 'blocked'
             || $spaceWrite['status'] === 'blocked'
+            || $mapShapeWrite['status'] === 'blocked'
             || $contractWrite['status'] === 'blocked'
-            ? ['status' => 'skipped', 'details' => 'market, location, tenant, space, or contract write was blocked']
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, user, space, map shape, or contract write was blocked']
             : $this->writeAccruals($dataSet, (int) $marketWrite['market_id']);
         $paymentWrite = $marketWrite['status'] === 'blocked'
             || $locationWrite['status'] === 'blocked'
             || $tenantWrite['status'] === 'blocked'
+            || $userWrite['status'] === 'blocked'
             || $spaceWrite['status'] === 'blocked'
+            || $mapShapeWrite['status'] === 'blocked'
             || $contractWrite['status'] === 'blocked'
             || $accrualWrite['status'] === 'blocked'
-            ? ['status' => 'skipped', 'details' => 'market, location, tenant, space, contract, or accrual write was blocked']
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, user, space, map shape, contract, or accrual write was blocked']
             : $this->writePayments($dataSet, (int) $marketWrite['market_id']);
         $sections = [];
         $issues = [];
@@ -280,9 +325,15 @@ class DemoPilotProvisioner
             } elseif ($section['section'] === 'tenants') {
                 $section['status'] = $tenantWrite['status'];
                 $section['details'] = $tenantWrite['details'];
+            } elseif ($section['section'] === 'users') {
+                $section['status'] = $userWrite['status'];
+                $section['details'] = $userWrite['details'];
             } elseif ($section['section'] === 'spaces') {
                 $section['status'] = $spaceWrite['status'];
                 $section['details'] = $spaceWrite['details'];
+            } elseif ($section['section'] === 'map_shapes') {
+                $section['status'] = $mapShapeWrite['status'];
+                $section['details'] = $mapShapeWrite['details'];
             } elseif ($section['section'] === 'contracts') {
                 $section['status'] = $contractWrite['status'];
                 $section['details'] = $contractWrite['details'];
@@ -312,8 +363,16 @@ class DemoPilotProvisioner
             $issues[] = $tenantWrite['details'];
         }
 
+        if ($userWrite['status'] === 'blocked') {
+            $issues[] = $userWrite['details'];
+        }
+
         if ($spaceWrite['status'] === 'blocked') {
             $issues[] = $spaceWrite['details'];
+        }
+
+        if ($mapShapeWrite['status'] === 'blocked') {
+            $issues[] = $mapShapeWrite['details'];
         }
 
         if ($contractWrite['status'] === 'blocked') {
@@ -621,6 +680,163 @@ class DemoPilotProvisioner
      * @param array<string, mixed> $dataSet
      * @return array{status:string, details:string}
      */
+    private function writeUsers(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'users');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'users payload is empty'];
+        }
+
+        return DB::transaction(function () use ($dataSet, $records, $marketId): array {
+            $tenantIdsByKey = $this->tenantIdsByKey($dataSet, $marketId);
+            $seenEmails = [];
+            $planned = [];
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $email = mb_strtolower(trim((string) ($record['email'] ?? '')), 'UTF-8');
+                $name = trim((string) ($record['name'] ?? ''));
+                $roleName = $this->userRoleName($record);
+                $tenantKey = $record['tenant_key'] ?? null;
+                $tenantKey = $tenantKey === null ? null : trim((string) $tenantKey);
+
+                if ($email === '' || $name === '' || $roleName === '') {
+                    return ['status' => 'blocked', 'details' => 'user email, name, and role are required'];
+                }
+
+                if (in_array($email, $seenEmails, true)) {
+                    return ['status' => 'blocked', 'details' => 'users payload has duplicate email [' . $email . ']'];
+                }
+
+                $tenantId = null;
+
+                if ($tenantKey !== null && $tenantKey !== '') {
+                    if (! array_key_exists($tenantKey, $tenantIdsByKey)) {
+                        return ['status' => 'blocked', 'details' => 'user [' . $email . '] references missing tenant [' . $tenantKey . ']'];
+                    }
+
+                    $tenantId = $tenantIdsByKey[$tenantKey];
+                }
+
+                $user = User::query()->where('email', $email)->first();
+                $source = trim((string) ($record['synthetic_source'] ?? 'demo_pilot')) ?: 'demo_pilot';
+
+                if ($user !== null && ! $this->isSyntheticUser($user, $source, $marketId)) {
+                    return [
+                        'status' => 'blocked',
+                        'details' => 'user email [' . $email . '] already belongs to a non-demo user',
+                    ];
+                }
+
+                $seenEmails[] = $email;
+                $planned[] = [$this->userAttributes($record, $marketId, $tenantId), $roleName, $user];
+            }
+
+            foreach ($planned as [$attributes, $roleName, $user]) {
+                $role = Role::findOrCreate($roleName, 'web');
+                $roleChanged = false;
+
+                if ($user === null) {
+                    $user = User::query()->create(array_merge($attributes, [
+                        'password' => Hash::make(Str::random(40)),
+                    ]));
+                    $created++;
+                } else {
+                    $user->fill($attributes);
+
+                    if ($user->isDirty()) {
+                        $user->save();
+                        $updated++;
+                    } else {
+                        $unchanged++;
+                    }
+                }
+
+                $currentRoles = $user->roles()
+                    ->pluck('name')
+                    ->map(static fn (mixed $name): string => (string) $name)
+                    ->sort()
+                    ->values()
+                    ->all();
+
+                if ($currentRoles !== [$role->name]) {
+                    $user->syncRoles([$role]);
+                    $roleChanged = true;
+                }
+
+                if ($roleChanged && $user->wasRecentlyCreated === false && ! $user->wasChanged()) {
+                    $updated++;
+                    $unchanged = max(0, $unchanged - 1);
+                }
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] users for market id [' . $marketId . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $userPayload
+     * @return array<string, mixed>
+     */
+    private function userAttributes(array $userPayload, int $marketId, ?int $tenantId): array
+    {
+        $source = trim((string) ($userPayload['synthetic_source'] ?? 'demo_pilot')) ?: 'demo_pilot';
+        $roleName = $this->userRoleName($userPayload);
+
+        return $this->onlyExistingColumns('users', [
+            'name' => trim((string) ($userPayload['name'] ?? '')),
+            'email' => mb_strtolower(trim((string) ($userPayload['email'] ?? '')), 'UTF-8'),
+            'phone' => trim((string) ($userPayload['phone'] ?? '')),
+            'job_title' => trim((string) ($userPayload['job_title'] ?? '')),
+            'department' => trim((string) ($userPayload['department'] ?? '')),
+            'market_id' => $marketId,
+            'tenant_id' => $tenantId,
+            'notification_preferences' => [
+                'demo_pilot' => [
+                    'synthetic_source' => $source,
+                    'role' => $roleName,
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $userPayload
+     */
+    private function userRoleName(array $userPayload): string
+    {
+        $role = trim((string) ($userPayload['role'] ?? ''));
+
+        return match ($role) {
+            'director' => 'market-owner-director',
+            'admin' => 'market-admin',
+            'operator' => 'market-operator',
+            'tenant' => 'merchant',
+            default => $role,
+        };
+    }
+
+    private function isSyntheticUser(User $user, string $source, int $marketId): bool
+    {
+        if ((int) ($user->market_id ?? 0) !== $marketId) {
+            return false;
+        }
+
+        return data_get($user->notification_preferences, 'demo_pilot.synthetic_source') === $source;
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
     private function writeSpaces(array $dataSet, int $marketId): array
     {
         $records = $this->recordsForSection($dataSet, 'spaces');
@@ -756,6 +972,134 @@ class DemoPilotProvisioner
 
     /**
      * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writeMapShapes(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'map_shapes');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'map_shapes payload is empty'];
+        }
+
+        return DB::transaction(function () use ($dataSet, $records, $marketId): array {
+            $spaceIdsByKey = $this->spaceIdsByKey($dataSet, $marketId);
+            $seenKeys = [];
+            $planned = [];
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $key = trim((string) ($record['key'] ?? ''));
+                $spaceKey = trim((string) ($record['market_space_key'] ?? ''));
+                $page = max(1, (int) ($record['page'] ?? 1));
+                $version = max(1, (int) ($record['version'] ?? 1));
+                $dedupeKey = $page . ':' . $version . ':' . $spaceKey;
+
+                if ($key === '' || $spaceKey === '') {
+                    return ['status' => 'blocked', 'details' => 'map shape key and market_space_key are required'];
+                }
+
+                if (! array_key_exists($spaceKey, $spaceIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'map shape [' . $key . '] references missing market_space [' . $spaceKey . ']'];
+                }
+
+                if (in_array($dedupeKey, $seenKeys, true)) {
+                    return ['status' => 'blocked', 'details' => 'map_shapes payload has duplicate page/version/space [' . $dedupeKey . ']'];
+                }
+
+                $polygon = MarketSpaceMapShape::normalizePolygon($record['polygon'] ?? []);
+
+                if (count($polygon) < 3) {
+                    return ['status' => 'blocked', 'details' => 'map shape [' . $key . '] polygon must contain at least 3 points'];
+                }
+
+                $attributes = $this->mapShapeAttributes($record, $marketId, $spaceIdsByKey[$spaceKey], $polygon);
+                $matches = MarketSpaceMapShape::query()
+                    ->where('market_id', $marketId)
+                    ->where('market_space_id', $spaceIdsByKey[$spaceKey])
+                    ->where('page', $page)
+                    ->where('version', $version)
+                    ->get();
+
+                if ($matches->count() > 1) {
+                    return ['status' => 'blocked', 'details' => 'map shape for space [' . $spaceKey . '] matches multiple existing shapes'];
+                }
+
+                $seenKeys[] = $dedupeKey;
+                $planned[] = [$attributes, $matches->first()];
+            }
+
+            foreach ($planned as [$attributes, $shape]) {
+                if ($shape === null) {
+                    MarketSpaceMapShape::query()->create($attributes);
+                    $created++;
+
+                    continue;
+                }
+
+                $shape->fill($attributes);
+
+                if (! $shape->isDirty()) {
+                    $unchanged++;
+
+                    continue;
+                }
+
+                $shape->save();
+                $updated++;
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] map shapes for market id [' . $marketId . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $shapePayload
+     * @param list<array{x:float, y:float}> $polygon
+     * @return array<string, mixed>
+     */
+    private function mapShapeAttributes(array $shapePayload, int $marketId, int $spaceId, array $polygon): array
+    {
+        [$x1, $y1, $x2, $y2] = MarketSpaceMapShape::computeBbox($polygon);
+        $source = trim((string) ($shapePayload['synthetic_source'] ?? 'demo_pilot')) ?: 'demo_pilot';
+        $key = trim((string) ($shapePayload['key'] ?? ''));
+        $spaceKey = trim((string) ($shapePayload['market_space_key'] ?? ''));
+
+        return [
+            'market_id' => $marketId,
+            'market_space_id' => $spaceId,
+            'page' => max(1, (int) ($shapePayload['page'] ?? 1)),
+            'version' => max(1, (int) ($shapePayload['version'] ?? 1)),
+            'polygon' => $polygon,
+            'bbox_x1' => round($x1, 2),
+            'bbox_y1' => round($y1, 2),
+            'bbox_x2' => round($x2, 2),
+            'bbox_y2' => round($y2, 2),
+            'fill_color' => trim((string) ($shapePayload['fill_color'] ?? '#00A3FF')) ?: '#00A3FF',
+            'stroke_color' => trim((string) ($shapePayload['stroke_color'] ?? '#00A3FF')) ?: '#00A3FF',
+            'fill_opacity' => $this->decimalString($shapePayload['fill_opacity'] ?? 0.18),
+            'stroke_width' => $this->decimalString($shapePayload['stroke_width'] ?? 2),
+            'sort_order' => (int) ($shapePayload['sort_order'] ?? 0),
+            'is_active' => (bool) ($shapePayload['is_active'] ?? true),
+            'meta' => [
+                'demo_pilot' => [
+                    'synthetic_source' => $source,
+                    'key' => $key,
+                    'market_space_key' => $spaceKey,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
      * @return array<string, int>
      */
     private function locationIdsByKey(array $dataSet, int $marketId): array
@@ -819,6 +1163,19 @@ class DemoPilotProvisioner
         }
 
         return number_format((float) $value, 2, '.', '');
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     * @return array<string, mixed>
+     */
+    private function onlyExistingColumns(string $table, array $attributes): array
+    {
+        return array_filter(
+            $attributes,
+            static fn (string $column): bool => Schema::hasColumn($table, $column),
+            ARRAY_FILTER_USE_KEY,
+        );
     }
 
     /**
@@ -1447,6 +1804,7 @@ class DemoPilotProvisioner
 
         $this->assertReferences($this->recordsForSection($dataSet, 'users'), 'tenant_key', $tenantKeys, 'users', $issues, true);
         $this->assertReferences($this->recordsForSection($dataSet, 'spaces'), 'tenant_key', $tenantKeys, 'spaces', $issues, true);
+        $this->assertReferences($this->recordsForSection($dataSet, 'map_shapes'), 'market_space_key', $spaceKeys, 'map_shapes', $issues);
         $this->assertReferences($this->recordsForSection($dataSet, 'contracts'), 'tenant_key', $tenantKeys, 'contracts', $issues);
         $this->assertReferences($this->recordsForSection($dataSet, 'contracts'), 'market_space_key', $spaceKeys, 'contracts', $issues);
         $this->assertReferences($this->recordsForSection($dataSet, 'accruals'), 'tenant_key', $tenantKeys, 'accruals', $issues);

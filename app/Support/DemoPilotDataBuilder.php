@@ -34,6 +34,7 @@ class DemoPilotDataBuilder
             'users' => $this->users($marketSlug, $emailDomain, $source),
             'locations' => $this->locations($source),
             'spaces' => $this->spaces($source),
+            'map_shapes' => $this->mapShapes($source),
             'tenants' => $this->tenants($emailDomain, $source),
             'contracts' => $this->contracts($source),
             'accruals' => $this->accruals($source),
@@ -103,10 +104,10 @@ class DemoPilotDataBuilder
     private function users(string $marketSlug, string $emailDomain, string $source): array
     {
         return [
-            $this->user('director', 'Анна Волкова', 'director', $emailDomain, $source),
-            $this->user('admin', 'Ирина Смирнова', 'admin', $emailDomain, $source),
-            $this->user('operator', 'Павел Орлов', 'operator', $emailDomain, $source),
-            array_merge($this->user('tenant-user', 'Мария Кузнецова', 'tenant', $emailDomain, $source), [
+            $this->user('director', 'Анна Волкова', 'market-owner-director', $emailDomain, $source, 'Директор рынка', 'Управление'),
+            $this->user('admin', 'Ирина Смирнова', 'market-admin', $emailDomain, $source, 'Администратор', 'Администрация'),
+            $this->user('operator', 'Павел Орлов', 'market-operator', $emailDomain, $source, 'Оператор', 'Работа с арендаторами'),
+            array_merge($this->user('tenant-user', 'Мария Кузнецова', 'merchant', $emailDomain, $source, 'Представитель арендатора', 'ООО "Продукты у дома"'), [
                 'tenant_key' => 'tenant-grocery',
             ]),
         ];
@@ -115,13 +116,23 @@ class DemoPilotDataBuilder
     /**
      * @return array<string, mixed>
      */
-    private function user(string $key, string $name, string $role, string $emailDomain, string $source): array
-    {
+    private function user(
+        string $key,
+        string $name,
+        string $role,
+        string $emailDomain,
+        string $source,
+        string $jobTitle,
+        string $department,
+    ): array {
         return [
             'key' => 'user-' . $key,
             'name' => $name,
             'email' => $key . '@' . $emailDomain,
             'role' => $role,
+            'phone' => '+70000000000',
+            'job_title' => $jobTitle,
+            'department' => $department,
             'password_strategy' => 'generated_on_provision',
             'synthetic_source' => $source,
         ];
@@ -165,6 +176,55 @@ class DemoPilotDataBuilder
             $this->space('space-b-01', 'location-food-court', 'B-01', 'Кофейная точка', 'tenant-coffee', 12.0, 3100, 'occupied', $source),
             $this->space('space-b-02', 'location-food-court', 'B-02', 'Пекарня', 'tenant-bakery', 14.0, 2950, 'occupied', $source),
             $this->space('space-a-03', 'location-main-hall', 'A-03', 'Свободное место', null, 16.0, 2100, 'vacant', $source),
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function mapShapes(string $source): array
+    {
+        return [
+            $this->shape('shape-a-01', 'space-a-01', 80, 90, 210, 180, '#16a34a', 10, $source),
+            $this->shape('shape-a-02', 'space-a-02', 225, 90, 375, 180, '#f59e0b', 20, $source),
+            $this->shape('shape-a-03', 'space-a-03', 390, 90, 515, 180, '#64748b', 30, $source),
+            $this->shape('shape-b-01', 'space-b-01', 80, 215, 235, 315, '#16a34a', 40, $source),
+            $this->shape('shape-b-02', 'space-b-02', 250, 215, 405, 315, '#dc2626', 50, $source),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function shape(
+        string $key,
+        string $spaceKey,
+        int $x1,
+        int $y1,
+        int $x2,
+        int $y2,
+        string $color,
+        int $sortOrder,
+        string $source,
+    ): array {
+        return [
+            'key' => $key,
+            'market_space_key' => $spaceKey,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => $x1, 'y' => $y1],
+                ['x' => $x2, 'y' => $y1],
+                ['x' => $x2, 'y' => $y2],
+                ['x' => $x1, 'y' => $y2],
+            ],
+            'fill_color' => $color,
+            'stroke_color' => $color,
+            'fill_opacity' => 0.18,
+            'stroke_width' => 2.0,
+            'sort_order' => $sortOrder,
+            'is_active' => true,
+            'synthetic_source' => $source,
         ];
     }
 

@@ -91,6 +91,21 @@ class DemoPilotResetterTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('market_space_map_shapes', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('market_id');
+            $table->unsignedBigInteger('market_space_id')->nullable();
+            $table->unsignedInteger('page')->default(1);
+            $table->unsignedInteger('version')->default(1);
+            $table->json('polygon')->nullable();
+            $table->decimal('bbox_x1', 10, 2)->nullable();
+            $table->decimal('bbox_y1', 10, 2)->nullable();
+            $table->decimal('bbox_x2', 10, 2)->nullable();
+            $table->decimal('bbox_y2', 10, 2)->nullable();
+            $table->json('meta')->nullable();
+            $table->timestamps();
+        });
+
         Schema::create('tenant_contracts', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('market_id');
@@ -184,11 +199,13 @@ class DemoPilotResetterTest extends TestCase
 
         self::assertSame('reset', $report['status']);
         self::assertSame('retained', $this->sectionStatus($report, 'market'));
+        self::assertSame('deleted', $this->sectionStatus($report, 'map_shapes'));
         self::assertSame(1, DB::table('users')->where('email', 'real@example.test')->count());
         self::assertSame(0, DB::table('users')->where('email', 'admin@demo.marketuchet.local')->count());
         self::assertSame(0, DB::table('model_has_roles')->where('model_type', User::class)->where('model_id', $userId)->count());
         self::assertSame(0, DB::table('tenant_payments')->where('source', 'demo_pilot')->count());
         self::assertSame(1, DB::table('tenant_payments')->where('source', '1c')->count());
+        self::assertSame(0, DB::table('market_space_map_shapes')->where('market_id', $market->getKey())->count());
         self::assertSame(0, DB::table('marketplace_products')->where('slug', 'demo-honey-jar')->count());
         self::assertSame(1, DB::table('marketplace_products')->where('slug', 'real-product')->count());
         self::assertSame(1, Market::query()->whereKey($market->getKey())->count());
@@ -299,6 +316,29 @@ class DemoPilotResetterTest extends TestCase
             'tenant_id' => $tenantId,
             'market_space_id' => $spaceId,
             'external_id' => 'demo-contract-grocery',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('market_space_map_shapes')->insert([
+            'market_id' => $marketId,
+            'market_space_id' => $spaceId,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => json_encode([
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ]),
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
+            'meta' => json_encode([
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                    'market_space_key' => 'space-a-02',
+                ],
+            ]),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
