@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Idempotent write adapter расширен до demo market, market_locations, tenants и market_spaces: demo:provision может создать или обновить только рынок, demo-локации, demo-арендаторов и demo-помещения; остальные секции пока пропускаются.',
-    'next_step' => 'Следующий малый пакет: расширить write adapter на contracts только после отдельной проверки связей tenant/space; prod data writes останутся под отдельным разрешением.',
+    'current_focus' => 'Idempotent write adapter расширен до demo market, market_locations, tenants, market_spaces и tenant_contracts: demo:provision может создать или обновить только рынок, demo-локации, demo-арендаторов, demo-помещения и demo-договоры; остальные секции пока пропускаются.',
+    'next_step' => 'Следующий малый пакет: расширить write adapter на accruals/payments только после отдельной проверки финансовых связей; prod data writes останутся под отдельным разрешением.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -114,7 +114,7 @@ return [
                 ['title' => 'Safety flags и prod write barrier для demo/pilot контура', 'status' => 'done'],
                 ['title' => 'demo:provision dry-run план без записи данных', 'status' => 'done'],
                 ['title' => 'demo:provision preflight adapter проверяет payload, таблицы и колонки без записи данных', 'status' => 'done'],
-                ['title' => 'demo:provision idempotent write adapter для local/staging: demo market, market_locations, tenants и market_spaces', 'status' => 'done'],
+                ['title' => 'demo:provision idempotent write adapter для local/staging: demo market, market_locations, tenants, market_spaces и tenant_contracts', 'status' => 'done'],
                 ['title' => 'demo:reset', 'status' => 'pending'],
                 ['title' => 'Состав синтетических арендаторов, мест, договоров, финансов и marketplace описан в data builder', 'status' => 'done'],
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'pending'],

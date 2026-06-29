@@ -8,6 +8,7 @@ use App\Models\Market;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
+use App\Models\TenantContract;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use LogicException;
@@ -243,6 +244,12 @@ class DemoPilotProvisioner
             || $tenantWrite['status'] === 'blocked'
             ? ['status' => 'skipped', 'details' => 'market, location, or tenant write was blocked']
             : $this->writeSpaces($dataSet, (int) $marketWrite['market_id']);
+        $contractWrite = $marketWrite['status'] === 'blocked'
+            || $locationWrite['status'] === 'blocked'
+            || $tenantWrite['status'] === 'blocked'
+            || $spaceWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, or space write was blocked']
+            : $this->writeContracts($dataSet, (int) $marketWrite['market_id']);
         $sections = [];
         $issues = [];
 
@@ -259,6 +266,9 @@ class DemoPilotProvisioner
             } elseif ($section['section'] === 'spaces') {
                 $section['status'] = $spaceWrite['status'];
                 $section['details'] = $spaceWrite['details'];
+            } elseif ($section['section'] === 'contracts') {
+                $section['status'] = $contractWrite['status'];
+                $section['details'] = $contractWrite['details'];
             } else {
                 $section['status'] = 'skipped';
                 $section['details'] = 'write adapter is not implemented in this package';
@@ -281,6 +291,10 @@ class DemoPilotProvisioner
 
         if ($spaceWrite['status'] === 'blocked') {
             $issues[] = $spaceWrite['details'];
+        }
+
+        if ($contractWrite['status'] === 'blocked') {
+            $issues[] = $contractWrite['details'];
         }
 
         $report['status'] = $issues === [] ? 'partial' : 'blocked';
@@ -774,6 +788,164 @@ class DemoPilotProvisioner
         }
 
         return number_format((float) $value, 2, '.', '');
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writeContracts(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'contracts');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'contracts payload is empty'];
+        }
+
+        return DB::transaction(function () use ($dataSet, $records, $marketId): array {
+            $tenantIdsByKey = $this->tenantIdsByKey($dataSet, $marketId);
+            $spaceIdsByKey = $this->spaceIdsByKey($dataSet, $marketId);
+            $seenExternalIds = [];
+            $planned = [];
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $externalId = trim((string) ($record['external_id'] ?? ''));
+                $tenantKey = trim((string) ($record['tenant_key'] ?? ''));
+                $spaceKey = trim((string) ($record['market_space_key'] ?? ''));
+
+                if (
+                    $externalId === ''
+                    || trim((string) ($record['number'] ?? '')) === ''
+                    || trim((string) ($record['starts_at'] ?? '')) === ''
+                ) {
+                    return ['status' => 'blocked', 'details' => 'contract external_id, number, and starts_at are required'];
+                }
+
+                if (in_array($externalId, $seenExternalIds, true)) {
+                    return ['status' => 'blocked', 'details' => 'contracts payload has duplicate external_id [' . $externalId . ']'];
+                }
+
+                if ($tenantKey === '' || ! array_key_exists($tenantKey, $tenantIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'contract [' . $externalId . '] references missing tenant [' . $tenantKey . ']'];
+                }
+
+                if ($spaceKey === '' || ! array_key_exists($spaceKey, $spaceIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'contract [' . $externalId . '] references missing market_space [' . $spaceKey . ']'];
+                }
+
+                $seenExternalIds[] = $externalId;
+                $attributes = $this->contractAttributes($record, $marketId, $tenantIdsByKey[$tenantKey], $spaceIdsByKey[$spaceKey]);
+
+                if ($attributes['monthly_rent'] === null || $attributes['currency'] === '') {
+                    return ['status' => 'blocked', 'details' => 'contract [' . $externalId . '] monthly_rent and currency are required'];
+                }
+
+                $matches = TenantContract::query()
+                    ->where('market_id', $marketId)
+                    ->where('external_id', $externalId)
+                    ->get();
+
+                if ($matches->count() > 1) {
+                    return ['status' => 'blocked', 'details' => 'contract external_id [' . $externalId . '] matches multiple existing contracts'];
+                }
+
+                $planned[] = [$attributes, $matches->first()];
+            }
+
+            foreach ($planned as [$attributes, $contract]) {
+                if ($contract === null) {
+                    TenantContract::withoutEvents(static function () use ($attributes): void {
+                        TenantContract::query()->create($attributes);
+                    });
+
+                    $created++;
+
+                    continue;
+                }
+
+                $contract->fill($attributes);
+
+                if (! $contract->isDirty()) {
+                    $unchanged++;
+
+                    continue;
+                }
+
+                TenantContract::withoutEvents(static function () use ($contract): void {
+                    $contract->save();
+                });
+
+                $updated++;
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] contracts for market id [' . $marketId . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $contractPayload
+     * @return array{external_id:string, market_id:int, tenant_id:int, market_space_id:int, number:string, status:string, starts_at:string, ends_at:string|null, signed_at:string|null, monthly_rent:string|null, currency:string, is_active:bool, space_mapping_mode:string, notes:string}
+     */
+    private function contractAttributes(array $contractPayload, int $marketId, int $tenantId, int $spaceId): array
+    {
+        $source = trim((string) ($contractPayload['synthetic_source'] ?? 'demo_pilot')) ?: 'demo_pilot';
+        $mode = trim((string) ($contractPayload['space_mapping_mode'] ?? TenantContract::SPACE_MAPPING_MODE_MANUAL));
+
+        return [
+            'external_id' => trim((string) ($contractPayload['external_id'] ?? '')),
+            'market_id' => $marketId,
+            'tenant_id' => $tenantId,
+            'market_space_id' => $spaceId,
+            'number' => trim((string) ($contractPayload['number'] ?? '')),
+            'status' => trim((string) ($contractPayload['status'] ?? 'active')) ?: 'active',
+            'starts_at' => trim((string) ($contractPayload['starts_at'] ?? '')),
+            'ends_at' => filled($contractPayload['ends_at'] ?? null) ? trim((string) $contractPayload['ends_at']) : null,
+            'signed_at' => filled($contractPayload['signed_at'] ?? null) ? trim((string) $contractPayload['signed_at']) : null,
+            'monthly_rent' => $this->decimalString($contractPayload['monthly_rent'] ?? null),
+            'currency' => trim((string) ($contractPayload['currency'] ?? 'RUB')) ?: 'RUB',
+            'is_active' => (bool) ($contractPayload['is_active'] ?? true),
+            'space_mapping_mode' => in_array($mode, TenantContract::spaceMappingModes(), true)
+                ? $mode
+                : TenantContract::SPACE_MAPPING_MODE_MANUAL,
+            'notes' => 'Synthetic demo contract. Source: ' . $source,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array<string, int>
+     */
+    private function spaceIdsByKey(array $dataSet, int $marketId): array
+    {
+        $idsByKey = [];
+
+        foreach ($this->recordsForSection($dataSet, 'spaces') as $record) {
+            $key = trim((string) ($record['key'] ?? ''));
+            $code = trim((string) ($record['code'] ?? ''));
+
+            if ($key === '' || $code === '') {
+                continue;
+            }
+
+            $id = MarketSpace::query()
+                ->where('market_id', $marketId)
+                ->where('code', $code)
+                ->value('id');
+
+            if ($id !== null) {
+                $idsByKey[$key] = (int) $id;
+            }
+        }
+
+        return $idsByKey;
     }
 
     private function isSyntheticMarket(Market $market, string $source): bool
