@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Support\DemoPilotDataBuilder;
+use App\Support\DemoPilotProvisioner;
 use App\Support\DemoPilotSettings;
 use Illuminate\Console\Command;
 use LogicException;
@@ -19,7 +20,7 @@ class DemoProvisionCommand extends Command
 
     protected $description = 'Plan demo/pilot market provisioning with write-safe defaults';
 
-    public function handle(DemoPilotSettings $settings, DemoPilotDataBuilder $builder): int
+    public function handle(DemoPilotSettings $settings, DemoPilotDataBuilder $builder, DemoPilotProvisioner $provisioner): int
     {
         $execute = (bool) $this->option('execute');
         $dryRun = ! $execute || (bool) $this->option('dry-run');
@@ -44,7 +45,22 @@ class DemoProvisionCommand extends Command
         $this->table(['Section', 'Records'], $this->countRows($builder->counts($dataSet)));
         $this->table(['Step', 'Planned action'], $this->planRows($dataSet));
 
+        $preflight = $provisioner->preflight($dataSet);
+
+        $this->line('Provisioning preflight: ' . $preflight['status']);
+        $this->table(['Section', 'Table', 'Records', 'Schema'], $this->preflightRows($preflight['sections']));
+
         if ($dryRun) {
+            if ($preflight['issues'] !== []) {
+                $this->warn('Preflight issues:');
+
+                foreach ($preflight['issues'] as $issue) {
+                    $this->warn('- ' . $issue);
+                }
+
+                return self::FAILURE;
+            }
+
             $this->warn('DRY RUN: no markets, users, tenants, spaces, contracts, finance records, files, or external integrations were changed.');
 
             return self::SUCCESS;
@@ -58,7 +74,13 @@ class DemoProvisionCommand extends Command
             return self::FAILURE;
         }
 
-        $this->error('Execute mode is not implemented yet. Keep using --dry-run until the data-write package is reviewed.');
+        $execution = $provisioner->executePreflight($dataSet);
+
+        $this->line('Execute adapter write phase: ' . ($execution['writes_enabled'] ? 'enabled' : 'disabled'));
+
+        foreach ($execution['issues'] as $issue) {
+            $this->error($issue);
+        }
 
         return self::FAILURE;
     }
@@ -100,5 +122,22 @@ class DemoProvisionCommand extends Command
         }
 
         return $rows;
+    }
+
+    /**
+     * @param list<array{section:string, table:string, records:int, status:string, details:string}> $sections
+     * @return list<array{0:string, 1:string, 2:int, 3:string}>
+     */
+    private function preflightRows(array $sections): array
+    {
+        return array_map(
+            static fn (array $section): array => [
+                $section['section'],
+                $section['table'],
+                $section['records'],
+                $section['status'] . ': ' . $section['details'],
+            ],
+            $sections,
+        );
     }
 }
