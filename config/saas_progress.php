@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Перевести marketplace:bootstrap на безопасный dry-run по умолчанию: запись только через --execute.',
-    'next_step' => 'Проверить marketplace bootstrap guard локально, провести через PR, staging smoke, затем prod только после успешного staging.',
+    'current_focus' => 'Same-market validator/service добавлен; следующий безопасный шаг - подключать guards к договорам и местам малыми пакетами.',
+    'next_step' => 'Провести MarketWriteGuard через PR, staging smoke и prod smoke без миграций и без изменения данных.',
     'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
         [
@@ -93,10 +93,10 @@ return [
             'key' => 'write_guards',
             'title' => '4. Write guards',
             'weight' => 14,
-            'status' => 'pending',
+            'status' => 'in_progress',
             'summary' => 'Защита от cross-market связей при создании и обновлении данных.',
             'items' => [
-                ['title' => 'Same-market validator/service', 'status' => 'pending'],
+                ['title' => 'Same-market validator/service', 'status' => 'done'],
                 ['title' => 'Guards для договоров и мест', 'status' => 'pending'],
                 ['title' => 'Guards для начислений и платежей', 'status' => 'pending'],
                 ['title' => 'Guards для документов и шаринга', 'status' => 'pending'],
