@@ -26,6 +26,7 @@ class DemoPilotDataBuilderTest extends TestCase
             'users' => 4,
             'locations' => 2,
             'spaces' => 5,
+            'map_shapes' => 5,
             'tenants' => 4,
             'contracts' => 4,
             'accruals' => 4,
@@ -54,6 +55,11 @@ class DemoPilotDataBuilderTest extends TestCase
         foreach ($dataSet['contracts'] as $contract) {
             self::assertContains($contract['tenant_key'], $tenantKeys);
             self::assertContains($contract['market_space_key'], $spaceKeys);
+        }
+
+        foreach ($dataSet['map_shapes'] as $shape) {
+            self::assertContains($shape['market_space_key'], $spaceKeys);
+            self::assertGreaterThanOrEqual(3, count($shape['polygon']));
         }
 
         foreach ($dataSet['accruals'] as $accrual) {

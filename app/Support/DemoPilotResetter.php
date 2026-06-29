@@ -34,6 +34,10 @@ class DemoPilotResetter
             'table' => 'market_spaces',
             'required_columns' => ['market_id', 'code'],
         ],
+        'map_shapes' => [
+            'table' => 'market_space_map_shapes',
+            'required_columns' => ['market_id', 'market_space_id', 'meta'],
+        ],
         'tenants' => [
             'table' => 'tenants',
             'required_columns' => ['market_id', 'external_id'],
@@ -164,6 +168,7 @@ class DemoPilotResetter
             $counts['payments'] = $this->deleteFinanceRows('tenant_payments', $marketId, $this->sourceHashes($dataSet, 'payments'));
             $counts['accruals'] = $this->deleteFinanceRows('tenant_accruals', $marketId, $this->sourceHashes($dataSet, 'accruals'));
             $counts['contracts'] = $this->deleteByExternalIds('tenant_contracts', $marketId, $this->externalIds($dataSet, 'contracts'));
+            $counts['map_shapes'] = $this->deleteMapShapes($dataSet, $marketId);
             $counts['spaces'] = $this->deleteByCodes('market_spaces', $marketId, $this->codes($dataSet, 'spaces'));
             $this->deleteUserPermissionPivots($userIds);
             $counts['users'] = $this->deleteUsers($userIds);
@@ -294,6 +299,7 @@ class DemoPilotResetter
             'contracts' => $this->countByExternalIds('tenant_contracts', $marketId, $this->externalIds($dataSet, 'contracts')),
             'accruals' => $this->financeRowsQuery('tenant_accruals', $marketId, $this->sourceHashes($dataSet, 'accruals'))->count(),
             'payments' => $this->financeRowsQuery('tenant_payments', $marketId, $this->sourceHashes($dataSet, 'payments'))->count(),
+            'map_shapes' => $this->targetMapShapesQuery($dataSet, $marketId)->count(),
             'marketplace_categories' => $this->countBySlugs('marketplace_categories', $marketId, $this->slugs($dataSet, 'marketplace_categories')),
             'marketplace_products' => $this->demoProductsQuery($dataSet, $marketId)->count(),
             'announcements' => $this->countBySlugs('marketplace_announcements', $marketId, $this->slugs($dataSet, 'announcements')),
@@ -407,6 +413,55 @@ class DemoPilotResetter
     private function deleteByCodes(string $table, int $marketId, array $codes): int
     {
         return $this->whereInOrNone(DB::table($table)->where('market_id', $marketId), 'code', $codes)->delete();
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     */
+    private function deleteMapShapes(array $dataSet, int $marketId): int
+    {
+        return $this->targetMapShapesQuery($dataSet, $marketId)->delete();
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     */
+    private function targetMapShapesQuery(array $dataSet, int $marketId): Builder
+    {
+        $query = DB::table('market_space_map_shapes')
+            ->where('market_id', $marketId)
+            ->where('meta->synthetic_source', $this->source($dataSet));
+
+        $query = $this->whereInOrNone($query, 'market_space_id', $this->targetSpaceIds($dataSet, $marketId));
+
+        return $this->whereInOrNone($query, 'meta->demo_key', $this->mapShapeKeys($dataSet));
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return list<int>
+     */
+    private function targetSpaceIds(array $dataSet, int $marketId): array
+    {
+        return $this->whereInOrNone(
+            DB::table('market_spaces')->where('market_id', $marketId),
+            'code',
+            $this->codes($dataSet, 'spaces'),
+        )
+            ->pluck('id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return list<string>
+     */
+    private function mapShapeKeys(array $dataSet): array
+    {
+        return $this->stringValues($dataSet, 'map_shapes', 'key');
     }
 
     /**

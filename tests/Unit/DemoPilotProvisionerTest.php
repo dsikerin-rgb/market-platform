@@ -23,7 +23,7 @@ class DemoPilotProvisionerTest extends TestCase
         self::assertSame('ready', $report['status']);
         self::assertFalse($report['writes_enabled']);
         self::assertSame([], $report['issues']);
-        self::assertCount(11, $report['sections']);
+        self::assertCount(12, $report['sections']);
     }
 
     public function test_preflight_blocks_broken_payload_references(): void

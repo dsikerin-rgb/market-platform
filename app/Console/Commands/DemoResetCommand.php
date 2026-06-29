@@ -56,7 +56,7 @@ class DemoResetCommand extends Command
                 return self::FAILURE;
             }
 
-            $this->warn('DRY RUN: no demo records, users, tenants, spaces, contracts, finance records, files, or external integrations were deleted.');
+            $this->warn('DRY RUN: no demo records, users, tenants, spaces, map shapes, contracts, finance records, files, or external integrations were deleted.');
 
             return self::SUCCESS;
         }

@@ -7,6 +7,7 @@ namespace App\Support;
 use App\Models\Market;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
+use App\Models\MarketSpaceMapShape;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
@@ -52,6 +53,27 @@ class DemoPilotProvisioner
                 'type',
                 'status',
                 'is_active',
+            ],
+        ],
+        'map_shapes' => [
+            'table' => 'market_space_map_shapes',
+            'required_columns' => [
+                'market_id',
+                'market_space_id',
+                'page',
+                'version',
+                'polygon',
+                'bbox_x1',
+                'bbox_y1',
+                'bbox_x2',
+                'bbox_y2',
+                'fill_color',
+                'stroke_color',
+                'fill_opacity',
+                'stroke_width',
+                'meta',
+                'is_active',
+                'sort_order',
             ],
         ],
         'tenants' => [
@@ -264,6 +286,10 @@ class DemoPilotProvisioner
             || $userWrite['status'] === 'blocked'
             ? ['status' => 'skipped', 'details' => 'market, location, tenant, or user write was blocked']
             : $this->writeSpaces($dataSet, (int) $marketWrite['market_id']);
+        $mapShapeWrite = $marketWrite['status'] === 'blocked'
+            || $spaceWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market or space write was blocked']
+            : $this->writeMapShapes($dataSet, (int) $marketWrite['market_id']);
         $contractWrite = $marketWrite['status'] === 'blocked'
             || $locationWrite['status'] === 'blocked'
             || $tenantWrite['status'] === 'blocked'
@@ -307,6 +333,9 @@ class DemoPilotProvisioner
             } elseif ($section['section'] === 'spaces') {
                 $section['status'] = $spaceWrite['status'];
                 $section['details'] = $spaceWrite['details'];
+            } elseif ($section['section'] === 'map_shapes') {
+                $section['status'] = $mapShapeWrite['status'];
+                $section['details'] = $mapShapeWrite['details'];
             } elseif ($section['section'] === 'contracts') {
                 $section['status'] = $contractWrite['status'];
                 $section['details'] = $contractWrite['details'];
@@ -342,6 +371,10 @@ class DemoPilotProvisioner
 
         if ($spaceWrite['status'] === 'blocked') {
             $issues[] = $spaceWrite['details'];
+        }
+
+        if ($mapShapeWrite['status'] === 'blocked') {
+            $issues[] = $mapShapeWrite['details'];
         }
 
         if ($contractWrite['status'] === 'blocked') {
@@ -947,6 +980,157 @@ class DemoPilotProvisioner
             'is_active' => (bool) ($spacePayload['is_active'] ?? true),
             'notes' => 'Synthetic demo space. Source: ' . $source,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writeMapShapes(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'map_shapes');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'map_shapes payload is empty'];
+        }
+
+        return DB::transaction(function () use ($dataSet, $records, $marketId): array {
+            $spaceIdsByKey = $this->spaceIdsByKey($dataSet, $marketId);
+            $seenKeys = [];
+            $planned = [];
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $key = trim((string) ($record['key'] ?? ''));
+                $spaceKey = trim((string) ($record['market_space_key'] ?? ''));
+                $page = (int) ($record['page'] ?? 1);
+                $version = (int) ($record['version'] ?? 1);
+                $polygon = MarketSpaceMapShape::normalizePolygon($record['polygon'] ?? []);
+
+                if ($key === '' || $spaceKey === '' || $page <= 0 || $version <= 0) {
+                    return ['status' => 'blocked', 'details' => 'map shape key, market_space_key, page, and version are required'];
+                }
+
+                if (in_array($key, $seenKeys, true)) {
+                    return ['status' => 'blocked', 'details' => 'map_shapes payload has duplicate key [' . $key . ']'];
+                }
+
+                if (! array_key_exists($spaceKey, $spaceIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'map shape [' . $key . '] references missing space [' . $spaceKey . ']'];
+                }
+
+                if (count($polygon) < 3) {
+                    return ['status' => 'blocked', 'details' => 'map shape [' . $key . '] must contain at least 3 polygon points'];
+                }
+
+                $attributes = $this->mapShapeAttributes(
+                    $record,
+                    $marketId,
+                    $spaceIdsByKey[$spaceKey],
+                    $spaceKey,
+                    $polygon,
+                );
+
+                $matches = MarketSpaceMapShape::query()
+                    ->where('market_id', $marketId)
+                    ->where('market_space_id', $spaceIdsByKey[$spaceKey])
+                    ->where('page', $page)
+                    ->where('version', $version)
+                    ->get();
+
+                if ($matches->count() > 1) {
+                    return ['status' => 'blocked', 'details' => 'map shape for space [' . $spaceKey . '] page [' . $page . '] version [' . $version . '] matches multiple existing shapes'];
+                }
+
+                $shape = $matches->first();
+                $source = (string) data_get($attributes, 'meta.synthetic_source', 'demo_pilot');
+
+                if ($shape !== null && ! $this->isSyntheticMapShape($shape, $key, $source)) {
+                    return ['status' => 'blocked', 'details' => 'map shape for space [' . $spaceKey . '] already exists and is not the expected demo shape [' . $key . ']'];
+                }
+
+                $seenKeys[] = $key;
+                $planned[] = [$attributes, $shape];
+            }
+
+            foreach ($planned as [$attributes, $shape]) {
+                if ($shape === null) {
+                    MarketSpaceMapShape::query()->create($attributes);
+                    $created++;
+
+                    continue;
+                }
+
+                $shape->fill($attributes);
+
+                if (! $shape->isDirty()) {
+                    $unchanged++;
+
+                    continue;
+                }
+
+                $shape->save();
+                $updated++;
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] map shapes for market id [' . $marketId . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $shapePayload
+     * @param list<array{x: float, y: float}> $polygon
+     * @return array<string, mixed>
+     */
+    private function mapShapeAttributes(
+        array $shapePayload,
+        int $marketId,
+        int $spaceId,
+        string $spaceKey,
+        array $polygon,
+    ): array {
+        $key = trim((string) ($shapePayload['key'] ?? ''));
+        $source = trim((string) ($shapePayload['synthetic_source'] ?? 'demo_pilot')) ?: 'demo_pilot';
+        [$x1, $y1, $x2, $y2] = MarketSpaceMapShape::computeBbox($polygon);
+
+        return [
+            'market_id' => $marketId,
+            'market_space_id' => $spaceId,
+            'page' => (int) ($shapePayload['page'] ?? 1),
+            'version' => (int) ($shapePayload['version'] ?? 1),
+            'polygon' => $polygon,
+            'bbox_x1' => round($x1, 2),
+            'bbox_y1' => round($y1, 2),
+            'bbox_x2' => round($x2, 2),
+            'bbox_y2' => round($y2, 2),
+            'stroke_color' => trim((string) ($shapePayload['stroke_color'] ?? '#2563eb')) ?: '#2563eb',
+            'fill_color' => trim((string) ($shapePayload['fill_color'] ?? '#38bdf8')) ?: '#38bdf8',
+            'fill_opacity' => (float) ($shapePayload['fill_opacity'] ?? 0.14),
+            'stroke_width' => (float) ($shapePayload['stroke_width'] ?? 1.5),
+            'meta' => [
+                'demo_key' => $key,
+                'market_space_key' => $spaceKey,
+                'synthetic_source' => $source,
+                'demo_pilot' => true,
+            ],
+            'is_active' => (bool) ($shapePayload['is_active'] ?? true),
+            'sort_order' => (int) ($shapePayload['sort_order'] ?? 0),
+        ];
+    }
+
+    private function isSyntheticMapShape(MarketSpaceMapShape $shape, string $key, string $source): bool
+    {
+        $meta = is_array($shape->meta) ? $shape->meta : [];
+
+        return ($meta['demo_key'] ?? null) === $key
+            && ($meta['synthetic_source'] ?? null) === $source;
     }
 
     /**
@@ -1637,12 +1821,14 @@ class DemoPilotProvisioner
         $issues = [];
         $tenantKeys = $this->keys($dataSet, 'tenants', $issues);
         $spaceKeys = $this->keys($dataSet, 'spaces', $issues);
+        $this->keys($dataSet, 'map_shapes', $issues);
         $contractKeys = $this->keys($dataSet, 'contracts', $issues);
         $categoryKeys = $this->keys($dataSet, 'marketplace_categories', $issues);
 
         $this->assertReferences($this->recordsForSection($dataSet, 'users'), 'tenant_key', $tenantKeys, 'users', $issues, true);
         $this->assertKnownUserRoles($this->recordsForSection($dataSet, 'users'), $issues);
         $this->assertReferences($this->recordsForSection($dataSet, 'spaces'), 'tenant_key', $tenantKeys, 'spaces', $issues, true);
+        $this->assertReferences($this->recordsForSection($dataSet, 'map_shapes'), 'market_space_key', $spaceKeys, 'map_shapes', $issues);
         $this->assertReferences($this->recordsForSection($dataSet, 'contracts'), 'tenant_key', $tenantKeys, 'contracts', $issues);
         $this->assertReferences($this->recordsForSection($dataSet, 'contracts'), 'market_space_key', $spaceKeys, 'contracts', $issues);
         $this->assertReferences($this->recordsForSection($dataSet, 'accruals'), 'tenant_key', $tenantKeys, 'accruals', $issues);

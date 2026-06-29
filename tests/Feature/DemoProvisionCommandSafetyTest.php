@@ -30,7 +30,7 @@ class DemoProvisionCommandSafetyTest extends TestCase
             ->expectsOutputToContain('marketplace_products')
             ->expectsOutputToContain('announcements')
             ->expectsOutput('Provisioning preflight: ready')
-            ->expectsOutputToContain('DRY RUN: no markets, users, tenants, spaces, contracts, finance records, files, or external integrations were changed.')
+            ->expectsOutputToContain('DRY RUN: no markets, users, tenants, spaces, map shapes, contracts, finance records, files, or external integrations were changed.')
             ->assertExitCode(0);
     }
 
