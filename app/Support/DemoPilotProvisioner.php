@@ -475,7 +475,7 @@ class DemoPilotProvisioner
     private function marketAttributes(array $marketPayload): array
     {
         return [
-            'name' => trim((string) ($marketPayload['name'] ?? 'Demo Market')) ?: 'Demo Market',
+            'name' => trim((string) ($marketPayload['name'] ?? 'Демо-рынок Центральный')) ?: 'Демо-рынок Центральный',
             'slug' => trim((string) ($marketPayload['slug'] ?? '')),
             'code' => trim((string) ($marketPayload['code'] ?? '')),
             'address' => trim((string) ($marketPayload['address'] ?? '')),

@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'CSV-импорт начислений и marketplace bootstrap переведены на MarketContext во время write-фазы; пакет не включает старые файлы из других worktree, prod flags/DB writes не трогаются.',
-    'next_step' => 'Следующий малый пакет: закрыть оставшиеся исключения jobs/commands без MarketContext или перейти к demo-пользователям после проверки этого пакета; strict scope в prod не включаем.',
+    'current_focus' => 'Демо-набор русифицирован для пользователей из России: рынок, локации, арендаторы, места, товары, анонс и будущие demo users теперь имеют русские видимые названия; технические slug/source/email остаются стабильными для reset/provision.',
+    'next_step' => 'Следующий малый пакет: добавить demo-пользователей/сотрудников в write adapter, затем отдельным пакетом добавить простую карту рынка с привязкой фигур к market_spaces; demo flags и DB writes на prod не включаем без отдельного решения.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [

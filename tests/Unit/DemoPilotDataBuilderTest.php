@@ -74,6 +74,25 @@ class DemoPilotDataBuilderTest extends TestCase
         }
     }
 
+    public function test_visible_demo_content_is_localized_for_russian_market(): void
+    {
+        $dataSet = app(DemoPilotDataBuilder::class)->build();
+
+        self::assertSame('Демо-рынок Центральный', $dataSet['market']['name']);
+        self::assertSame('г. Новосибирск, ул. Рыночная, 1', $dataSet['market']['address']);
+        self::assertSame('Анна Волкова', $dataSet['users'][0]['name']);
+        self::assertSame('Основной павильон', $dataSet['locations'][0]['name']);
+        self::assertSame('Продукты у дома', $dataSet['spaces'][1]['display_name']);
+        self::assertSame('ООО "Продукты у дома"', $dataSet['tenants'][1]['name']);
+        self::assertSame('demo-grocery', $dataSet['tenants'][1]['slug']);
+        self::assertSame('Бакалея', $dataSet['marketplace_categories'][1]['name']);
+        self::assertSame('grocery', $dataSet['marketplace_categories'][1]['slug']);
+        self::assertSame('Мед цветочный', $dataSet['marketplace_products'][1]['title']);
+        self::assertSame('demo-honey-jar', $dataSet['marketplace_products'][1]['slug']);
+        self::assertSame('Ярмарка выходного дня', $dataSet['announcements'][0]['title']);
+        self::assertSame('demo-weekend-market', $dataSet['announcements'][0]['slug']);
+    }
+
     public function test_normalizes_empty_overrides_to_safe_defaults(): void
     {
         $dataSet = app(DemoPilotDataBuilder::class)->build('  ', '@');

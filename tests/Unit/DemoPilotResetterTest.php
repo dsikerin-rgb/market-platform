@@ -229,7 +229,7 @@ class DemoPilotResetterTest extends TestCase
     private function createDemoMarket(): Market
     {
         return Market::query()->create([
-            'name' => 'Demo Market',
+            'name' => 'Демо-рынок Центральный',
             'slug' => 'demo-market',
             'code' => 'DEMO_MARKET',
             'settings' => [
@@ -289,7 +289,7 @@ class DemoPilotResetterTest extends TestCase
     {
         DB::table('market_locations')->insert([
             'market_id' => $marketId,
-            'name' => 'Main Hall',
+            'name' => 'Основной павильон',
             'code' => 'main-hall',
             'created_at' => now(),
             'updated_at' => now(),
@@ -330,7 +330,7 @@ class DemoPilotResetterTest extends TestCase
             'tenant_id' => $tenantId,
             'market_space_id' => $spaceId,
             'slug' => 'demo-honey-jar',
-            'title' => 'Demo honey jar',
+            'title' => 'Мед цветочный',
             'is_demo' => true,
             'created_at' => now(),
             'updated_at' => now(),
@@ -339,7 +339,7 @@ class DemoPilotResetterTest extends TestCase
             'market_id' => $marketId,
             'author_user_id' => $userId,
             'slug' => 'demo-weekend-market',
-            'title' => 'Demo weekend market',
+            'title' => 'Ярмарка выходного дня',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
