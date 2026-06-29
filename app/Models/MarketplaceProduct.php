@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MarketWriteGuard;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Schema;
@@ -52,6 +53,15 @@ class MarketplaceProduct extends Model
         'is_demo' => 'boolean',
         'published_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $product): void {
+            $product->assertTenantBelongsToProductMarket();
+            $product->assertSpaceBelongsToProductMarket();
+            $product->assertCategoryBelongsToProductMarket();
+        });
+    }
 
     public function market(): BelongsTo
     {
@@ -115,5 +125,71 @@ class MarketplaceProduct extends Model
         }
 
         return static::$hasIsDemoColumn;
+    }
+
+    private function assertTenantBelongsToProductMarket(): void
+    {
+        if (! $this->market_id || ! $this->tenant_id || ! Schema::hasTable('tenants')) {
+            return;
+        }
+
+        $tenantMarketId = Tenant::query()
+            ->whereKey((int) $this->tenant_id)
+            ->value('market_id');
+
+        if ($tenantMarketId === null) {
+            return;
+        }
+
+        app(MarketWriteGuard::class)->assertSameMarketId(
+            $this->market_id,
+            $tenantMarketId,
+            'tenant_id',
+            'Marketplace product tenant belongs to another market.',
+        );
+    }
+
+    private function assertSpaceBelongsToProductMarket(): void
+    {
+        if (! $this->market_id || ! $this->market_space_id || ! Schema::hasTable('market_spaces')) {
+            return;
+        }
+
+        $spaceMarketId = MarketSpace::query()
+            ->whereKey((int) $this->market_space_id)
+            ->value('market_id');
+
+        if ($spaceMarketId === null) {
+            return;
+        }
+
+        app(MarketWriteGuard::class)->assertSameMarketId(
+            $this->market_id,
+            $spaceMarketId,
+            'market_space_id',
+            'Marketplace product space belongs to another market.',
+        );
+    }
+
+    private function assertCategoryBelongsToProductMarket(): void
+    {
+        if (! $this->market_id || ! $this->category_id || ! Schema::hasTable('marketplace_categories')) {
+            return;
+        }
+
+        $categoryMarketId = MarketplaceCategory::query()
+            ->whereKey((int) $this->category_id)
+            ->value('market_id');
+
+        if ($categoryMarketId === null) {
+            return;
+        }
+
+        app(MarketWriteGuard::class)->assertSameMarketId(
+            $this->market_id,
+            $categoryMarketId,
+            'category_id',
+            'Marketplace product category belongs to another market.',
+        );
     }
 }
