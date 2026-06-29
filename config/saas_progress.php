@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'demo:provision теперь создаёт demo users/staff в существующей модели users: директор, админ, оператор и tenant user получают market/tenant привязку и роли без сброса пароля при повторном запуске.',
-    'next_step' => 'Следующий малый пакет: добавить простую карту рынка с привязкой фигур к market_spaces; demo flags и DB writes на prod не включаем без отдельного решения.',
+    'current_focus' => 'demo:provision теперь создаёт простую демо-карту: 5 активных фигур привязаны к synthetic market_spaces, а demo:reset удаляет только эти demo shapes перед удалением мест.',
+    'next_step' => 'Следующий малый пакет: закрепить, что внешние интеграции в демо выключены, и подготовить demo script на 15 минут; demo flags и DB writes на prod не включаем без отдельного решения.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -119,6 +119,7 @@ return [
                 ['title' => 'Состав синтетических арендаторов, мест, договоров, финансов и marketplace описан в data builder', 'status' => 'done'],
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'done'],
                 ['title' => 'Демо-пользователи директор/админ/оператор/арендатор', 'status' => 'done'],
+                ['title' => 'Демо-карта рынка: фигуры для всех synthetic market_spaces', 'status' => 'done'],
                 ['title' => 'Внешние интеграции в демо выключены', 'status' => 'pending'],
                 ['title' => 'Demo script на 15 минут', 'status' => 'pending'],
             ],

@@ -61,7 +61,7 @@ class DemoProvisionCommand extends Command
                 return self::FAILURE;
             }
 
-            $this->warn('DRY RUN: no markets, users, tenants, spaces, contracts, finance records, files, or external integrations were changed.');
+            $this->warn('DRY RUN: no markets, users, tenants, spaces, map shapes, contracts, finance records, files, or external integrations were changed.');
 
             return self::SUCCESS;
         }
@@ -104,6 +104,7 @@ class DemoProvisionCommand extends Command
             ['market', 'Create or reuse synthetic market [' . $dataSet['metadata']['market_slug'] . '] with demo metadata.'],
             ['roles', 'Prepare director, admin, operator, and tenant demo users under [' . $dataSet['metadata']['email_domain'] . '].'],
             ['spaces', 'Create synthetic locations, rows, spaces, and occupancy signals.'],
+            ['map_shapes', 'Create simple demo map shapes bound to synthetic market spaces.'],
             ['tenants', 'Create synthetic tenants, contacts, contracts, and bindings to spaces.'],
             ['finance', 'Create synthetic accrual/payment/debt records clearly marked as demo data.'],
             ['marketplace', 'Attach demo marketplace categories, products, announcements, and safe local assets.'],

@@ -21,7 +21,7 @@ class DemoResetCommandSafetyTest extends TestCase
             ->expectsOutput('Email domain: demo.marketuchet.local')
             ->expectsOutput('External integrations: disabled')
             ->expectsOutput('Reset preflight: ready')
-            ->expectsOutputToContain('DRY RUN: no demo records, users, tenants, spaces, contracts, finance records, files, or external integrations were deleted.')
+            ->expectsOutputToContain('DRY RUN: no demo records, users, tenants, spaces, map shapes, contracts, finance records, files, or external integrations were deleted.')
             ->assertExitCode(0);
     }
 

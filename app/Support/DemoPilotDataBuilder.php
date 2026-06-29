@@ -34,6 +34,7 @@ class DemoPilotDataBuilder
             'users' => $this->users($marketSlug, $emailDomain, $source),
             'locations' => $this->locations($source),
             'spaces' => $this->spaces($source),
+            'map_shapes' => $this->mapShapes($source),
             'tenants' => $this->tenants($emailDomain, $source),
             'contracts' => $this->contracts($source),
             'accruals' => $this->accruals($source),
@@ -195,6 +196,54 @@ class DemoPilotDataBuilder
             'rent_rate_unit' => 'sqm_month',
             'type' => 'retail',
             'status' => $status,
+            'is_active' => true,
+            'synthetic_source' => $source,
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function mapShapes(string $source): array
+    {
+        return [
+            $this->mapShape('shape-a-01', 'space-a-01', 60, 80, 220, 180, 10, $source),
+            $this->mapShape('shape-a-02', 'space-a-02', 240, 80, 430, 180, 20, $source),
+            $this->mapShape('shape-a-03', 'space-a-03', 450, 80, 600, 180, 30, $source),
+            $this->mapShape('shape-b-01', 'space-b-01', 110, 250, 250, 350, 40, $source),
+            $this->mapShape('shape-b-02', 'space-b-02', 270, 250, 430, 350, 50, $source),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapShape(
+        string $key,
+        string $spaceKey,
+        int $x1,
+        int $y1,
+        int $x2,
+        int $y2,
+        int $sortOrder,
+        string $source,
+    ): array {
+        return [
+            'key' => $key,
+            'market_space_key' => $spaceKey,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => $x1, 'y' => $y1],
+                ['x' => $x2, 'y' => $y1],
+                ['x' => $x2, 'y' => $y2],
+                ['x' => $x1, 'y' => $y2],
+            ],
+            'stroke_color' => '#2563eb',
+            'fill_color' => '#38bdf8',
+            'fill_opacity' => 0.14,
+            'stroke_width' => 1.5,
+            'sort_order' => $sortOrder,
             'is_active' => true,
             'synthetic_source' => $source,
         ];

@@ -91,6 +91,27 @@ class DemoPilotResetterTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('market_space_map_shapes', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('market_id');
+            $table->unsignedBigInteger('market_space_id')->nullable();
+            $table->unsignedInteger('page')->default(1);
+            $table->unsignedInteger('version')->default(1);
+            $table->json('polygon');
+            $table->decimal('bbox_x1', 10, 2);
+            $table->decimal('bbox_y1', 10, 2);
+            $table->decimal('bbox_x2', 10, 2);
+            $table->decimal('bbox_y2', 10, 2);
+            $table->string('fill_color')->nullable();
+            $table->string('stroke_color')->nullable();
+            $table->decimal('fill_opacity', 4, 2)->nullable();
+            $table->decimal('stroke_width', 5, 2)->nullable();
+            $table->json('meta')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->integer('sort_order')->default(0);
+            $table->timestamps();
+        });
+
         Schema::create('tenant_contracts', function (Blueprint $table): void {
             $table->id();
             $table->unsignedBigInteger('market_id');
@@ -187,6 +208,8 @@ class DemoPilotResetterTest extends TestCase
         self::assertSame(1, DB::table('users')->where('email', 'real@example.test')->count());
         self::assertSame(0, DB::table('users')->where('email', 'admin@demo.marketuchet.local')->count());
         self::assertSame(0, DB::table('model_has_roles')->where('model_type', User::class)->where('model_id', $userId)->count());
+        self::assertSame(0, DB::table('market_space_map_shapes')->where('meta->demo_key', 'shape-a-02')->count());
+        self::assertSame(1, DB::table('market_space_map_shapes')->where('meta->synthetic_source', 'manual')->count());
         self::assertSame(0, DB::table('tenant_payments')->where('source', 'demo_pilot')->count());
         self::assertSame(1, DB::table('tenant_payments')->where('source', '1c')->count());
         self::assertSame(0, DB::table('marketplace_products')->where('slug', 'demo-honey-jar')->count());
@@ -302,6 +325,35 @@ class DemoPilotResetterTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+        DB::table('market_space_map_shapes')->insert([
+            'market_id' => $marketId,
+            'market_space_id' => $spaceId,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => json_encode([
+                ['x' => 240, 'y' => 80],
+                ['x' => 430, 'y' => 80],
+                ['x' => 430, 'y' => 180],
+                ['x' => 240, 'y' => 180],
+            ]),
+            'bbox_x1' => 240,
+            'bbox_y1' => 80,
+            'bbox_x2' => 430,
+            'bbox_y2' => 180,
+            'fill_color' => '#38bdf8',
+            'stroke_color' => '#2563eb',
+            'fill_opacity' => 0.14,
+            'stroke_width' => 1.5,
+            'meta' => json_encode([
+                'demo_key' => 'shape-a-02',
+                'market_space_key' => 'space-a-02',
+                'synthetic_source' => 'demo_pilot',
+            ]),
+            'is_active' => true,
+            'sort_order' => 20,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
         DB::table('tenant_accruals')->insert([
             'market_id' => $marketId,
             'tenant_id' => $tenantId,
@@ -369,6 +421,33 @@ class DemoPilotResetterTest extends TestCase
             'slug' => 'real-product',
             'title' => 'Real Product',
             'is_demo' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('market_space_map_shapes')->insert([
+            'market_id' => $marketId,
+            'market_space_id' => null,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => json_encode([
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ]),
+            'bbox_x1' => 1,
+            'bbox_y1' => 1,
+            'bbox_x2' => 2,
+            'bbox_y2' => 2,
+            'fill_color' => '#111111',
+            'stroke_color' => '#111111',
+            'fill_opacity' => 0.1,
+            'stroke_width' => 1,
+            'meta' => json_encode([
+                'demo_key' => 'manual-shape',
+                'synthetic_source' => 'manual',
+            ]),
+            'is_active' => true,
+            'sort_order' => 1,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
