@@ -77,6 +77,11 @@ class DemoPilotResetter
         $issues = [];
         $schema = $this->schemaStatuses();
         $market = null;
+        $integrationGuard = app(DemoPilotExternalIntegrationGuard::class)->check($dataSet);
+
+        if ($integrationGuard['status'] !== 'ready') {
+            $issues = array_merge($issues, $integrationGuard['issues']);
+        }
 
         try {
             $market = $this->demoMarket($dataSet);
@@ -111,6 +116,14 @@ class DemoPilotResetter
                 'details' => $details,
             ];
         }
+
+        $sections[] = [
+            'section' => 'integrations',
+            'table' => $integrationGuard['table'],
+            'records' => $integrationGuard['records'],
+            'status' => $integrationGuard['status'],
+            'details' => $integrationGuard['details'],
+        ];
 
         if ($market === null && $issues === []) {
             $sections[0]['details'] = 'demo market [' . $this->marketSlug($dataSet) . '] does not exist';
@@ -187,7 +200,10 @@ class DemoPilotResetter
             $section['status'] = ($deleted[$name] ?? 0) > 0 ? 'deleted' : 'unchanged';
             $section['details'] = 'deleted [' . ($deleted[$name] ?? 0) . '] records';
 
-            if ($name === 'market') {
+            if ($name === 'integrations') {
+                $section['status'] = 'unchanged';
+                $section['details'] = 'external integrations disabled; no outbound adapters called';
+            } elseif ($name === 'market') {
                 $section['status'] = 'retained';
                 $section['details'] = 'demo market shell is retained by this safe reset package';
             }

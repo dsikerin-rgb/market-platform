@@ -23,7 +23,26 @@ class DemoPilotProvisionerTest extends TestCase
         self::assertSame('ready', $report['status']);
         self::assertFalse($report['writes_enabled']);
         self::assertSame([], $report['issues']);
-        self::assertCount(12, $report['sections']);
+        self::assertCount(13, $report['sections']);
+        self::assertSame('ready', $this->sectionStatus($report, 'integrations'));
+    }
+
+    public function test_preflight_blocks_enabled_external_integrations(): void
+    {
+        $this->mockReadySchema();
+
+        config()->set('demo_pilot.external_integrations_enabled', true);
+        $dataSet = app(DemoPilotDataBuilder::class)->build();
+        $dataSet['metadata']['external_integrations_enabled'] = true;
+        $dataSet['integrations']['one_c'] = 'enabled';
+
+        $report = app(DemoPilotProvisioner::class)->preflight($dataSet);
+
+        self::assertSame('blocked', $report['status']);
+        self::assertSame('blocked', $this->sectionStatus($report, 'integrations'));
+        self::assertContains('demo external integrations config flag must remain disabled', $report['issues']);
+        self::assertContains('demo metadata external_integrations_enabled must be false', $report['issues']);
+        self::assertContains('demo integration [1C] must be disabled', $report['issues']);
     }
 
     public function test_preflight_blocks_broken_payload_references(): void
@@ -106,5 +125,19 @@ class DemoPilotProvisionerTest extends TestCase
     {
         Schema::shouldReceive('hasTable')->andReturn(true);
         Schema::shouldReceive('hasColumn')->andReturn(true);
+    }
+
+    /**
+     * @param array{sections:list<array{section:string, status:string}>} $report
+     */
+    private function sectionStatus(array $report, string $section): string
+    {
+        foreach ($report['sections'] as $sectionReport) {
+            if ($sectionReport['section'] === $section) {
+                return $sectionReport['status'];
+            }
+        }
+
+        self::fail('Missing section [' . $section . '] in provisioner report.');
     }
 }

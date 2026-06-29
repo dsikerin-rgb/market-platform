@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'demo:provision теперь создаёт простую демо-карту: 5 активных фигур привязаны к synthetic market_spaces, а demo:reset удаляет только эти demo shapes перед удалением мест.',
-    'next_step' => 'Следующий малый пакет: закрепить, что внешние интеграции в демо выключены, и подготовить demo script на 15 минут; demo flags и DB writes на prod не включаем без отдельного решения.',
+    'current_focus' => 'demo preflight теперь явно блокирует включение live 1C, mail, Telegram и webhooks в demo/pilot контуре до любых DB-записей.',
+    'next_step' => 'Следующий малый пакет: подготовить demo script на 15 минут; demo flags и DB writes на prod не включаем без отдельного решения.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -120,7 +120,7 @@ return [
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'done'],
                 ['title' => 'Демо-пользователи директор/админ/оператор/арендатор', 'status' => 'done'],
                 ['title' => 'Демо-карта рынка: фигуры для всех synthetic market_spaces', 'status' => 'done'],
-                ['title' => 'Внешние интеграции в демо выключены', 'status' => 'pending'],
+                ['title' => 'Внешние интеграции в демо выключены', 'status' => 'done'],
                 ['title' => 'Demo script на 15 минут', 'status' => 'pending'],
             ],
         ],
