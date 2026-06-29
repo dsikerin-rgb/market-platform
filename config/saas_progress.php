@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Перевести market:holidays:sync на безопасный dry-run по умолчанию, сохранив штатное расписание через явный --execute --all-markets.',
-    'next_step' => 'Дальше разбирать оставшиеся write-capable команды отдельными пакетами: notification health, backfill, cleanup, seed, marketplace и AI сценарии.',
+    'current_focus' => 'Перевести market:spaces-merge на безопасный dry-run по умолчанию: запись только через --execute.',
+    'next_step' => 'Дальше продолжить write-capable artisan-команды маленькими пакетами: local checks, PR, staging smoke, затем prod только после успешного staging.',
     'release_policy' => 'Страница Ход работ выведена на prod. Следующие SaaS-изменения: local/staging сначала, prod только с flags off и отдельным подтверждением.',
     'stages' => [
         [
