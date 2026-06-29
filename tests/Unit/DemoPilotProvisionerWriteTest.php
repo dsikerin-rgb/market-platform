@@ -259,8 +259,8 @@ class DemoPilotProvisionerWriteTest extends TestCase
 
         self::assertSame('partial', $report['status']);
         self::assertSame('updated', $this->sectionStatus($report, 'market'));
-        self::assertSame('Demo Market', $market->name);
-        self::assertSame('Demo address, 1', $market->address);
+        self::assertSame('Демо-рынок Центральный', $market->name);
+        self::assertSame('г. Новосибирск, ул. Рыночная, 1', $market->address);
         self::assertTrue((bool) data_get($market->features, 'marketplace'));
         self::assertSame(2, MarketLocation::query()->where('market_id', $market->getKey())->count());
         self::assertSame(4, Tenant::query()->where('market_id', $market->getKey())->count());
@@ -273,10 +273,10 @@ class DemoPilotProvisionerWriteTest extends TestCase
     public function test_execute_updates_existing_demo_locations(): void
     {
         $market = Market::query()->create([
-            'name' => 'Demo Market',
+            'name' => 'Демо-рынок Центральный',
             'slug' => 'demo-market',
             'code' => 'DEMO_MARKET',
-            'address' => 'Demo address, 1',
+            'address' => 'г. Новосибирск, ул. Рыночная, 1',
             'timezone' => 'Asia/Novosibirsk',
             'is_active' => true,
             'settings' => [
@@ -307,7 +307,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
 
         self::assertSame('partial', $report['status']);
         self::assertSame('updated', $this->sectionStatus($report, 'locations'));
-        self::assertSame('Main Hall', $location->name);
+        self::assertSame('Основной павильон', $location->name);
         self::assertSame('hall', $location->type);
         self::assertSame(10, $location->sort_order);
         self::assertTrue($location->is_active);
@@ -322,7 +322,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
             'market_id' => $market->getKey(),
             'name' => 'Old Grocery',
             'short_name' => 'Old Grocery',
-            'slug' => 'demo-grocery-llc',
+            'slug' => 'demo-grocery',
             'type' => 'llc',
             'external_id' => 'demo-tenant-grocery',
             'phone' => '+71111111111',
@@ -349,7 +349,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
 
         self::assertSame('partial', $report['status']);
         self::assertSame('updated', $this->sectionStatus($report, 'tenants'));
-        self::assertSame('Demo Grocery LLC', $tenant->name);
+        self::assertSame('ООО "Продукты у дома"', $tenant->name);
         self::assertSame('grocery@demo.marketuchet.local', $tenant->email);
         self::assertSame('active', $tenant->status);
         self::assertTrue($tenant->is_active);
@@ -395,7 +395,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('partial', $report['status']);
         self::assertSame('updated', $this->sectionStatus($report, 'spaces'));
         self::assertSame('A-02', $space->number);
-        self::assertSame('Grocery stall', $space->display_name);
+        self::assertSame('Продукты у дома', $space->display_name);
         self::assertSame('retail', $space->activity_type);
         self::assertSame('22.00', (string) $space->area_sqm);
         self::assertSame('2400.00', (string) $space->rent_rate_value);
@@ -650,7 +650,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
             'market_id' => $market->getKey(),
             'name' => 'Conflicting Tenant',
             'short_name' => 'Conflicting Tenant',
-            'slug' => 'demo-grocery-llc',
+            'slug' => 'demo-grocery',
             'type' => 'llc',
             'external_id' => 'other-external-id',
             'phone' => '+70000000000',
@@ -668,7 +668,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
 
         self::assertSame('blocked', $report['status']);
         self::assertContains(
-            'tenant slug [demo-grocery-llc] already belongs to another tenant',
+            'tenant slug [demo-grocery] already belongs to another tenant',
             $report['issues'],
         );
         self::assertSame(1, Tenant::query()->count());
@@ -754,10 +754,10 @@ class DemoPilotProvisionerWriteTest extends TestCase
     private function createDemoMarket(): Market
     {
         return Market::query()->create([
-            'name' => 'Demo Market',
+            'name' => 'Демо-рынок Центральный',
             'slug' => 'demo-market',
             'code' => 'DEMO_MARKET',
-            'address' => 'Demo address, 1',
+            'address' => 'г. Новосибирск, ул. Рыночная, 1',
             'timezone' => 'Asia/Novosibirsk',
             'is_active' => true,
             'settings' => [
@@ -773,7 +773,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
     {
         return MarketLocation::query()->create([
             'market_id' => $market->getKey(),
-            'name' => $code === 'main-hall' ? 'Main Hall' : 'Food Court',
+            'name' => $code === 'main-hall' ? 'Основной павильон' : 'Фуд-корт',
             'code' => $code,
             'type' => 'hall',
             'sort_order' => 10,
@@ -783,19 +783,19 @@ class DemoPilotProvisionerWriteTest extends TestCase
 
     private function createDemoTenant(Market $market, string $key): Tenant
     {
-        $name = $key === 'tenant-grocery' ? 'Demo Grocery LLC' : 'Demo Tenant LLC';
+        $name = $key === 'tenant-grocery' ? 'ООО "Продукты у дома"' : 'ООО "Демо-арендатор"';
 
         return Tenant::withoutEvents(static function () use ($market, $key, $name): Tenant {
             return Tenant::query()->create([
                 'market_id' => $market->getKey(),
                 'name' => $name,
                 'short_name' => $name,
-                'slug' => str($name)->slug()->toString(),
+                'slug' => $key === 'tenant-grocery' ? 'demo-grocery' : 'demo-tenant',
                 'type' => 'llc',
                 'external_id' => 'demo-' . $key,
                 'phone' => '+70000000000',
                 'email' => $key . '@example.test',
-                'contact_person' => 'Demo Contact',
+                'contact_person' => 'Иван Петров',
                 'status' => 'active',
                 'is_active' => true,
                 'one_c_data' => [],

@@ -76,10 +76,10 @@ class DemoPilotDataBuilder
     {
         return [
             'key' => 'market',
-            'name' => 'Demo Market',
+            'name' => 'Демо-рынок Центральный',
             'slug' => $marketSlug,
             'code' => Str::upper(Str::replace('-', '_', $marketSlug)),
-            'address' => 'Demo address, 1',
+            'address' => 'г. Новосибирск, ул. Рыночная, 1',
             'timezone' => 'Asia/Novosibirsk',
             'is_active' => true,
             'settings' => [
@@ -103,10 +103,10 @@ class DemoPilotDataBuilder
     private function users(string $marketSlug, string $emailDomain, string $source): array
     {
         return [
-            $this->user('director', 'Demo Director', 'director', $emailDomain, $source),
-            $this->user('admin', 'Demo Admin', 'admin', $emailDomain, $source),
-            $this->user('operator', 'Demo Operator', 'operator', $emailDomain, $source),
-            array_merge($this->user('tenant-user', 'Demo Tenant User', 'tenant', $emailDomain, $source), [
+            $this->user('director', 'Анна Волкова', 'director', $emailDomain, $source),
+            $this->user('admin', 'Ирина Смирнова', 'admin', $emailDomain, $source),
+            $this->user('operator', 'Павел Орлов', 'operator', $emailDomain, $source),
+            array_merge($this->user('tenant-user', 'Мария Кузнецова', 'tenant', $emailDomain, $source), [
                 'tenant_key' => 'tenant-grocery',
             ]),
         ];
@@ -135,7 +135,7 @@ class DemoPilotDataBuilder
         return [
             [
                 'key' => 'location-main-hall',
-                'name' => 'Main Hall',
+                'name' => 'Основной павильон',
                 'code' => 'main-hall',
                 'type' => 'hall',
                 'sort_order' => 10,
@@ -144,7 +144,7 @@ class DemoPilotDataBuilder
             ],
             [
                 'key' => 'location-food-court',
-                'name' => 'Food Court',
+                'name' => 'Фуд-корт',
                 'code' => 'food-court',
                 'type' => 'food',
                 'sort_order' => 20,
@@ -160,11 +160,11 @@ class DemoPilotDataBuilder
     private function spaces(string $source): array
     {
         return [
-            $this->space('space-a-01', 'location-main-hall', 'A-01', 'Produce stall', 'tenant-produce', 18.5, 2150, 'occupied', $source),
-            $this->space('space-a-02', 'location-main-hall', 'A-02', 'Grocery stall', 'tenant-grocery', 22.0, 2400, 'occupied', $source),
-            $this->space('space-b-01', 'location-food-court', 'B-01', 'Coffee point', 'tenant-coffee', 12.0, 3100, 'occupied', $source),
-            $this->space('space-b-02', 'location-food-court', 'B-02', 'Bakery point', 'tenant-bakery', 14.0, 2950, 'occupied', $source),
-            $this->space('space-a-03', 'location-main-hall', 'A-03', 'Vacant reserve', null, 16.0, 2100, 'vacant', $source),
+            $this->space('space-a-01', 'location-main-hall', 'A-01', 'Овощная лавка', 'tenant-produce', 18.5, 2150, 'occupied', $source),
+            $this->space('space-a-02', 'location-main-hall', 'A-02', 'Продукты у дома', 'tenant-grocery', 22.0, 2400, 'occupied', $source),
+            $this->space('space-b-01', 'location-food-court', 'B-01', 'Кофейная точка', 'tenant-coffee', 12.0, 3100, 'occupied', $source),
+            $this->space('space-b-02', 'location-food-court', 'B-02', 'Пекарня', 'tenant-bakery', 14.0, 2950, 'occupied', $source),
+            $this->space('space-a-03', 'location-main-hall', 'A-03', 'Свободное место', null, 16.0, 2100, 'vacant', $source),
         ];
     }
 
@@ -206,29 +206,29 @@ class DemoPilotDataBuilder
     private function tenants(string $emailDomain, string $source): array
     {
         return [
-            $this->tenant('tenant-produce', 'Demo Produce LLC', 'produce@' . $emailDomain, 'green', $source),
-            $this->tenant('tenant-grocery', 'Demo Grocery LLC', 'grocery@' . $emailDomain, 'orange', $source),
-            $this->tenant('tenant-coffee', 'Demo Coffee LLC', 'coffee@' . $emailDomain, 'green', $source),
-            $this->tenant('tenant-bakery', 'Demo Bakery LLC', 'bakery@' . $emailDomain, 'red', $source),
+            $this->tenant('tenant-produce', 'ООО "Свежие овощи"', 'demo-produce', 'produce@' . $emailDomain, 'green', $source),
+            $this->tenant('tenant-grocery', 'ООО "Продукты у дома"', 'demo-grocery', 'grocery@' . $emailDomain, 'orange', $source),
+            $this->tenant('tenant-coffee', 'ООО "Кофе на рынке"', 'demo-coffee', 'coffee@' . $emailDomain, 'green', $source),
+            $this->tenant('tenant-bakery', 'ООО "Ремесленная пекарня"', 'demo-bakery', 'bakery@' . $emailDomain, 'red', $source),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function tenant(string $key, string $name, string $email, string $debtStatus, string $source): array
+    private function tenant(string $key, string $name, string $slug, string $email, string $debtStatus, string $source): array
     {
         return [
             'key' => $key,
             'name' => $name,
             'short_name' => $name,
-            'slug' => Str::slug($name),
+            'slug' => $slug,
             'type' => 'llc',
             'external_id' => 'demo-' . $key,
             'inn' => null,
             'phone' => '+70000000000',
             'email' => $email,
-            'contact_person' => 'Demo Contact',
+            'contact_person' => 'Иван Петров',
             'status' => 'active',
             'is_active' => true,
             'debt_status' => $debtStatus,
@@ -359,21 +359,21 @@ class DemoPilotDataBuilder
     private function marketplaceCategories(string $source): array
     {
         return [
-            $this->category('category-produce', 'Produce', 10, $source),
-            $this->category('category-grocery', 'Grocery', 20, $source),
-            $this->category('category-ready-food', 'Ready Food', 30, $source),
+            $this->category('category-produce', 'Овощи и фрукты', 'produce', 10, $source),
+            $this->category('category-grocery', 'Бакалея', 'grocery', 20, $source),
+            $this->category('category-ready-food', 'Готовая еда', 'ready-food', 30, $source),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function category(string $key, string $name, int $sortOrder, string $source): array
+    private function category(string $key, string $name, string $slug, int $sortOrder, string $source): array
     {
         return [
             'key' => $key,
             'name' => $name,
-            'slug' => Str::slug($name),
+            'slug' => $slug,
             'sort_order' => $sortOrder,
             'is_active' => true,
             'synthetic_source' => $source,
@@ -386,10 +386,10 @@ class DemoPilotDataBuilder
     private function marketplaceProducts(string $source): array
     {
         return [
-            $this->product('product-apples', 'tenant-produce', 'space-a-01', 'category-produce', 'Farm apples', 180, 'kg', $source),
-            $this->product('product-honey', 'tenant-grocery', 'space-a-02', 'category-grocery', 'Demo honey jar', 420, 'piece', $source),
-            $this->product('product-coffee', 'tenant-coffee', 'space-b-01', 'category-ready-food', 'Fresh coffee', 190, 'cup', $source),
-            $this->product('product-bread', 'tenant-bakery', 'space-b-02', 'category-ready-food', 'Bakery bread', 120, 'piece', $source),
+            $this->product('product-apples', 'tenant-produce', 'space-a-01', 'category-produce', 'Яблоки фермерские', 'farm-apples', 180, 'кг', $source),
+            $this->product('product-honey', 'tenant-grocery', 'space-a-02', 'category-grocery', 'Мед цветочный', 'demo-honey-jar', 420, 'шт', $source),
+            $this->product('product-coffee', 'tenant-coffee', 'space-b-01', 'category-ready-food', 'Кофе свежесваренный', 'fresh-coffee', 190, 'стакан', $source),
+            $this->product('product-bread', 'tenant-bakery', 'space-b-02', 'category-ready-food', 'Хлеб ремесленный', 'bakery-bread', 120, 'шт', $source),
         ];
     }
 
@@ -402,6 +402,7 @@ class DemoPilotDataBuilder
         string $spaceKey,
         string $categoryKey,
         string $title,
+        string $slug,
         int $price,
         string $unit,
         string $source,
@@ -412,8 +413,8 @@ class DemoPilotDataBuilder
             'market_space_key' => $spaceKey,
             'category_key' => $categoryKey,
             'title' => $title,
-            'slug' => Str::slug($title),
-            'description' => 'Synthetic demo marketplace product.',
+            'slug' => $slug,
+            'description' => 'Демо-товар для витрины маркетплейса.',
             'price' => $price,
             'currency' => 'RUB',
             'stock_qty' => 25,
@@ -439,10 +440,10 @@ class DemoPilotDataBuilder
             [
                 'key' => 'announcement-opening-weekend',
                 'kind' => 'promo',
-                'title' => 'Demo weekend market',
+                'title' => 'Ярмарка выходного дня',
                 'slug' => 'demo-weekend-market',
-                'excerpt' => 'Synthetic announcement for the demo market.',
-                'content' => 'Demo content only. No external publication is performed.',
+                'excerpt' => 'Демо-анонс акции для посетителей рынка.',
+                'content' => 'Демо-контент для проверки витрины. Внешняя публикация не выполняется.',
                 'starts_at' => '2026-06-01 09:00:00',
                 'ends_at' => '2026-06-30 21:00:00',
                 'is_active' => true,
