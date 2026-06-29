@@ -33,6 +33,15 @@ class MarketWriteGuardTest extends TestCase
         self::assertTrue($guard->isSameMarket($this->record(10), $this->record(10)));
     }
 
+    public function test_assert_same_market_id_allows_matching_scalar_values(): void
+    {
+        $guard = app(MarketWriteGuard::class);
+
+        $guard->assertSameMarketId('10', 10);
+
+        self::assertTrue($guard->isSameMarketId('10', 10));
+    }
+
     public function test_assert_same_market_rejects_cross_market_records(): void
     {
         $guard = app(MarketWriteGuard::class);
@@ -40,6 +49,15 @@ class MarketWriteGuardTest extends TestCase
         $this->expectException(ValidationException::class);
 
         $guard->assertSameMarket($this->record(10), $this->record(20), 'tenant_id');
+    }
+
+    public function test_assert_same_market_id_rejects_cross_market_scalar_values(): void
+    {
+        $guard = app(MarketWriteGuard::class);
+
+        $this->expectException(ValidationException::class);
+
+        $guard->assertSameMarketId(10, 20, 'tenant_id');
     }
 
     public function test_assert_belongs_to_current_market_uses_override_context(): void
@@ -61,6 +79,15 @@ class MarketWriteGuardTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         $guard->assertSameMarket($this->record(null), $this->record(10));
+    }
+
+    public function test_assertions_require_positive_scalar_market_id(): void
+    {
+        $guard = app(MarketWriteGuard::class);
+
+        $this->expectException(InvalidArgumentException::class);
+
+        $guard->assertSameMarketId(null, 10);
     }
 
     private function record(int|string|null $marketId): MarketWriteGuardTestRecord

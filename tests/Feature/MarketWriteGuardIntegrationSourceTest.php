@@ -31,4 +31,22 @@ class MarketWriteGuardIntegrationSourceTest extends TestCase
         self::assertStringContainsString('->withoutMarketScope()', $safeContractSpaceLinker);
         self::assertStringContainsString("\$this->marketWriteGuard->assertSameMarket(\n            \$contract,\n            \$space,\n            'market_space_id',", $safeContractSpaceLinker);
     }
+
+    public function test_accrual_maintenance_commands_use_market_write_guard(): void
+    {
+        $backfillAccrualContracts = file_get_contents(app_path('Console/Commands/BackfillTenantAccrualContractsCommand.php'));
+        $dedupeTenantAccruals = file_get_contents(app_path('Console/Commands/DedupeTenantAccrualsCommand.php'));
+
+        self::assertIsString($backfillAccrualContracts);
+        self::assertIsString($dedupeTenantAccruals);
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $backfillAccrualContracts);
+        self::assertStringContainsString('MarketWriteGuard $marketWriteGuard', $backfillAccrualContracts);
+        self::assertSame(3, substr_count($backfillAccrualContracts, '$marketWriteGuard->assertSameMarketId('));
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $dedupeTenantAccruals);
+        self::assertStringContainsString('MarketWriteGuard $marketWriteGuard', $dedupeTenantAccruals);
+        self::assertStringContainsString('$marketWriteGuard->assertSameMarketId(', $dedupeTenantAccruals);
+        self::assertStringContainsString("->where('market_id', \$marketId)\n                            ->whereIn('id', \$deleteIds)", $dedupeTenantAccruals);
+    }
 }

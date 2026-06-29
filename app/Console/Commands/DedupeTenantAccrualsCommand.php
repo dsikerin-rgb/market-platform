@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Support\MarketContext;
+use App\Support\MarketWriteGuard;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,7 @@ class DedupeTenantAccrualsCommand extends Command
 
     protected $description = 'Find and optionally remove duplicate 1C tenant accrual rows for one market period.';
 
-    public function handle(): int
+    public function handle(MarketWriteGuard $marketWriteGuard): int
     {
         $marketId = (int) $this->option('market');
         $period = trim((string) $this->option('period'));
@@ -52,7 +53,7 @@ class DedupeTenantAccrualsCommand extends Command
 
         return app(MarketContext::class)->withMarket(
             $marketId,
-            function () use ($marketId, $period, $tenantId, $limit, $apply, $backup, $json): int {
+            function () use ($marketId, $period, $tenantId, $limit, $apply, $backup, $json, $marketWriteGuard): int {
                 $periodDate = $period.'-01';
                 $rows = $this->loadRows($marketId, $periodDate, $tenantId);
                 $groups = $this->duplicateGroups($rows);
@@ -66,11 +67,21 @@ class DedupeTenantAccrualsCommand extends Command
                     ->values()
                     ->all();
 
+                foreach ($groups as $group) {
+                    $marketWriteGuard->assertSameMarketId(
+                        $group['key']['market_id'] ?? null,
+                        $marketId,
+                        'market_id',
+                        'Duplicate accrual group belongs to another market.',
+                    );
+                }
+
                 $deleted = 0;
 
                 if ($apply && $deleteIds !== []) {
-                    DB::transaction(function () use ($deleteIds, &$deleted): void {
+                    DB::transaction(function () use ($marketId, $deleteIds, &$deleted): void {
                         $deleted = DB::table('tenant_accruals')
+                            ->where('market_id', $marketId)
                             ->whereIn('id', $deleteIds)
                             ->delete();
                     });
