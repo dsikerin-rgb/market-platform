@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Idempotent write adapter расширен до финансов демо-контура: demo:provision может создать или обновить demo market, market_locations, tenants, market_spaces, tenant_contracts, tenant_accruals и tenant_payments; prod data writes остаются под отдельным разрешением.',
-    'next_step' => 'Следующий малый пакет после проверки финансового адаптера: demo:reset или marketplace demo-каталог; любые prod data writes, flags и миграции останутся отдельными контрольными точками.',
+    'current_focus' => 'Добавлен безопасный demo:reset: команда умеет строить dry-run план и удалять только известные synthetic demo-записи после отдельных reset flags, оставляя demo market shell; prod data writes остаются под отдельным разрешением.',
+    'next_step' => 'Следующий малый пакет: marketplace demo-каталог или demo-пользователи; любые prod data writes, flags и миграции останутся отдельными контрольными точками.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -115,7 +115,7 @@ return [
                 ['title' => 'demo:provision dry-run план без записи данных', 'status' => 'done'],
                 ['title' => 'demo:provision preflight adapter проверяет payload, таблицы и колонки без записи данных', 'status' => 'done'],
                 ['title' => 'demo:provision idempotent write adapter для local/staging: demo market, market_locations, tenants, market_spaces, tenant_contracts, tenant_accruals и tenant_payments', 'status' => 'done'],
-                ['title' => 'demo:reset', 'status' => 'pending'],
+                ['title' => 'demo:reset dry-run/execute с удалением только synthetic demo-записей без удаления market shell', 'status' => 'done'],
                 ['title' => 'Состав синтетических арендаторов, мест, договоров, финансов и marketplace описан в data builder', 'status' => 'done'],
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'done'],
                 ['title' => 'Демо-пользователи директор/админ/арендатор', 'status' => 'pending'],
