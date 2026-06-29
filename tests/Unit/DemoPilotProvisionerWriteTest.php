@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Models\TenantPayment;
+use App\Models\User;
 use App\Support\DemoPilotDataBuilder;
 use App\Support\DemoPilotProvisioner;
 use Illuminate\Database\Schema\Blueprint;
@@ -55,6 +56,31 @@ class DemoPilotProvisionerWriteTest extends TestCase
             $table->integer('sort_order')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
+        });
+
+        Schema::create('users', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique();
+            $table->string('password');
+            $table->unsignedBigInteger('market_id')->nullable();
+            $table->unsignedBigInteger('tenant_id')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('roles', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+            $table->timestamps();
+            $table->unique(['name', 'guard_name']);
+        });
+
+        Schema::create('model_has_roles', function (Blueprint $table): void {
+            $table->unsignedBigInteger('role_id');
+            $table->string('model_type');
+            $table->unsignedBigInteger('model_id');
+            $table->primary(['role_id', 'model_id', 'model_type']);
         });
 
         Schema::create('tenants', function (Blueprint $table): void {
@@ -196,6 +222,15 @@ class DemoPilotProvisionerWriteTest extends TestCase
             $table->timestamps();
         });
 
+        foreach (['market-owner-director', 'market-admin', 'market-operator', 'merchant-user'] as $roleName) {
+            DB::table('roles')->insert([
+                'name' => $roleName,
+                'guard_name' => 'web',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
         Schema::shouldReceive('hasTable')->andReturn(true);
         Schema::shouldReceive('hasColumn')->andReturn(true);
     }
@@ -211,6 +246,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('partial', $firstReport['status']);
         self::assertTrue($firstReport['writes_enabled']);
         self::assertSame('created', $this->sectionStatus($firstReport, 'market'));
+        self::assertSame('created', $this->sectionStatus($firstReport, 'users'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'locations'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'tenants'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'spaces'));
@@ -219,6 +255,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('created', $this->sectionStatus($firstReport, 'payments'));
         self::assertSame('partial', $secondReport['status']);
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'market'));
+        self::assertSame('unchanged', $this->sectionStatus($secondReport, 'users'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'locations'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'tenants'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'spaces'));
@@ -226,12 +263,22 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'accruals'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'payments'));
         self::assertSame(1, Market::query()->where('slug', 'demo-market')->count());
+        self::assertSame(4, User::query()->where('market_id', Market::query()->where('slug', 'demo-market')->value('id'))->count());
+        self::assertSame(4, DB::table('model_has_roles')->count());
         self::assertSame(2, MarketLocation::query()->count());
         self::assertSame(4, Tenant::query()->count());
         self::assertSame(5, MarketSpace::query()->count());
         self::assertSame(4, TenantContract::query()->count());
         self::assertSame(4, TenantAccrual::query()->count());
         self::assertSame(3, TenantPayment::query()->count());
+
+        $admin = User::query()->where('email', 'admin@demo.marketuchet.local')->firstOrFail();
+        $tenantUser = User::query()->where('email', 'tenant-user@demo.marketuchet.local')->firstOrFail();
+        $tenant = Tenant::query()->where('external_id', 'demo-tenant-grocery')->firstOrFail();
+
+        self::assertSame('market-admin', $this->singleRoleNameForUser($admin));
+        self::assertSame('merchant-user', $this->singleRoleNameForUser($tenantUser));
+        self::assertSame((int) $tenant->getKey(), (int) $tenantUser->tenant_id);
     }
 
     public function test_execute_updates_existing_demo_market(): void
@@ -674,6 +721,41 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame(1, Tenant::query()->count());
     }
 
+    public function test_execute_blocks_existing_demo_user_email_outside_demo_market(): void
+    {
+        Market::query()->create([
+            'name' => 'Other Market',
+            'slug' => 'other-market',
+            'code' => 'OTHER_MARKET',
+            'address' => 'Other address',
+            'timezone' => 'Asia/Novosibirsk',
+            'is_active' => true,
+            'settings' => [],
+            'features' => [],
+        ]);
+
+        User::query()->create([
+            'name' => 'Existing Admin',
+            'email' => 'admin@demo.marketuchet.local',
+            'password' => 'test',
+            'market_id' => 1,
+            'tenant_id' => null,
+        ]);
+
+        $report = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        self::assertSame('blocked', $report['status']);
+        self::assertContains(
+            'user email [admin@demo.marketuchet.local] already belongs to another market or has no demo market',
+            $report['issues'],
+        );
+        self::assertSame('blocked', $this->sectionStatus($report, 'users'));
+        self::assertSame('skipped', $this->sectionStatus($report, 'spaces'));
+        self::assertSame(1, User::query()->where('email', 'admin@demo.marketuchet.local')->count());
+    }
+
     public function test_execute_does_not_overwrite_real_market_with_same_slug(): void
     {
         Market::query()->create([
@@ -749,6 +831,21 @@ class DemoPilotProvisionerWriteTest extends TestCase
         }
 
         self::fail('Missing section [' . $section . '] in provisioner report.');
+    }
+
+    private function singleRoleNameForUser(User $user): string
+    {
+        $roleNames = DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('model_has_roles.model_type', User::class)
+            ->where('model_has_roles.model_id', $user->getKey())
+            ->pluck('roles.name')
+            ->values()
+            ->all();
+
+        self::assertCount(1, $roleNames);
+
+        return (string) $roleNames[0];
     }
 
     private function createDemoMarket(): Market
