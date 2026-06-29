@@ -511,6 +511,7 @@ class MarketplaceFeatureTest extends TestCase
         $this->artisan('marketplace:bootstrap', [
             '--market' => (string) $market->id,
             '--seed-products' => 10,
+            '--execute' => true,
             '--force' => true,
         ])->assertExitCode(0);
 
@@ -556,6 +557,7 @@ class MarketplaceFeatureTest extends TestCase
         $this->artisan('marketplace:bootstrap', [
             '--market' => (string) $market->id,
             '--seed-products' => 3,
+            '--execute' => true,
             '--force' => true,
         ])->assertExitCode(0);
 
@@ -641,6 +643,7 @@ class MarketplaceFeatureTest extends TestCase
         $this->artisan('marketplace:bootstrap', [
             '--market' => (string) $market->id,
             '--seed-products' => 2,
+            '--execute' => true,
             '--force' => true,
         ])->assertExitCode(0);
 
@@ -742,6 +745,7 @@ class MarketplaceFeatureTest extends TestCase
         $this->artisan('marketplace:bootstrap', [
             '--market' => (string) $market->id,
             '--seed-products' => 2,
+            '--execute' => true,
             '--force' => true,
         ])->assertExitCode(0);
 
@@ -798,6 +802,7 @@ class MarketplaceFeatureTest extends TestCase
         $this->artisan('marketplace:bootstrap', [
             '--market' => (string) $market->id,
             '--seed-products' => 0,
+            '--execute' => true,
             '--force' => true,
         ])->assertExitCode(0);
 
@@ -861,6 +866,7 @@ class MarketplaceFeatureTest extends TestCase
         $this->artisan('marketplace:bootstrap', [
             '--market' => (string) $market->id,
             '--seed-products' => 0,
+            '--execute' => true,
             '--force' => true,
         ])->assertExitCode(0);
 
@@ -1110,6 +1116,7 @@ class MarketplaceFeatureTest extends TestCase
         $this->artisan('marketplace:bootstrap', [
             '--market' => (string) $market->id,
             '--seed-products' => 2,
+            '--execute' => true,
             '--force' => true,
         ])->assertExitCode(0);
 
@@ -1164,6 +1171,7 @@ class MarketplaceFeatureTest extends TestCase
         $this->artisan('marketplace:bootstrap', [
             '--market' => (string) $market->id,
             '--seed-products' => 1,
+            '--execute' => true,
             '--force' => true,
         ])->assertExitCode(0);
 

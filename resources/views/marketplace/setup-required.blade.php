@@ -42,7 +42,7 @@
 
     <h3>Команды инициализации:</h3>
     <pre>php artisan migrate --force
-php artisan marketplace:bootstrap --refresh-announcements --seed-products=10 --force
+php artisan marketplace:bootstrap --execute --refresh-announcements --seed-products=10 --force
 php artisan optimize:clear</pre>
 </div>
 </body>

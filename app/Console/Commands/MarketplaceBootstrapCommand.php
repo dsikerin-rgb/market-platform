@@ -141,13 +141,22 @@ class MarketplaceBootstrapCommand extends Command
         {--market= : Market id or slug}
         {--seed-products=10 : Max demo products per tenant}
         {--refresh-announcements : Sync announcements from market holidays}
+        {--dry-run : Run in dry-run mode}
+        {--execute : Apply marketplace bootstrap changes (default: dry-run)}
         {--force : Generate demo products even if marketplace already has products}';
 
     protected $description = 'Bootstrap marketplace base categories, announcements, and demo products';
 
     public function handle(): int
     {
-        Role::findOrCreate('buyer', 'web');
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
 
         $markets = $this->resolveMarkets();
         if ($markets->isEmpty()) {
@@ -156,11 +165,30 @@ class MarketplaceBootstrapCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->ensureGlobalCategories();
-
         $seedProductsPerTenant = max(0, (int) $this->option('seed-products'));
         $force = (bool) $this->option('force');
         $refreshAnnouncements = (bool) $this->option('refresh-announcements');
+
+        if ($dryRun) {
+            $this->warn('DRY RUN: no marketplace data was written. Use --execute to apply.');
+            $this->line('  role buyer: would ensure');
+            $this->line('  global categories: would ensure');
+
+            foreach ($markets as $market) {
+                $this->line('');
+                $this->info(sprintf('Market: %s (#%d)', $market->name, (int) $market->id));
+                $this->line('  announcements sync: '.($refreshAnnouncements ? 'would inspect up to 200 holidays' : 'skipped'));
+                $this->line('  demo products per tenant: '.$seedProductsPerTenant.($force ? ' (would replace existing demo products)' : ''));
+            }
+
+            $this->info('');
+            $this->info('Marketplace bootstrap dry-run completed.');
+
+            return self::SUCCESS;
+        }
+
+        Role::findOrCreate('buyer', 'web');
+        $this->ensureGlobalCategories();
 
         foreach ($markets as $market) {
             $this->line('');
