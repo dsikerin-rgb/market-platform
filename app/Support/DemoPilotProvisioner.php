@@ -218,6 +218,11 @@ class DemoPilotProvisioner
     {
         $issues = $this->referenceIssues($dataSet);
         $sections = [];
+        $integrationGuard = app(DemoPilotExternalIntegrationGuard::class)->check($dataSet);
+
+        if ($integrationGuard['status'] !== 'ready') {
+            $issues = array_merge($issues, $integrationGuard['issues']);
+        }
 
         foreach (self::SECTION_TABLES as $section => $definition) {
             [$status, $details] = $this->schemaStatus($definition['table'], $definition['required_columns']);
@@ -234,6 +239,14 @@ class DemoPilotProvisioner
                 'details' => $details,
             ];
         }
+
+        $sections[] = [
+            'section' => 'integrations',
+            'table' => $integrationGuard['table'],
+            'records' => $integrationGuard['records'],
+            'status' => $integrationGuard['status'],
+            'details' => $integrationGuard['details'],
+        ];
 
         return [
             'status' => $issues === [] ? 'ready' : 'blocked',
@@ -345,6 +358,9 @@ class DemoPilotProvisioner
             } elseif ($section['section'] === 'payments') {
                 $section['status'] = $paymentWrite['status'];
                 $section['details'] = $paymentWrite['details'];
+            } elseif ($section['section'] === 'integrations') {
+                $section['status'] = 'unchanged';
+                $section['details'] = 'external integrations disabled; no outbound adapters called';
             } else {
                 $section['status'] = 'skipped';
                 $section['details'] = 'write adapter is not implemented in this package';

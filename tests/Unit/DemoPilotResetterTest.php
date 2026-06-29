@@ -190,6 +190,20 @@ class DemoPilotResetterTest extends TestCase
         );
     }
 
+    public function test_plan_blocks_enabled_external_integrations(): void
+    {
+        config()->set('demo_pilot.external_integrations_enabled', true);
+        $dataSet = app(DemoPilotDataBuilder::class)->build();
+        $dataSet['integrations']['telegram'] = 'enabled';
+
+        $report = app(DemoPilotResetter::class)->plan($dataSet);
+
+        self::assertSame('blocked', $report['status']);
+        self::assertSame('blocked', $this->sectionStatus($report, 'integrations'));
+        self::assertContains('demo external integrations config flag must remain disabled', $report['issues']);
+        self::assertContains('demo integration [Telegram] must be disabled', $report['issues']);
+    }
+
     public function test_execute_deletes_only_known_demo_records_and_keeps_leftovers(): void
     {
         $dataSet = app(DemoPilotDataBuilder::class)->build();
