@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Dry-run demo:provision план готовится как безопасный CLI-интерфейс: команда показывает будущие demo-данные, но не пишет в БД и блокирует execute по флагам.',
-    'next_step' => 'Следующий малый пакет: описать минимальный состав синтетических demo-данных и начать реализацию provision data builder без запуска на prod.',
+    'current_focus' => 'Demo data builder готовится без записи в БД: минимальный состав рынка, пользователей, мест, арендаторов, договоров, финансов и marketplace описан как проверяемый payload.',
+    'next_step' => 'Следующий малый пакет: подготовить execute adapter за флагами только для локальной/staging проверки; prod data writes останутся под отдельным разрешением.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -115,6 +115,7 @@ return [
                 ['title' => 'demo:provision dry-run план без записи данных', 'status' => 'done'],
                 ['title' => 'demo:provision', 'status' => 'pending'],
                 ['title' => 'demo:reset', 'status' => 'pending'],
+                ['title' => 'Состав синтетических арендаторов, мест, договоров, финансов и marketplace описан в data builder', 'status' => 'done'],
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'pending'],
                 ['title' => 'Демо-пользователи директор/админ/арендатор', 'status' => 'pending'],
                 ['title' => 'Внешние интеграции в демо выключены', 'status' => 'pending'],

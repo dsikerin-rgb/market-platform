@@ -17,6 +17,8 @@ class DemoProvisionCommandSafetyTest extends TestCase
             ->expectsOutput('Market slug: demo-market')
             ->expectsOutput('Email domain: demo.marketuchet.local')
             ->expectsOutput('External integrations: disabled')
+            ->expectsOutputToContain('marketplace_products')
+            ->expectsOutputToContain('announcements')
             ->expectsOutputToContain('DRY RUN: no markets, users, tenants, spaces, contracts, finance records, files, or external integrations were changed.')
             ->assertExitCode(0);
     }
