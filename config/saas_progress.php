@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Добавлен безопасный demo:reset: команда умеет строить dry-run план и удалять только известные synthetic demo-записи после отдельных reset flags, оставляя demo market shell; prod data writes остаются под отдельным разрешением.',
-    'next_step' => 'Следующий малый пакет: marketplace demo-каталог или demo-пользователи; любые prod data writes, flags и миграции останутся отдельными контрольными точками.',
+    'current_focus' => 'CSV-импорт начислений и marketplace bootstrap переведены на MarketContext во время write-фазы; пакет не включает старые файлы из других worktree, prod flags/DB writes не трогаются.',
+    'next_step' => 'Следующий малый пакет: закрыть оставшиеся исключения jobs/commands без MarketContext или перейти к demo-пользователям после проверки этого пакета; strict scope в prod не включаем.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [

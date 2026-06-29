@@ -17,6 +17,8 @@ class ImportTenantAccrualsFromCsvCommandSafetyTest extends TestCase
         self::assertStringContainsString('{--execute : Import rows into DB (default: dry-run)}', $source);
         self::assertStringContainsString('$dryRun = ! $execute || (bool) $this->option(\'dry-run\');', $source);
         self::assertStringContainsString('if ($execute && (bool) $this->option(\'dry-run\')) {', $source);
+        self::assertStringContainsString('use App\Support\MarketContext;', $source);
+        self::assertStringContainsString('app(MarketContext::class)->withMarket($marketId, function () use ($dryRun, $runner): void {', $source);
         self::assertStringContainsString('DRY RUN: transaction will be rolled back (no data will be written).', $source);
         self::assertStringContainsString('DB::rollBack();', $source);
         self::assertStringContainsString('DB::transaction(function () use ($runner) {', $source);
