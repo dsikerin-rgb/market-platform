@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Cross-market create/update тесты для guard-контуров выведены на prod: документы, marketplace-продукты, категории, анонсы и чаты покрыты regression-сценариями.',
-    'next_step' => 'Следующий малый пакет: начать подготовку demo/pilot контура без включения tenant-scope flags и без записи в prod-данные.',
+    'current_focus' => 'Demo/pilot контур готовится как выключенный scaffold: добавлены safety flags, prod write barrier и настройки синтетических demo-данных без изменения текущего поведения.',
+    'next_step' => 'Следующий малый пакет: подготовить dry-run demo:provision план без записи в prod-данные и без включения внешних интеграций.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -108,9 +108,10 @@ return [
             'key' => 'demo_pilot',
             'title' => '5. Demo market и пилот',
             'weight' => 12,
-            'status' => 'pending',
+            'status' => 'in_progress',
             'summary' => 'Безопасное демо с синтетическими данными и пилотный контур для первых клиентов.',
             'items' => [
+                ['title' => 'Safety flags и prod write barrier для demo/pilot контура', 'status' => 'done'],
                 ['title' => 'demo:provision', 'status' => 'pending'],
                 ['title' => 'demo:reset', 'status' => 'pending'],
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'pending'],
