@@ -49,4 +49,28 @@ class MarketWriteGuardIntegrationSourceTest extends TestCase
         self::assertStringContainsString('$marketWriteGuard->assertSameMarketId(', $dedupeTenantAccruals);
         self::assertStringContainsString("->where('market_id', \$marketId)\n                            ->whereIn('id', \$deleteIds)", $dedupeTenantAccruals);
     }
+
+    public function test_one_c_finance_import_controllers_use_market_write_guard(): void
+    {
+        $accrualController = file_get_contents(app_path('Http/Controllers/Api/OneC/AccrualController.php'));
+        $paymentController = file_get_contents(app_path('Http/Controllers/Api/OneC/PaymentController.php'));
+
+        self::assertIsString($accrualController);
+        self::assertIsString($paymentController);
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $accrualController);
+        self::assertStringContainsString('MarketWriteGuard $marketWriteGuard', $accrualController);
+        self::assertStringContainsString('$this->assertMarketSpaceBelongsToMarket(', $accrualController);
+        self::assertStringContainsString('$this->assertTenantContractBelongsToMarket(', $accrualController);
+        self::assertStringContainsString('$this->assertAccrualBelongsToMarket(', $accrualController);
+        self::assertSame(4, substr_count($accrualController, '$marketWriteGuard->assertSameMarketId('));
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $paymentController);
+        self::assertStringContainsString('MarketWriteGuard $marketWriteGuard', $paymentController);
+        self::assertStringContainsString("'Resolved tenant belongs to another market.'", $paymentController);
+        self::assertStringContainsString("'Resolved contract belongs to another market.'", $paymentController);
+        self::assertStringContainsString("'Existing payment belongs to another market.'", $paymentController);
+        self::assertStringContainsString("'Created payment belongs to another market.'", $paymentController);
+        self::assertSame(4, substr_count($paymentController, '$marketWriteGuard->assertSameMarketId('));
+    }
 }

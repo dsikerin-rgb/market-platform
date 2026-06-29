@@ -13,6 +13,7 @@ use App\Models\TenantContract;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use App\Services\Tenants\OneCTenantResolver;
 use App\Support\MarketContext;
+use App\Support\MarketWriteGuard;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,7 +30,7 @@ class AccrualController extends Controller
 
     private const ENTITY_TYPE = 'accruals';
 
-    public function store(Request $request, TenantAccrualContractResolver $contractResolver, OneCTenantResolver $tenantResolver): JsonResponse
+    public function store(Request $request, TenantAccrualContractResolver $contractResolver, OneCTenantResolver $tenantResolver, MarketWriteGuard $marketWriteGuard): JsonResponse
     {
         $startedAt = now();
         $exchange = null;
@@ -87,7 +88,7 @@ class AccrualController extends Controller
 
             return app(MarketContext::class)->withMarket(
                 $marketId,
-                function () use ($request, $contractResolver, $tenantResolver, $integration, $marketId, $startedAt, &$sequencePreflight, &$exchange): JsonResponse {
+                function () use ($request, $contractResolver, $tenantResolver, $marketWriteGuard, $integration, $marketId, $startedAt, &$sequencePreflight, &$exchange): JsonResponse {
                     $exchange = new IntegrationExchange;
                     $exchange->market_id = $marketId;
                     $exchange->direction = IntegrationExchange::DIRECTION_IN;
@@ -279,11 +280,19 @@ class AccrualController extends Controller
                             continue;
                         }
 
+                        $marketWriteGuard->assertSameMarketId(
+                            $tenant->market_id,
+                            $marketId,
+                            'tenant_external_id',
+                            'Resolved tenant belongs to another market.',
+                        );
+
                         $marketSpaceId = null;
                         if ($spaceKey !== '') {
                             [$resolvedId, $spaceState] = $this->resolveMarketSpaceId($spaceIndex, $spaceKey);
                             if ($spaceState === 'ok') {
                                 $marketSpaceId = $resolvedId;
+                                $this->assertMarketSpaceBelongsToMarket($marketSpaceId, $marketId, $marketWriteGuard);
                                 $resolvedSpaces++;
                             } else {
                                 $unresolvedSpaces++;
@@ -300,6 +309,15 @@ class AccrualController extends Controller
 
                         $tenantContractId = $match->tenantContractId;
                         $legacyMarketSpaceId = $marketSpaceId;
+
+                        if ($tenantContractId !== null) {
+                            $this->assertTenantContractBelongsToMarket(
+                                $tenantContractId,
+                                $marketId,
+                                (int) $tenant->id,
+                                $marketWriteGuard,
+                            );
+                        }
 
                         if ($match->isLinked()) {
                             $linkedContracts++;
@@ -325,6 +343,7 @@ class AccrualController extends Controller
 
                             if ($contractMarketSpaceId !== null) {
                                 $marketSpaceId = $contractMarketSpaceId;
+                                $this->assertMarketSpaceBelongsToMarket($marketSpaceId, $marketId, $marketWriteGuard);
                                 $spacesResolvedFromContract++;
                             }
                         }
@@ -476,6 +495,8 @@ class AccrualController extends Controller
                         }
 
                         if ($existingId) {
+                            $this->assertAccrualBelongsToMarket((int) $existingId, $marketId, $marketWriteGuard);
+
                             DB::table('tenant_accruals')
                                 ->where('id', (int) $existingId)
                                 ->update($values);
@@ -920,6 +941,66 @@ class AccrualController extends Controller
             ->pluck('id');
 
         return $ids->count() === 1 ? (int) $ids->first() : null;
+    }
+
+    private function assertMarketSpaceBelongsToMarket(int $marketSpaceId, int $marketId, MarketWriteGuard $marketWriteGuard): void
+    {
+        $space = MarketSpace::query()->find($marketSpaceId, ['id', 'market_id']);
+
+        if (! $space) {
+            throw ValidationException::withMessages([
+                'market_space_id' => 'Resolved market space was not found.',
+            ]);
+        }
+
+        $marketWriteGuard->assertSameMarketId(
+            $space->market_id,
+            $marketId,
+            'market_space_id',
+            'Resolved market space belongs to another market.',
+        );
+    }
+
+    private function assertTenantContractBelongsToMarket(
+        int $tenantContractId,
+        int $marketId,
+        int $tenantId,
+        MarketWriteGuard $marketWriteGuard,
+    ): void {
+        $contract = TenantContract::query()->find($tenantContractId, ['id', 'market_id', 'tenant_id']);
+
+        if (! $contract) {
+            throw ValidationException::withMessages([
+                'tenant_contract_id' => 'Resolved contract was not found.',
+            ]);
+        }
+
+        $marketWriteGuard->assertSameMarketId(
+            $contract->market_id,
+            $marketId,
+            'tenant_contract_id',
+            'Resolved contract belongs to another market.',
+        );
+
+        if ((int) $contract->tenant_id !== $tenantId) {
+            throw ValidationException::withMessages([
+                'tenant_contract_id' => 'Resolved contract belongs to another tenant.',
+            ]);
+        }
+    }
+
+    private function assertAccrualBelongsToMarket(int $accrualId, int $marketId, MarketWriteGuard $marketWriteGuard): void
+    {
+        $accrualMarketId = DB::table('tenant_accruals')
+            ->where('id', $accrualId)
+            ->value('market_id');
+
+        $marketWriteGuard->assertSameMarketId(
+            $accrualMarketId,
+            $marketId,
+            'tenant_accrual_id',
+            'Existing accrual belongs to another market.',
+        );
     }
 
     private function resolveContractMarketSpaceId(int $marketId, int $tenantId, int $tenantContractId): ?int
