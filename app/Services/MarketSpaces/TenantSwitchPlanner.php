@@ -8,6 +8,7 @@ use App\Domain\Operations\OperationType;
 use App\Models\MarketSpace;
 use App\Models\Operation;
 use App\Models\Tenant;
+use App\Support\MarketWriteGuard;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +17,7 @@ final class TenantSwitchPlanner
 {
     public function __construct(
         private readonly MarketSpaceStateGuard $stateGuard,
+        private readonly MarketWriteGuard $marketWriteGuard,
     ) {
     }
 
@@ -90,11 +92,12 @@ final class TenantSwitchPlanner
             ]);
         }
 
-        if ((int) $space->market_id !== (int) $targetTenant->market_id) {
-            throw ValidationException::withMessages([
-                'target_tenant_id' => 'Нельзя назначить арендатора из другого рынка.',
-            ]);
-        }
+        $this->marketWriteGuard->assertSameMarket(
+            $space,
+            $targetTenant,
+            'target_tenant_id',
+            'Нельзя назначить арендатора из другого рынка.',
+        );
 
         if (! $allowInactiveTargetTenant && ! (bool) $targetTenant->is_active) {
             throw ValidationException::withMessages([
