@@ -1,5 +1,6 @@
 <?php
-# app/Console/Commands/MergeMarketSpacesCommand.php
+
+// app/Console/Commands/MergeMarketSpacesCommand.php
 
 declare(strict_types=1);
 
@@ -15,7 +16,8 @@ class MergeMarketSpacesCommand extends Command
     protected $signature = 'market:spaces-merge
         {from : ID дубля (который гасим)}
         {to : ID канонического места (которое оставляем)}
-        {--dry-run : Только показать, что будет изменено}';
+        {--dry-run : Preview changes only}
+        {--execute : Apply changes (default: dry-run)}';
 
     protected $description = 'Слияние дублей market_spaces: перенос ссылок и деактивация дубля';
 
@@ -23,10 +25,18 @@ class MergeMarketSpacesCommand extends Command
     {
         $fromId = (int) $this->argument('from');
         $toId = (int) $this->argument('to');
-        $dryRun = (bool) $this->option('dry-run');
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
 
         if ($fromId <= 0 || $toId <= 0 || $fromId === $toId) {
             $this->error('Invalid ids');
+
             return self::FAILURE;
         }
 
@@ -37,19 +47,21 @@ class MergeMarketSpacesCommand extends Command
 
         if (! $from || ! $to) {
             $this->error('MarketSpace not found');
+
             return self::FAILURE;
         }
 
         if ((int) $from->market_id !== (int) $to->market_id) {
             $this->error('Different market_id: merge запрещён');
+
             return self::FAILURE;
         }
 
         $marketId = (int) $from->market_id;
 
         $this->info("market_id={$marketId}");
-        $this->info("from={$fromId} number=" . (string) ($from->number ?? '') . " code=" . (string) ($from->code ?? ''));
-        $this->info("to={$toId}   number=" . (string) ($to->number ?? '') . " code=" . (string) ($to->code ?? ''));
+        $this->info("from={$fromId} number=".(string) ($from->number ?? '').' code='.(string) ($from->code ?? ''));
+        $this->info("to={$toId}   number=".(string) ($to->number ?? '').' code='.(string) ($to->code ?? ''));
 
         $targets = [
             ['table' => 'tenant_contracts', 'column' => 'market_space_id'],
@@ -78,6 +90,7 @@ class MergeMarketSpacesCommand extends Command
 
         if ($dryRun) {
             $this->warn('DRY RUN: nothing changed');
+
             return self::SUCCESS;
         }
 
@@ -118,7 +131,7 @@ class MergeMarketSpacesCommand extends Command
             if (Schema::hasColumn('market_spaces', 'notes')) {
                 $note = trim((string) ($from->notes ?? ''));
                 $suffix = "duplicate_of={$toId}";
-                $from->notes = $note === '' ? $suffix : ($note . "\n" . $suffix);
+                $from->notes = $note === '' ? $suffix : ($note."\n".$suffix);
             }
 
             // tenant_id у дубля лучше обнулить, чтобы не светился как занятый
@@ -135,6 +148,7 @@ class MergeMarketSpacesCommand extends Command
         }
 
         $this->info('OK: merged');
+
         return self::SUCCESS;
     }
 }
