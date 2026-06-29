@@ -5,10 +5,19 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Support\DemoPilotSettings;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class DemoProvisionCommandSafetyTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Schema::shouldReceive('hasTable')->andReturn(true);
+        Schema::shouldReceive('hasColumn')->andReturn(true);
+    }
+
     public function test_dry_run_outputs_plan_without_writes(): void
     {
         $this->artisan('demo:provision --dry-run')
@@ -19,6 +28,7 @@ class DemoProvisionCommandSafetyTest extends TestCase
             ->expectsOutput('External integrations: disabled')
             ->expectsOutputToContain('marketplace_products')
             ->expectsOutputToContain('announcements')
+            ->expectsOutput('Provisioning preflight: ready')
             ->expectsOutputToContain('DRY RUN: no markets, users, tenants, spaces, contracts, finance records, files, or external integrations were changed.')
             ->assertExitCode(0);
     }
@@ -51,7 +61,8 @@ class DemoProvisionCommandSafetyTest extends TestCase
         config()->set('demo_pilot.provision_enabled', true);
 
         $this->artisan('demo:provision --execute')
-            ->expectsOutput('Execute mode is not implemented yet. Keep using --dry-run until the data-write package is reviewed.')
+            ->expectsOutput('Execute adapter write phase: disabled')
+            ->expectsOutput('Demo/pilot write phase is intentionally disabled in this package; no database rows were changed.')
             ->assertExitCode(1);
     }
 }
