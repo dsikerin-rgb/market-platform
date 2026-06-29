@@ -6,6 +6,7 @@ namespace App\Support;
 
 use App\Models\Market;
 use App\Models\MarketLocation;
+use App\Models\MarketSpace;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -237,6 +238,11 @@ class DemoPilotProvisioner
         $tenantWrite = $marketWrite['status'] === 'blocked' || $locationWrite['status'] === 'blocked'
             ? ['status' => 'skipped', 'details' => 'market or location write was blocked']
             : $this->writeTenants($dataSet, (int) $marketWrite['market_id']);
+        $spaceWrite = $marketWrite['status'] === 'blocked'
+            || $locationWrite['status'] === 'blocked'
+            || $tenantWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market, location, or tenant write was blocked']
+            : $this->writeSpaces($dataSet, (int) $marketWrite['market_id']);
         $sections = [];
         $issues = [];
 
@@ -250,6 +256,9 @@ class DemoPilotProvisioner
             } elseif ($section['section'] === 'tenants') {
                 $section['status'] = $tenantWrite['status'];
                 $section['details'] = $tenantWrite['details'];
+            } elseif ($section['section'] === 'spaces') {
+                $section['status'] = $spaceWrite['status'];
+                $section['details'] = $spaceWrite['details'];
             } else {
                 $section['status'] = 'skipped';
                 $section['details'] = 'write adapter is not implemented in this package';
@@ -268,6 +277,10 @@ class DemoPilotProvisioner
 
         if ($tenantWrite['status'] === 'blocked') {
             $issues[] = $tenantWrite['details'];
+        }
+
+        if ($spaceWrite['status'] === 'blocked') {
+            $issues[] = $spaceWrite['details'];
         }
 
         $report['status'] = $issues === [] ? 'partial' : 'blocked';
@@ -557,6 +570,210 @@ class DemoPilotProvisioner
                 ? (string) $tenantPayload['debt_status']
                 : null,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writeSpaces(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'spaces');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'spaces payload is empty'];
+        }
+
+        return DB::transaction(function () use ($dataSet, $records, $marketId): array {
+            $locationIdsByKey = $this->locationIdsByKey($dataSet, $marketId);
+            $tenantIdsByKey = $this->tenantIdsByKey($dataSet, $marketId);
+            $seenCodes = [];
+            $planned = [];
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $code = trim((string) ($record['code'] ?? ''));
+                $locationKey = trim((string) ($record['location_key'] ?? ''));
+                $tenantKey = $record['tenant_key'] ?? null;
+                $tenantKey = $tenantKey === null ? null : trim((string) $tenantKey);
+
+                if (
+                    $code === ''
+                    || trim((string) ($record['number'] ?? '')) === ''
+                    || trim((string) ($record['display_name'] ?? '')) === ''
+                ) {
+                    return ['status' => 'blocked', 'details' => 'space code, number, and display_name are required'];
+                }
+
+                if ($locationKey === '' || ! array_key_exists($locationKey, $locationIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'space [' . $code . '] references missing location [' . $locationKey . ']'];
+                }
+
+                if (in_array($code, $seenCodes, true)) {
+                    return ['status' => 'blocked', 'details' => 'spaces payload has duplicate code [' . $code . ']'];
+                }
+
+                $seenCodes[] = $code;
+                $tenantId = null;
+
+                if ($tenantKey !== null && $tenantKey !== '') {
+                    if (! array_key_exists($tenantKey, $tenantIdsByKey)) {
+                        return ['status' => 'blocked', 'details' => 'space [' . $code . '] references missing tenant [' . $tenantKey . ']'];
+                    }
+
+                    $tenantId = $tenantIdsByKey[$tenantKey];
+                }
+
+                $attributes = $this->spaceAttributes($record, $marketId, $locationIdsByKey[$locationKey], $tenantId);
+
+                if (
+                    $attributes['area_sqm'] === null
+                    || $attributes['rent_rate_value'] === null
+                    || $attributes['rent_rate_unit'] === ''
+                ) {
+                    return ['status' => 'blocked', 'details' => 'space [' . $code . '] area_sqm, rent_rate_value, and rent_rate_unit are required'];
+                }
+
+                $matches = MarketSpace::query()
+                    ->where('market_id', $marketId)
+                    ->where('code', $code)
+                    ->get();
+
+                if ($matches->count() > 1) {
+                    return ['status' => 'blocked', 'details' => 'space code [' . $code . '] matches multiple existing spaces'];
+                }
+
+                $planned[] = [$attributes, $matches->first()];
+            }
+
+            foreach ($planned as [$attributes, $space]) {
+                if ($space === null) {
+                    MarketSpace::withoutEvents(static function () use ($attributes): void {
+                        MarketSpace::query()->create($attributes);
+                    });
+
+                    $created++;
+
+                    continue;
+                }
+
+                $space->fill($attributes);
+
+                if (! $space->isDirty()) {
+                    $unchanged++;
+
+                    continue;
+                }
+
+                MarketSpace::withoutEvents(static function () use ($space): void {
+                    $space->save();
+                });
+
+                $updated++;
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] spaces for market id [' . $marketId . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $spacePayload
+     * @return array{market_id:int, location_id:int, tenant_id:int|null, number:string, code:string, display_name:string, activity_type:string, area_sqm:string|null, rent_rate_value:string|null, rent_rate_unit:string, type:string, status:string, is_active:bool, notes:string}
+     */
+    private function spaceAttributes(array $spacePayload, int $marketId, int $locationId, ?int $tenantId): array
+    {
+        $source = trim((string) ($spacePayload['synthetic_source'] ?? 'demo_pilot')) ?: 'demo_pilot';
+
+        return [
+            'market_id' => $marketId,
+            'location_id' => $locationId,
+            'tenant_id' => $tenantId,
+            'number' => trim((string) ($spacePayload['number'] ?? '')),
+            'code' => trim((string) ($spacePayload['code'] ?? '')),
+            'display_name' => trim((string) ($spacePayload['display_name'] ?? '')),
+            'activity_type' => trim((string) ($spacePayload['activity_type'] ?? 'retail')) ?: 'retail',
+            'area_sqm' => $this->decimalString($spacePayload['area_sqm'] ?? null),
+            'rent_rate_value' => $this->decimalString($spacePayload['rent_rate_value'] ?? null),
+            'rent_rate_unit' => trim((string) ($spacePayload['rent_rate_unit'] ?? 'sqm_month')) ?: 'sqm_month',
+            'type' => trim((string) ($spacePayload['type'] ?? 'retail')) ?: 'retail',
+            'status' => trim((string) ($spacePayload['status'] ?? 'vacant')) ?: 'vacant',
+            'is_active' => (bool) ($spacePayload['is_active'] ?? true),
+            'notes' => 'Synthetic demo space. Source: ' . $source,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array<string, int>
+     */
+    private function locationIdsByKey(array $dataSet, int $marketId): array
+    {
+        $idsByKey = [];
+
+        foreach ($this->recordsForSection($dataSet, 'locations') as $record) {
+            $key = trim((string) ($record['key'] ?? ''));
+            $code = trim((string) ($record['code'] ?? ''));
+
+            if ($key === '' || $code === '') {
+                continue;
+            }
+
+            $id = MarketLocation::query()
+                ->where('market_id', $marketId)
+                ->where('code', $code)
+                ->value('id');
+
+            if ($id !== null) {
+                $idsByKey[$key] = (int) $id;
+            }
+        }
+
+        return $idsByKey;
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array<string, int>
+     */
+    private function tenantIdsByKey(array $dataSet, int $marketId): array
+    {
+        $idsByKey = [];
+
+        foreach ($this->recordsForSection($dataSet, 'tenants') as $record) {
+            $key = trim((string) ($record['key'] ?? ''));
+            $externalId = trim((string) ($record['external_id'] ?? ''));
+
+            if ($key === '' || $externalId === '') {
+                continue;
+            }
+
+            $id = Tenant::query()
+                ->where('market_id', $marketId)
+                ->where('external_id', $externalId)
+                ->value('id');
+
+            if ($id !== null) {
+                $idsByKey[$key] = (int) $id;
+            }
+        }
+
+        return $idsByKey;
+    }
+
+    private function decimalString(mixed $value): ?string
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return number_format((float) $value, 2, '.', '');
     }
 
     private function isSyntheticMarket(Market $market, string $source): bool

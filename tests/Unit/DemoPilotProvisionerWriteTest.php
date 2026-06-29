@@ -6,6 +6,7 @@ namespace Tests\Unit;
 
 use App\Models\Market;
 use App\Models\MarketLocation;
+use App\Models\MarketSpace;
 use App\Models\Tenant;
 use App\Support\DemoPilotDataBuilder;
 use App\Support\DemoPilotProvisioner;
@@ -77,6 +78,26 @@ class DemoPilotProvisionerWriteTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('market_spaces', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('market_id');
+            $table->unsignedBigInteger('location_id')->nullable();
+            $table->unsignedBigInteger('tenant_id')->nullable();
+            $table->string('number')->nullable();
+            $table->string('code')->nullable();
+            $table->string('display_name')->nullable();
+            $table->string('activity_type')->nullable();
+            $table->decimal('area_sqm', 10, 2)->nullable();
+            $table->decimal('rent_rate_value', 12, 2)->nullable();
+            $table->string('rent_rate_unit')->nullable();
+            $table->dateTime('rent_rate_updated_at')->nullable();
+            $table->string('type')->nullable();
+            $table->string('status')->default('free');
+            $table->boolean('is_active')->default(true);
+            $table->text('notes')->nullable();
+            $table->timestamps();
+        });
+
         Schema::shouldReceive('hasTable')->andReturn(true);
         Schema::shouldReceive('hasColumn')->andReturn(true);
     }
@@ -94,13 +115,16 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('created', $this->sectionStatus($firstReport, 'market'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'locations'));
         self::assertSame('created', $this->sectionStatus($firstReport, 'tenants'));
+        self::assertSame('created', $this->sectionStatus($firstReport, 'spaces'));
         self::assertSame('partial', $secondReport['status']);
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'market'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'locations'));
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'tenants'));
+        self::assertSame('unchanged', $this->sectionStatus($secondReport, 'spaces'));
         self::assertSame(1, Market::query()->where('slug', 'demo-market')->count());
         self::assertSame(2, MarketLocation::query()->count());
         self::assertSame(4, Tenant::query()->count());
+        self::assertSame(5, MarketSpace::query()->count());
     }
 
     public function test_execute_updates_existing_demo_market(): void
@@ -133,6 +157,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertTrue((bool) data_get($market->features, 'marketplace'));
         self::assertSame(2, MarketLocation::query()->where('market_id', $market->getKey())->count());
         self::assertSame(4, Tenant::query()->where('market_id', $market->getKey())->count());
+        self::assertSame(5, MarketSpace::query()->where('market_id', $market->getKey())->count());
     }
 
     public function test_execute_updates_existing_demo_locations(): void
@@ -223,6 +248,88 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame(4, Tenant::query()->where('market_id', $market->getKey())->count());
     }
 
+    public function test_execute_updates_existing_demo_spaces(): void
+    {
+        $market = $this->createDemoMarket();
+        $location = $this->createDemoLocation($market, 'main-hall');
+        $tenant = $this->createDemoTenant($market, 'tenant-grocery');
+
+        MarketSpace::withoutEvents(static function () use ($market, $location, $tenant): void {
+            MarketSpace::query()->create([
+                'market_id' => $market->getKey(),
+                'location_id' => $location->getKey(),
+                'tenant_id' => $tenant->getKey(),
+                'number' => 'OLD-A-02',
+                'code' => 'a-02',
+                'display_name' => 'Old grocery',
+                'activity_type' => 'old',
+                'area_sqm' => 1,
+                'rent_rate_value' => 1,
+                'rent_rate_unit' => 'old_unit',
+                'type' => 'old',
+                'status' => 'vacant',
+                'is_active' => false,
+                'notes' => 'old',
+            ]);
+        });
+
+        $report = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        $space = MarketSpace::query()
+            ->where('market_id', $market->getKey())
+            ->where('code', 'a-02')
+            ->firstOrFail();
+
+        self::assertSame('partial', $report['status']);
+        self::assertSame('updated', $this->sectionStatus($report, 'spaces'));
+        self::assertSame('A-02', $space->number);
+        self::assertSame('Grocery stall', $space->display_name);
+        self::assertSame('retail', $space->activity_type);
+        self::assertSame('22.00', (string) $space->area_sqm);
+        self::assertSame('2400.00', (string) $space->rent_rate_value);
+        self::assertSame('sqm_month', $space->rent_rate_unit);
+        self::assertSame('occupied', $space->status);
+        self::assertTrue($space->is_active);
+        self::assertSame(5, MarketSpace::query()->where('market_id', $market->getKey())->count());
+    }
+
+    public function test_execute_blocks_ambiguous_existing_space_code(): void
+    {
+        $market = $this->createDemoMarket();
+        $location = $this->createDemoLocation($market, 'main-hall');
+
+        MarketSpace::withoutEvents(static function () use ($market, $location): void {
+            foreach ([1, 2] as $suffix) {
+                MarketSpace::query()->create([
+                    'market_id' => $market->getKey(),
+                    'location_id' => $location->getKey(),
+                    'tenant_id' => null,
+                    'number' => 'Duplicate ' . $suffix,
+                    'code' => 'a-01',
+                    'display_name' => 'Duplicate ' . $suffix,
+                    'activity_type' => 'retail',
+                    'area_sqm' => 10,
+                    'rent_rate_value' => 100,
+                    'rent_rate_unit' => 'sqm_month',
+                    'type' => 'retail',
+                    'status' => 'vacant',
+                    'is_active' => true,
+                    'notes' => 'duplicate',
+                ]);
+            }
+        });
+
+        $report = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        self::assertSame('blocked', $report['status']);
+        self::assertContains('space code [a-01] matches multiple existing spaces', $report['issues']);
+        self::assertSame(2, MarketSpace::query()->where('market_id', $market->getKey())->count());
+    }
+
     public function test_execute_blocks_tenant_slug_conflict(): void
     {
         $market = $this->createDemoMarket();
@@ -281,6 +388,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('Real Market', Market::query()->where('slug', 'demo-market')->value('name'));
         self::assertSame(0, MarketLocation::query()->count());
         self::assertSame(0, Tenant::query()->count());
+        self::assertSame(0, MarketSpace::query()->count());
     }
 
     public function test_execute_blocks_market_code_conflict(): void
@@ -308,6 +416,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame(1, Market::query()->count());
         self::assertSame(0, MarketLocation::query()->count());
         self::assertSame(0, Tenant::query()->count());
+        self::assertSame(0, MarketSpace::query()->count());
     }
 
     /**
@@ -340,5 +449,40 @@ class DemoPilotProvisionerWriteTest extends TestCase
             ],
             'features' => [],
         ]);
+    }
+
+    private function createDemoLocation(Market $market, string $code): MarketLocation
+    {
+        return MarketLocation::query()->create([
+            'market_id' => $market->getKey(),
+            'name' => $code === 'main-hall' ? 'Main Hall' : 'Food Court',
+            'code' => $code,
+            'type' => 'hall',
+            'sort_order' => 10,
+            'is_active' => true,
+        ]);
+    }
+
+    private function createDemoTenant(Market $market, string $key): Tenant
+    {
+        $name = $key === 'tenant-grocery' ? 'Demo Grocery LLC' : 'Demo Tenant LLC';
+
+        return Tenant::withoutEvents(static function () use ($market, $key, $name): Tenant {
+            return Tenant::query()->create([
+                'market_id' => $market->getKey(),
+                'name' => $name,
+                'short_name' => $name,
+                'slug' => str($name)->slug()->toString(),
+                'type' => 'llc',
+                'external_id' => 'demo-' . $key,
+                'phone' => '+70000000000',
+                'email' => $key . '@example.test',
+                'contact_person' => 'Demo Contact',
+                'status' => 'active',
+                'is_active' => true,
+                'one_c_data' => [],
+                'debt_status' => 'green',
+            ]);
+        });
     }
 }
