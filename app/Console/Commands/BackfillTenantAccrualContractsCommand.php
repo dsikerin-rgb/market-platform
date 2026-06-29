@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Models\TenantAccrual;
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
 use App\Support\MarketContext;
+use App\Support\MarketWriteGuard;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,7 @@ class BackfillTenantAccrualContractsCommand extends Command
 
     protected $description = 'Link tenant_accruals to tenant_contracts and backfill accrual space from linked contracts when safe.';
 
-    public function handle(TenantAccrualContractResolver $resolver): int
+    public function handle(TenantAccrualContractResolver $resolver, MarketWriteGuard $marketWriteGuard): int
     {
         $marketId = max(1, (int) $this->option('market'));
         $periodOption = trim((string) ($this->option('period') ?? ''));
@@ -30,7 +31,7 @@ class BackfillTenantAccrualContractsCommand extends Command
 
         return app(MarketContext::class)->withMarket(
             $marketId,
-            function () use ($marketId, $periodOption, $limit, $execute, $resolver): int {
+            function () use ($marketId, $periodOption, $limit, $execute, $resolver, $marketWriteGuard): int {
                 $query = DB::table('tenant_accruals')
                     ->where('market_id', $marketId)
                     ->whereNotNull('tenant_id')
@@ -58,7 +59,7 @@ class BackfillTenantAccrualContractsCommand extends Command
                     $query->limit($limit);
                 }
 
-                $rows = $query->get(['id', 'tenant_id', 'tenant_contract_id', 'market_space_id', 'period']);
+                $rows = $query->get(['id', 'market_id', 'tenant_id', 'tenant_contract_id', 'market_space_id', 'period']);
 
                 $stats = [
                     'market_id' => $marketId,
@@ -76,23 +77,38 @@ class BackfillTenantAccrualContractsCommand extends Command
                 $samples = [];
 
                 foreach ($rows as $row) {
-                    if ($row->tenant_contract_id !== null) {
-                        $contractSpaceId = DB::table('tenant_contracts')
-                            ->where('id', (int) $row->tenant_contract_id)
-                            ->where('market_id', $marketId)
-                            ->where('tenant_id', (int) $row->tenant_id)
-                            ->value('market_space_id');
+                    $marketWriteGuard->assertSameMarketId(
+                        $row->market_id,
+                        $marketId,
+                        'market_id',
+                        'Tenant accrual belongs to another market.',
+                    );
 
-                        if (! is_numeric($contractSpaceId) || (int) $contractSpaceId <= 0) {
+                    if ($row->tenant_contract_id !== null) {
+                        $contract = DB::table('tenant_contracts')
+                            ->where('id', (int) $row->tenant_contract_id)
+                            ->where('tenant_id', (int) $row->tenant_id)
+                            ->first(['id', 'market_id', 'tenant_id', 'market_space_id']);
+
+                        if (! $contract || ! is_numeric($contract->market_space_id) || (int) $contract->market_space_id <= 0) {
                             $stats['unresolved']++;
 
                             continue;
                         }
 
+                        $marketWriteGuard->assertSameMarketId(
+                            $contract->market_id,
+                            $marketId,
+                            'tenant_contract_id',
+                            'Tenant contract belongs to another market.',
+                        );
+
+                        $contractSpaceId = (int) $contract->market_space_id;
+
                         $samples[] = [
                             'tenant_accrual_id' => (int) $row->id,
                             'tenant_contract_id' => (int) $row->tenant_contract_id,
-                            'market_space_id' => (int) $contractSpaceId,
+                            'market_space_id' => $contractSpaceId,
                             'period' => (string) $row->period,
                             'action' => 'backfill_market_space_from_contract',
                         ];
@@ -104,7 +120,7 @@ class BackfillTenantAccrualContractsCommand extends Command
                         DB::table('tenant_accruals')
                             ->where('id', (int) $row->id)
                             ->update([
-                                'market_space_id' => (int) $contractSpaceId,
+                                'market_space_id' => $contractSpaceId,
                                 'updated_at' => now(),
                             ]);
 
@@ -142,6 +158,24 @@ class BackfillTenantAccrualContractsCommand extends Command
 
                         continue;
                     }
+
+                    $matchedContract = DB::table('tenant_contracts')
+                        ->where('id', (int) $match->tenantContractId)
+                        ->where('tenant_id', (int) $row->tenant_id)
+                        ->first(['id', 'market_id', 'tenant_id']);
+
+                    if (! $matchedContract) {
+                        $stats['unresolved']++;
+
+                        continue;
+                    }
+
+                    $marketWriteGuard->assertSameMarketId(
+                        $matchedContract->market_id,
+                        $marketId,
+                        'tenant_contract_id',
+                        'Resolved tenant contract belongs to another market.',
+                    );
 
                     $stats['matched']++;
                     if ($match->status === TenantAccrual::CONTRACT_LINK_STATUS_EXACT) {
