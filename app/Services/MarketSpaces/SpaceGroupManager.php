@@ -6,6 +6,7 @@ declare(strict_types=1);
 namespace App\Services\MarketSpaces;
 
 use App\Models\MarketSpace;
+use App\Support\MarketWriteGuard;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -14,6 +15,7 @@ final class SpaceGroupManager
     public function __construct(
         private readonly SpaceGroupResolver $resolver,
         private readonly MarketSpaceStateGuard $stateGuard,
+        private readonly MarketWriteGuard $marketWriteGuard,
     ) {
     }
 
@@ -227,11 +229,12 @@ final class SpaceGroupManager
             ]);
         }
 
-        if ((int) $child->market_id !== (int) $targetParent->market_id) {
-            throw ValidationException::withMessages([
-                'target_parent_id' => 'Нельзя переносить место в группу другого рынка.',
-            ]);
-        }
+        $this->marketWriteGuard->assertSameMarket(
+            $child,
+            $targetParent,
+            'target_parent_id',
+            'Нельзя переносить место в группу другого рынка.',
+        );
 
         if (! (bool) $targetParent->is_active) {
             throw ValidationException::withMessages([
@@ -360,11 +363,12 @@ final class SpaceGroupManager
             ]);
         }
 
-        if ((int) $space->market_id !== (int) $targetParent->market_id) {
-            throw ValidationException::withMessages([
-                'target_parent_id' => 'Нельзя добавить место в группу другого рынка.',
-            ]);
-        }
+        $this->marketWriteGuard->assertSameMarket(
+            $space,
+            $targetParent,
+            'target_parent_id',
+            'Нельзя добавить место в группу другого рынка.',
+        );
 
         if (! (bool) $targetParent->is_active) {
             throw ValidationException::withMessages([

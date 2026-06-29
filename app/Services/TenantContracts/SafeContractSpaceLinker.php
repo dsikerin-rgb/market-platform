@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\TenantContracts;
 
+use App\Models\MarketSpace;
 use App\Models\TenantContract;
 use App\Services\TenantAccruals\TenantAccrualContractMatch;
+use App\Support\MarketWriteGuard;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -22,6 +24,7 @@ class SafeContractSpaceLinker
     public function __construct(
         private readonly ContractDocumentClassifier $classifier,
         private readonly ContractNumberSpaceMatcher $numberMatcher,
+        private readonly MarketWriteGuard $marketWriteGuard,
     ) {
     }
 
@@ -236,7 +239,22 @@ class SafeContractSpaceLinker
             return false;
         }
 
-        $contract->market_space_id = $result['matched_space_id'];
+        $space = MarketSpace::query()
+            ->withoutMarketScope()
+            ->find((int) $result['matched_space_id']);
+
+        if (! $space instanceof MarketSpace) {
+            return false;
+        }
+
+        $this->marketWriteGuard->assertSameMarket(
+            $contract,
+            $space,
+            'market_space_id',
+            'Нельзя связать договор с местом другого рынка.',
+        );
+
+        $contract->market_space_id = (int) $space->getKey();
 
         // Fill space mapping fields if they exist in the table
         $table = $contract->getTable();
