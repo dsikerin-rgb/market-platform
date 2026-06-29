@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Demo/pilot контур готовится как выключенный scaffold: добавлены safety flags, prod write barrier и настройки синтетических demo-данных без изменения текущего поведения.',
-    'next_step' => 'Следующий малый пакет: подготовить dry-run demo:provision план без записи в prod-данные и без включения внешних интеграций.',
+    'current_focus' => 'Dry-run demo:provision план готовится как безопасный CLI-интерфейс: команда показывает будущие demo-данные, но не пишет в БД и блокирует execute по флагам.',
+    'next_step' => 'Следующий малый пакет: описать минимальный состав синтетических demo-данных и начать реализацию provision data builder без запуска на prod.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -112,6 +112,7 @@ return [
             'summary' => 'Безопасное демо с синтетическими данными и пилотный контур для первых клиентов.',
             'items' => [
                 ['title' => 'Safety flags и prod write barrier для demo/pilot контура', 'status' => 'done'],
+                ['title' => 'demo:provision dry-run план без записи данных', 'status' => 'done'],
                 ['title' => 'demo:provision', 'status' => 'pending'],
                 ['title' => 'demo:reset', 'status' => 'pending'],
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'pending'],
