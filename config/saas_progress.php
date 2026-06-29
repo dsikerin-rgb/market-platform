@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'MarketWriteGuard для marketplace выведен на prod: продукты, категории, анонсы и чаты проверяют связи на тот же рынок перед записью.',
-    'next_step' => 'Следующий малый пакет: добавить cross-market create/update тесты для guard-контуров, затем провести через PR, staging smoke и prod deploy без миграций и без включения tenant-scope flags.',
+    'current_focus' => 'Cross-market create/update тесты для guard-контуров выведены на prod: документы, marketplace-продукты, категории, анонсы и чаты покрыты regression-сценариями.',
+    'next_step' => 'Следующий малый пакет: начать подготовку demo/pilot контура без включения tenant-scope flags и без записи в prod-данные.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -101,7 +101,7 @@ return [
                 ['title' => 'Guards для начислений и платежей: offline-команды и live 1C accruals/payments', 'status' => 'done'],
                 ['title' => 'Guards для документов и шаринга', 'status' => 'done'],
                 ['title' => 'Guards для marketplace', 'status' => 'done'],
-                ['title' => 'Cross-market tests create/update', 'status' => 'pending'],
+                ['title' => 'Cross-market tests create/update', 'status' => 'done'],
             ],
         ],
         [
