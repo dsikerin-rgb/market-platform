@@ -103,4 +103,47 @@ class MarketWriteGuardIntegrationSourceTest extends TestCase
         self::assertStringContainsString("'Share author belongs to another market.'", $share);
         self::assertSame(2, substr_count($share, 'assertSameMarketId('));
     }
+
+    public function test_marketplace_write_models_use_market_write_guard(): void
+    {
+        $product = file_get_contents(app_path('Models/MarketplaceProduct.php'));
+        $category = file_get_contents(app_path('Models/MarketplaceCategory.php'));
+        $announcement = file_get_contents(app_path('Models/MarketplaceAnnouncement.php'));
+        $chat = file_get_contents(app_path('Models/MarketplaceChat.php'));
+
+        self::assertIsString($product);
+        self::assertIsString($category);
+        self::assertIsString($announcement);
+        self::assertIsString($chat);
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $product);
+        self::assertStringContainsString('assertTenantBelongsToProductMarket', $product);
+        self::assertStringContainsString('assertSpaceBelongsToProductMarket', $product);
+        self::assertStringContainsString('assertCategoryBelongsToProductMarket', $product);
+        self::assertStringContainsString("'Marketplace product tenant belongs to another market.'", $product);
+        self::assertStringContainsString("'Marketplace product space belongs to another market.'", $product);
+        self::assertStringContainsString("'Marketplace product category belongs to another market.'", $product);
+        self::assertSame(3, substr_count($product, 'assertSameMarketId('));
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $category);
+        self::assertStringContainsString('assertParentBelongsToCategoryMarket', $category);
+        self::assertStringContainsString("'Marketplace category parent belongs to another market.'", $category);
+        self::assertSame(1, substr_count($category, 'assertSameMarketId('));
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $announcement);
+        self::assertStringContainsString('assertHolidayBelongsToAnnouncementMarket', $announcement);
+        self::assertStringContainsString('assertAuthorBelongsToAnnouncementMarket', $announcement);
+        self::assertStringContainsString("'Marketplace announcement holiday belongs to another market.'", $announcement);
+        self::assertStringContainsString("'Marketplace announcement author belongs to another market.'", $announcement);
+        self::assertSame(2, substr_count($announcement, 'assertSameMarketId('));
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $chat);
+        self::assertStringContainsString('assertTenantBelongsToChatMarket', $chat);
+        self::assertStringContainsString('assertSpaceBelongsToChatMarket', $chat);
+        self::assertStringContainsString('assertProductBelongsToChatMarket', $chat);
+        self::assertStringContainsString("'Marketplace chat tenant belongs to another market.'", $chat);
+        self::assertStringContainsString("'Marketplace chat space belongs to another market.'", $chat);
+        self::assertStringContainsString("'Marketplace chat product belongs to another market.'", $chat);
+        self::assertSame(3, substr_count($chat, 'assertSameMarketId('));
+    }
 }

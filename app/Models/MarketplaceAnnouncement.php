@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MarketWriteGuard;
 use App\Support\MarketplaceMediaStorage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Schema;
 
 class MarketplaceAnnouncement extends Model
 {
@@ -38,6 +40,14 @@ class MarketplaceAnnouncement extends Model
         'ends_at' => 'datetime',
         'published_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $announcement): void {
+            $announcement->assertHolidayBelongsToAnnouncementMarket();
+            $announcement->assertAuthorBelongsToAnnouncementMarket();
+        });
+    }
 
     public function market(): BelongsTo
     {
@@ -92,5 +102,47 @@ class MarketplaceAnnouncement extends Model
             'schedule_items' => [],
             'promo_items' => [],
         ];
+    }
+
+    private function assertHolidayBelongsToAnnouncementMarket(): void
+    {
+        if (! $this->market_id || ! $this->market_holiday_id || ! Schema::hasTable('market_holidays')) {
+            return;
+        }
+
+        $holidayMarketId = MarketHoliday::query()
+            ->whereKey((int) $this->market_holiday_id)
+            ->value('market_id');
+
+        if ($holidayMarketId === null) {
+            return;
+        }
+
+        app(MarketWriteGuard::class)->assertSameMarketId(
+            $this->market_id,
+            $holidayMarketId,
+            'market_holiday_id',
+            'Marketplace announcement holiday belongs to another market.',
+        );
+    }
+
+    private function assertAuthorBelongsToAnnouncementMarket(): void
+    {
+        if (! $this->market_id || ! $this->author_user_id || ! Schema::hasTable('users')) {
+            return;
+        }
+
+        $author = User::query()->find((int) $this->author_user_id, ['id', 'market_id']);
+
+        if (! $author || $author->isSuperAdmin() || $author->market_id === null) {
+            return;
+        }
+
+        app(MarketWriteGuard::class)->assertSameMarketId(
+            $this->market_id,
+            $author->market_id,
+            'author_user_id',
+            'Marketplace announcement author belongs to another market.',
+        );
     }
 }
