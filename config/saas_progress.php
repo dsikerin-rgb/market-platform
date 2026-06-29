@@ -5,13 +5,13 @@ declare(strict_types=1);
 return [
     'title' => 'Ход SaaS-перехода',
     'subtitle' => 'Безопасная перестройка Market Platform под SaaS, демо-контур и привлечение новых клиентов.',
-    'last_updated_at' => '2026-06-29',
+    'last_updated_at' => '2026-06-30',
     'access' => [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Подготовлена публичная страница /demo для заявки на демо или ограниченную бесплатную версию без записи заявок в БД.',
-    'next_step' => 'Следующий малый пакет: добавить безопасную форму заявки с сохранением и уведомлением; demo flags и DB writes на prod не включаем без отдельного решения.',
+    'current_focus' => 'Demo provision расширяется до полноценного первого показа: русские demo users, арендаторы, места, финансы и простая карта рынка с фигурами, привязанными к market_spaces. Пакет остаётся безопасным: flags выключены, prod DB writes не включаются.',
+    'next_step' => 'Следующий шаг после merge/deploy кода: dry-run demo:provision на staging, затем отдельное решение по включению demo flags и записи синтетических данных только на staging.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -114,12 +114,12 @@ return [
                 ['title' => 'Safety flags и prod write barrier для demo/pilot контура', 'status' => 'done'],
                 ['title' => 'demo:provision dry-run план без записи данных', 'status' => 'done'],
                 ['title' => 'demo:provision preflight adapter проверяет payload, таблицы и колонки без записи данных', 'status' => 'done'],
-                ['title' => 'demo:provision idempotent write adapter для local/staging: demo market, market_locations, tenants, market_spaces, tenant_contracts, tenant_accruals и tenant_payments', 'status' => 'done'],
-                ['title' => 'demo:reset dry-run/execute с удалением только synthetic demo-записей без удаления market shell', 'status' => 'done'],
-                ['title' => 'Состав синтетических арендаторов, мест, договоров, финансов и marketplace описан в data builder', 'status' => 'done'],
+                ['title' => 'demo:provision idempotent write adapter для local/staging: demo market, users, market_locations, tenants, market_spaces, map_shapes, tenant_contracts, tenant_accruals и tenant_payments', 'status' => 'done'],
+                ['title' => 'demo:reset dry-run/execute с удалением только synthetic demo-записей, включая map_shapes, без удаления market shell', 'status' => 'done'],
+                ['title' => 'Состав синтетических пользователей, арендаторов, мест, карты, договоров, финансов и marketplace описан в data builder', 'status' => 'done'],
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'done'],
                 ['title' => 'Демо-пользователи директор/админ/оператор/арендатор', 'status' => 'done'],
-                ['title' => 'Демо-карта рынка: фигуры для всех synthetic market_spaces', 'status' => 'done'],
+                ['title' => 'Простая карта рынка с 5 фигурами мест', 'status' => 'done'],
                 ['title' => 'Внешние интеграции в демо выключены', 'status' => 'done'],
                 ['title' => 'Demo script на 15 минут', 'status' => 'done'],
             ],

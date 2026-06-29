@@ -97,11 +97,11 @@ class DemoPilotResetterTest extends TestCase
             $table->unsignedBigInteger('market_space_id')->nullable();
             $table->unsignedInteger('page')->default(1);
             $table->unsignedInteger('version')->default(1);
-            $table->json('polygon');
-            $table->decimal('bbox_x1', 10, 2);
-            $table->decimal('bbox_y1', 10, 2);
-            $table->decimal('bbox_x2', 10, 2);
-            $table->decimal('bbox_y2', 10, 2);
+            $table->json('polygon')->nullable();
+            $table->decimal('bbox_x1', 10, 2)->nullable();
+            $table->decimal('bbox_y1', 10, 2)->nullable();
+            $table->decimal('bbox_x2', 10, 2)->nullable();
+            $table->decimal('bbox_y2', 10, 2)->nullable();
             $table->string('fill_color')->nullable();
             $table->string('stroke_color')->nullable();
             $table->decimal('fill_opacity', 4, 2)->nullable();
@@ -219,10 +219,11 @@ class DemoPilotResetterTest extends TestCase
 
         self::assertSame('reset', $report['status']);
         self::assertSame('retained', $this->sectionStatus($report, 'market'));
+        self::assertSame('deleted', $this->sectionStatus($report, 'map_shapes'));
         self::assertSame(1, DB::table('users')->where('email', 'real@example.test')->count());
         self::assertSame(0, DB::table('users')->where('email', 'admin@demo.marketuchet.local')->count());
         self::assertSame(0, DB::table('model_has_roles')->where('model_type', User::class)->where('model_id', $userId)->count());
-        self::assertSame(0, DB::table('market_space_map_shapes')->where('meta->demo_key', 'shape-a-02')->count());
+        self::assertSame(0, DB::table('market_space_map_shapes')->where('meta->demo_pilot->key', 'shape-a-02')->count());
         self::assertSame(1, DB::table('market_space_map_shapes')->where('meta->synthetic_source', 'manual')->count());
         self::assertSame(0, DB::table('tenant_payments')->where('source', 'demo_pilot')->count());
         self::assertSame(1, DB::table('tenant_payments')->where('source', '1c')->count());
@@ -359,9 +360,11 @@ class DemoPilotResetterTest extends TestCase
             'fill_opacity' => 0.14,
             'stroke_width' => 1.5,
             'meta' => json_encode([
-                'demo_key' => 'shape-a-02',
-                'market_space_key' => 'space-a-02',
-                'synthetic_source' => 'demo_pilot',
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                    'key' => 'shape-a-02',
+                    'market_space_key' => 'space-a-02',
+                ],
             ]),
             'is_active' => true,
             'sort_order' => 20,
