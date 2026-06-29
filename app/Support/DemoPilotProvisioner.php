@@ -8,7 +8,9 @@ use App\Models\Market;
 use App\Models\MarketLocation;
 use App\Models\MarketSpace;
 use App\Models\Tenant;
+use App\Models\TenantAccrual;
 use App\Models\TenantContract;
+use App\Models\TenantPayment;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use LogicException;
@@ -250,6 +252,21 @@ class DemoPilotProvisioner
             || $spaceWrite['status'] === 'blocked'
             ? ['status' => 'skipped', 'details' => 'market, location, tenant, or space write was blocked']
             : $this->writeContracts($dataSet, (int) $marketWrite['market_id']);
+        $accrualWrite = $marketWrite['status'] === 'blocked'
+            || $locationWrite['status'] === 'blocked'
+            || $tenantWrite['status'] === 'blocked'
+            || $spaceWrite['status'] === 'blocked'
+            || $contractWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, space, or contract write was blocked']
+            : $this->writeAccruals($dataSet, (int) $marketWrite['market_id']);
+        $paymentWrite = $marketWrite['status'] === 'blocked'
+            || $locationWrite['status'] === 'blocked'
+            || $tenantWrite['status'] === 'blocked'
+            || $spaceWrite['status'] === 'blocked'
+            || $contractWrite['status'] === 'blocked'
+            || $accrualWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, space, contract, or accrual write was blocked']
+            : $this->writePayments($dataSet, (int) $marketWrite['market_id']);
         $sections = [];
         $issues = [];
 
@@ -269,6 +286,12 @@ class DemoPilotProvisioner
             } elseif ($section['section'] === 'contracts') {
                 $section['status'] = $contractWrite['status'];
                 $section['details'] = $contractWrite['details'];
+            } elseif ($section['section'] === 'accruals') {
+                $section['status'] = $accrualWrite['status'];
+                $section['details'] = $accrualWrite['details'];
+            } elseif ($section['section'] === 'payments') {
+                $section['status'] = $paymentWrite['status'];
+                $section['details'] = $paymentWrite['details'];
             } else {
                 $section['status'] = 'skipped';
                 $section['details'] = 'write adapter is not implemented in this package';
@@ -295,6 +318,14 @@ class DemoPilotProvisioner
 
         if ($contractWrite['status'] === 'blocked') {
             $issues[] = $contractWrite['details'];
+        }
+
+        if ($accrualWrite['status'] === 'blocked') {
+            $issues[] = $accrualWrite['details'];
+        }
+
+        if ($paymentWrite['status'] === 'blocked') {
+            $issues[] = $paymentWrite['details'];
         }
 
         $report['status'] = $issues === [] ? 'partial' : 'blocked';
@@ -946,6 +977,419 @@ class DemoPilotProvisioner
         }
 
         return $idsByKey;
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writeAccruals(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'accruals');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'accruals payload is empty'];
+        }
+
+        return DB::transaction(function () use ($dataSet, $records, $marketId): array {
+            $tenantIdsByKey = $this->tenantIdsByKey($dataSet, $marketId);
+            $spaceIdsByKey = $this->spaceIdsByKey($dataSet, $marketId);
+            $contractIdsByKey = $this->contractIdsByKey($dataSet, $marketId);
+            $contractExternalIdsByKey = $this->contractExternalIdsByKey($dataSet);
+            $seenHashes = [];
+            $planned = [];
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $key = trim((string) ($record['key'] ?? ''));
+                $tenantKey = trim((string) ($record['tenant_key'] ?? ''));
+                $contractKey = trim((string) ($record['tenant_contract_key'] ?? ''));
+                $spaceKey = trim((string) ($record['market_space_key'] ?? ''));
+                $period = trim((string) ($record['period'] ?? ''));
+                $hash = $this->demoSourceRowHash('accruals', $key);
+
+                if ($key === '' || $period === '' || trim((string) ($record['document_date'] ?? '')) === '') {
+                    return ['status' => 'blocked', 'details' => 'accrual key, period, and document_date are required'];
+                }
+
+                if (in_array($hash, $seenHashes, true)) {
+                    return ['status' => 'blocked', 'details' => 'accruals payload has duplicate source hash for key [' . $key . ']'];
+                }
+
+                if ($tenantKey === '' || ! array_key_exists($tenantKey, $tenantIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'accrual [' . $key . '] references missing tenant [' . $tenantKey . ']'];
+                }
+
+                if ($contractKey === '' || ! array_key_exists($contractKey, $contractIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'accrual [' . $key . '] references missing contract [' . $contractKey . ']'];
+                }
+
+                if ($spaceKey === '' || ! array_key_exists($spaceKey, $spaceIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'accrual [' . $key . '] references missing market_space [' . $spaceKey . ']'];
+                }
+
+                $attributes = $this->accrualAttributes(
+                    $record,
+                    $marketId,
+                    $tenantIdsByKey[$tenantKey],
+                    $contractIdsByKey[$contractKey],
+                    $spaceIdsByKey[$spaceKey],
+                    $contractExternalIdsByKey[$contractKey] ?? null,
+                    $hash,
+                );
+
+                if (
+                    $attributes['rent_amount'] === null
+                    || $attributes['total_no_vat'] === null
+                    || $attributes['total_with_vat'] === null
+                ) {
+                    return ['status' => 'blocked', 'details' => 'accrual [' . $key . '] rent_amount, total_no_vat, and total_with_vat are required'];
+                }
+
+                $matches = TenantAccrual::query()
+                    ->where('market_id', $marketId)
+                    ->whereDate('period', $period)
+                    ->where('source_row_hash', $hash)
+                    ->get();
+
+                if ($matches->count() > 1) {
+                    return ['status' => 'blocked', 'details' => 'accrual source hash [' . $hash . '] matches multiple existing accruals'];
+                }
+
+                $seenHashes[] = $hash;
+                $planned[] = [$attributes, $matches->first()];
+            }
+
+            foreach ($planned as [$attributes, $accrual]) {
+                if ($accrual === null) {
+                    TenantAccrual::withoutEvents(static function () use ($attributes): void {
+                        TenantAccrual::query()->create($attributes);
+                    });
+
+                    $created++;
+
+                    continue;
+                }
+
+                $accrual->fill($attributes);
+
+                if (! $accrual->isDirty()) {
+                    $unchanged++;
+
+                    continue;
+                }
+
+                TenantAccrual::withoutEvents(static function () use ($accrual): void {
+                    $accrual->save();
+                });
+
+                $updated++;
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] accruals for market id [' . $marketId . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $accrualPayload
+     * @return array<string, mixed>
+     */
+    private function accrualAttributes(
+        array $accrualPayload,
+        int $marketId,
+        int $tenantId,
+        int $contractId,
+        int $spaceId,
+        ?string $contractExternalId,
+        string $sourceRowHash,
+    ): array {
+        $key = trim((string) ($accrualPayload['key'] ?? ''));
+        $source = trim((string) ($accrualPayload['synthetic_source'] ?? 'demo_pilot')) ?: 'demo_pilot';
+
+        return [
+            'market_id' => $marketId,
+            'tenant_id' => $tenantId,
+            'tenant_contract_id' => $contractId,
+            'market_space_id' => $spaceId,
+            'contract_external_id' => $contractExternalId,
+            'contract_link_status' => TenantAccrual::CONTRACT_LINK_STATUS_EXACT,
+            'contract_link_source' => 'demo_pilot',
+            'contract_link_note' => 'Synthetic demo finance link.',
+            'period' => trim((string) ($accrualPayload['period'] ?? '')),
+            'document_external_id' => 'demo-' . $key,
+            'document_number' => 'D-ACCRUAL-' . strtoupper(str_replace('accrual-', '', $key)),
+            'document_date' => trim((string) ($accrualPayload['document_date'] ?? '')),
+            'document_name' => 'Demo accrual ' . $key,
+            'service_name' => 'Rent',
+            'line_description' => 'Synthetic demo rent accrual.',
+            'purpose' => 'Demo data only. External 1C import is disabled.',
+            'currency' => 'RUB',
+            'rent_amount' => $this->decimalString($accrualPayload['rent_amount'] ?? null),
+            'management_fee' => $this->decimalString($accrualPayload['management_fee'] ?? 0),
+            'utilities_amount' => $this->decimalString($accrualPayload['utilities_amount'] ?? 0),
+            'electricity_amount' => $this->decimalString($accrualPayload['electricity_amount'] ?? 0),
+            'total_no_vat' => $this->decimalString($accrualPayload['total_no_vat'] ?? null),
+            'vat_rate' => $this->decimalString($accrualPayload['vat_rate'] ?? 0),
+            'total_with_vat' => $this->decimalString($accrualPayload['total_with_vat'] ?? null),
+            'cash_amount' => $this->decimalString($accrualPayload['cash_amount'] ?? 0),
+            'status' => 'imported',
+            'source' => 'demo_pilot',
+            'source_file' => 'demo_pilot',
+            'source_row_hash' => $sourceRowHash,
+            'payload' => $this->jsonPayload([
+                'synthetic_source' => $source,
+                'live_1c' => false,
+                'demo_key' => $key,
+                'tenant_key' => $accrualPayload['tenant_key'] ?? null,
+                'tenant_contract_key' => $accrualPayload['tenant_contract_key'] ?? null,
+                'market_space_key' => $accrualPayload['market_space_key'] ?? null,
+            ]),
+            'imported_at' => trim((string) ($accrualPayload['imported_at'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writePayments(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'payments');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'payments payload is empty'];
+        }
+
+        return DB::transaction(function () use ($dataSet, $records, $marketId): array {
+            $tenantIdsByKey = $this->tenantIdsByKey($dataSet, $marketId);
+            $tenantExternalIdsByKey = $this->tenantExternalIdsByKey($dataSet);
+            $contractIdsByKey = $this->contractIdsByKey($dataSet, $marketId);
+            $contractExternalIdsByKey = $this->contractExternalIdsByKey($dataSet);
+            $seenHashes = [];
+            $planned = [];
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $key = trim((string) ($record['key'] ?? ''));
+                $tenantKey = trim((string) ($record['tenant_key'] ?? ''));
+                $contractKey = trim((string) ($record['tenant_contract_key'] ?? ''));
+                $hash = $this->demoSourceRowHash('payments', $key);
+
+                if (
+                    $key === ''
+                    || trim((string) ($record['payment_date'] ?? '')) === ''
+                    || trim((string) ($record['period'] ?? '')) === ''
+                ) {
+                    return ['status' => 'blocked', 'details' => 'payment key, payment_date, and period are required'];
+                }
+
+                if (in_array($hash, $seenHashes, true)) {
+                    return ['status' => 'blocked', 'details' => 'payments payload has duplicate source hash for key [' . $key . ']'];
+                }
+
+                if ($tenantKey === '' || ! array_key_exists($tenantKey, $tenantIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'payment [' . $key . '] references missing tenant [' . $tenantKey . ']'];
+                }
+
+                if ($contractKey === '' || ! array_key_exists($contractKey, $contractIdsByKey)) {
+                    return ['status' => 'blocked', 'details' => 'payment [' . $key . '] references missing contract [' . $contractKey . ']'];
+                }
+
+                $attributes = $this->paymentAttributes(
+                    $record,
+                    $marketId,
+                    $tenantIdsByKey[$tenantKey],
+                    $contractIdsByKey[$contractKey],
+                    $tenantExternalIdsByKey[$tenantKey] ?? '',
+                    $contractExternalIdsByKey[$contractKey] ?? null,
+                    $hash,
+                );
+
+                if ($attributes['tenant_external_id'] === '' || $attributes['amount'] === null) {
+                    return ['status' => 'blocked', 'details' => 'payment [' . $key . '] tenant_external_id and amount are required'];
+                }
+
+                $matches = TenantPayment::query()
+                    ->where('market_id', $marketId)
+                    ->where('source_row_hash', $hash)
+                    ->get();
+
+                if ($matches->count() > 1) {
+                    return ['status' => 'blocked', 'details' => 'payment source hash [' . $hash . '] matches multiple existing payments'];
+                }
+
+                $seenHashes[] = $hash;
+                $planned[] = [$attributes, $matches->first()];
+            }
+
+            foreach ($planned as [$attributes, $payment]) {
+                if ($payment === null) {
+                    TenantPayment::withoutEvents(static function () use ($attributes): void {
+                        TenantPayment::query()->create($attributes);
+                    });
+
+                    $created++;
+
+                    continue;
+                }
+
+                $payment->fill($attributes);
+
+                if (! $payment->isDirty()) {
+                    $unchanged++;
+
+                    continue;
+                }
+
+                TenantPayment::withoutEvents(static function () use ($payment): void {
+                    $payment->save();
+                });
+
+                $updated++;
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] payments for market id [' . $marketId . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $paymentPayload
+     * @return array<string, mixed>
+     */
+    private function paymentAttributes(
+        array $paymentPayload,
+        int $marketId,
+        int $tenantId,
+        int $contractId,
+        string $tenantExternalId,
+        ?string $contractExternalId,
+        string $sourceRowHash,
+    ): array {
+        $key = trim((string) ($paymentPayload['key'] ?? ''));
+        $source = trim((string) ($paymentPayload['synthetic_source'] ?? 'demo_pilot')) ?: 'demo_pilot';
+        $payload = is_array($paymentPayload['payload'] ?? null) ? $paymentPayload['payload'] : [];
+
+        return [
+            'market_id' => $marketId,
+            'tenant_id' => $tenantId,
+            'tenant_contract_id' => $contractId,
+            'tenant_external_id' => $tenantExternalId,
+            'contract_external_id' => $contractExternalId,
+            'payment_external_id' => 'demo-' . $key,
+            'document_number' => 'D-PAYMENT-' . strtoupper(str_replace('payment-', '', $key)),
+            'payment_date' => trim((string) ($paymentPayload['payment_date'] ?? '')),
+            'period' => trim((string) ($paymentPayload['period'] ?? '')),
+            'amount' => $this->decimalString($paymentPayload['amount'] ?? null),
+            'currency' => 'RUB',
+            'purpose' => 'Demo data only. External 1C import is disabled.',
+            'source' => 'demo_pilot',
+            'source_file' => 'demo_pilot',
+            'payload' => array_merge($payload, [
+                'synthetic_source' => $source,
+                'live_1c' => false,
+                'demo_key' => $key,
+                'tenant_key' => $paymentPayload['tenant_key'] ?? null,
+                'tenant_contract_key' => $paymentPayload['tenant_contract_key'] ?? null,
+            ]),
+            'imported_at' => trim((string) ($paymentPayload['imported_at'] ?? '')),
+            'source_row_hash' => $sourceRowHash,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array<string, int>
+     */
+    private function contractIdsByKey(array $dataSet, int $marketId): array
+    {
+        $idsByKey = [];
+
+        foreach ($this->recordsForSection($dataSet, 'contracts') as $record) {
+            $key = trim((string) ($record['key'] ?? ''));
+            $externalId = trim((string) ($record['external_id'] ?? ''));
+
+            if ($key === '' || $externalId === '') {
+                continue;
+            }
+
+            $id = TenantContract::query()
+                ->where('market_id', $marketId)
+                ->where('external_id', $externalId)
+                ->value('id');
+
+            if ($id !== null) {
+                $idsByKey[$key] = (int) $id;
+            }
+        }
+
+        return $idsByKey;
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array<string, string>
+     */
+    private function tenantExternalIdsByKey(array $dataSet): array
+    {
+        $externalIdsByKey = [];
+
+        foreach ($this->recordsForSection($dataSet, 'tenants') as $record) {
+            $key = trim((string) ($record['key'] ?? ''));
+            $externalId = trim((string) ($record['external_id'] ?? ''));
+
+            if ($key !== '' && $externalId !== '') {
+                $externalIdsByKey[$key] = $externalId;
+            }
+        }
+
+        return $externalIdsByKey;
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array<string, string>
+     */
+    private function contractExternalIdsByKey(array $dataSet): array
+    {
+        $externalIdsByKey = [];
+
+        foreach ($this->recordsForSection($dataSet, 'contracts') as $record) {
+            $key = trim((string) ($record['key'] ?? ''));
+            $externalId = trim((string) ($record['external_id'] ?? ''));
+
+            if ($key !== '' && $externalId !== '') {
+                $externalIdsByKey[$key] = $externalId;
+            }
+        }
+
+        return $externalIdsByKey;
+    }
+
+    private function demoSourceRowHash(string $section, string $key): string
+    {
+        return hash('sha256', 'demo_pilot:' . $section . ':' . $key);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function jsonPayload(array $payload): string
+    {
+        return json_encode($payload, JSON_UNESCAPED_SLASHES) ?: '{}';
     }
 
     private function isSyntheticMarket(Market $market, string $source): bool
