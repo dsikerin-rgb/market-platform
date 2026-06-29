@@ -11,6 +11,7 @@ use App\Models\MarketplaceCategory;
 use App\Models\MarketplaceProduct;
 use App\Models\Tenant;
 use App\Models\TenantAccrual;
+use App\Support\MarketContext;
 use App\Support\MarketplaceAnnouncementImageCatalog;
 use App\Support\MarketplaceDemoAssets;
 use Illuminate\Console\Command;
@@ -191,16 +192,18 @@ class MarketplaceBootstrapCommand extends Command
         $this->ensureGlobalCategories();
 
         foreach ($markets as $market) {
-            $this->line('');
-            $this->info(sprintf('Market: %s (#%d)', $market->name, (int) $market->id));
+            app(MarketContext::class)->withMarket((int) $market->id, function () use ($market, $refreshAnnouncements, $seedProductsPerTenant, $force): void {
+                $this->line('');
+                $this->info(sprintf('Market: %s (#%d)', $market->name, (int) $market->id));
 
-            if ($refreshAnnouncements) {
-                $count = $this->syncAnnouncementsFromHolidays($market);
-                $this->line("  announcements synced: {$count}");
-            }
+                if ($refreshAnnouncements) {
+                    $count = $this->syncAnnouncementsFromHolidays($market);
+                    $this->line("  announcements synced: {$count}");
+                }
 
-            $created = $this->seedDemoProducts($market, $seedProductsPerTenant, $force);
-            $this->line("  demo products created: {$created}");
+                $created = $this->seedDemoProducts($market, $seedProductsPerTenant, $force);
+                $this->line("  demo products created: {$created}");
+            });
         }
 
         $this->info('');

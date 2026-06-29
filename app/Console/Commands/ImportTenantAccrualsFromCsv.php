@@ -5,6 +5,7 @@
 namespace App\Console\Commands;
 
 use App\Services\TenantAccruals\TenantAccrualContractResolver;
+use App\Support\MarketContext;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -664,20 +665,24 @@ class ImportTenantAccrualsFromCsv extends Command
                 }
             };
 
-            if ($dryRun) {
-                DB::beginTransaction();
-                try {
-                    $runner();
-                    DB::rollBack();
-                } catch (Throwable $e) {
-                    DB::rollBack();
-                    throw $e;
+            app(MarketContext::class)->withMarket($marketId, function () use ($dryRun, $runner): void {
+                if ($dryRun) {
+                    DB::beginTransaction();
+                    try {
+                        $runner();
+                        DB::rollBack();
+                    } catch (Throwable $e) {
+                        DB::rollBack();
+                        throw $e;
+                    }
+
+                    return;
                 }
-            } else {
+
                 DB::transaction(function () use ($runner) {
                     $runner();
                 });
-            }
+            });
         } catch (Throwable $e) {
             $this->error('Import failed: '.$e->getMessage());
 

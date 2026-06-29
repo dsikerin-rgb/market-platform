@@ -19,6 +19,8 @@ class MarketplaceBootstrapCommandSafetyTest extends TestCase
         self::assertStringContainsString('{--execute : Apply marketplace bootstrap changes (default: dry-run)}', $source);
         self::assertStringContainsString('$dryRun = ! $execute || (bool) $this->option(\'dry-run\');', $source);
         self::assertStringContainsString('if ($execute && (bool) $this->option(\'dry-run\')) {', $source);
+        self::assertStringContainsString('use App\Support\MarketContext;', $source);
+        self::assertStringContainsString('app(MarketContext::class)->withMarket((int) $market->id, function () use ($market, $refreshAnnouncements, $seedProductsPerTenant, $force): void {', $source);
         self::assertStringContainsString('DRY RUN: no marketplace data was written. Use --execute to apply.', $source);
         self::assertStringContainsString('Role::findOrCreate(\'buyer\', \'web\');', $source);
         self::assertStringContainsString('$this->ensureGlobalCategories();', $source);
