@@ -78,6 +78,15 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Illuminate\Validation\ValidationException;
 
 Route::view('/', 'welcome')->name('home');
+Route::view('/demo', 'demo-pilot-landing')
+    ->withoutMiddleware([
+        EncryptCookies::class,
+        AddQueuedCookiesToResponse::class,
+        StartSession::class,
+        ShareErrorsFromSession::class,
+        VerifyCsrfToken::class,
+    ])
+    ->name('demo.landing');
 
 Route::get('/media/{path}', function (string $path) {
     return MarketplaceMediaStorage::serve($path);
