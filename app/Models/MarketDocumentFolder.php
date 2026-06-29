@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MarketWriteGuard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 
 class MarketDocumentFolder extends Model
 {
@@ -57,9 +59,30 @@ class MarketDocumentFolder extends Model
             $folder->visibility = MarketDocument::normalizeVisibility((string) $folder->visibility);
             $folder->name = trim((string) $folder->name);
 
+            if ($folder->parent_id && Schema::hasTable('market_document_folders')) {
+                $parent = self::query()->find((int) $folder->parent_id);
+
+                if ($parent) {
+                    if ($folder->market_id) {
+                        app(MarketWriteGuard::class)->assertSameMarketId(
+                            $folder->market_id,
+                            $parent->market_id,
+                            'parent_id',
+                            'Parent folder belongs to another market.',
+                        );
+                    }
+
+                    $folder->market_id = $parent->market_id;
+                    $folder->visibility = $parent->visibility;
+                    $folder->owner_user_id = $parent->owner_user_id;
+                }
+            }
+
             if ($folder->visibility === MarketDocument::VISIBILITY_SHARED) {
                 $folder->owner_user_id = null;
             }
+
+            $folder->assertOwnerBelongsToFolderMarket();
         });
     }
 
@@ -125,5 +148,27 @@ class MarketDocumentFolder extends Model
         }
 
         return $name !== '' ? $name : 'Папка';
+    }
+
+    private function assertOwnerBelongsToFolderMarket(): void
+    {
+        if (! $this->owner_user_id || ! $this->market_id || ! Schema::hasTable('users')) {
+            return;
+        }
+
+        $ownerMarketId = User::query()
+            ->whereKey((int) $this->owner_user_id)
+            ->value('market_id');
+
+        if ($ownerMarketId === null) {
+            return;
+        }
+
+        app(MarketWriteGuard::class)->assertSameMarketId(
+            $this->market_id,
+            $ownerMarketId,
+            'owner_user_id',
+            'Folder owner belongs to another market.',
+        );
     }
 }

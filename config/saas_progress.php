@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'MarketWriteGuard для live 1C accruals/payments выведен на prod: tenant, contract, space, existing и created finance records проверяются перед записью.',
-    'next_step' => 'Следующий малый пакет: добавить write guards для документов и шаринга, затем провести через PR, staging smoke и prod deploy без миграций и без включения tenant-scope flags.',
+    'current_focus' => 'MarketWriteGuard для документов и шаринга выведен на prod: папки, владельцы, связанные сущности и получатели доступа проверяются перед записью.',
+    'next_step' => 'Следующий малый пакет: добавить write guards для marketplace, затем провести через PR, staging smoke и prod deploy без миграций и без включения tenant-scope flags.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -99,7 +99,7 @@ return [
                 ['title' => 'Same-market validator/service', 'status' => 'done'],
                 ['title' => 'Guards для договоров и мест', 'status' => 'done'],
                 ['title' => 'Guards для начислений и платежей: offline-команды и live 1C accruals/payments', 'status' => 'done'],
-                ['title' => 'Guards для документов и шаринга', 'status' => 'pending'],
+                ['title' => 'Guards для документов и шаринга', 'status' => 'done'],
                 ['title' => 'Guards для marketplace', 'status' => 'pending'],
                 ['title' => 'Cross-market tests create/update', 'status' => 'pending'],
             ],

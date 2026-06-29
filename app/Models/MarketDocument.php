@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MarketWriteGuard;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -84,6 +85,15 @@ class MarketDocument extends Model
                 $folder = MarketDocumentFolder::query()->find((int) $document->folder_id);
 
                 if ($folder) {
+                    if ($document->market_id) {
+                        app(MarketWriteGuard::class)->assertSameMarketId(
+                            $document->market_id,
+                            $folder->market_id,
+                            'folder_id',
+                            'Selected folder belongs to another market.',
+                        );
+                    }
+
                     $document->market_id = $folder->market_id;
                     $document->visibility = $folder->visibility;
                     $document->owner_user_id = $folder->owner_user_id;
@@ -104,6 +114,9 @@ class MarketDocument extends Model
             if (blank($document->title)) {
                 $document->title = $document->resolvedFileName();
             }
+
+            $document->assertOwnerBelongsToDocumentMarket();
+            $document->assertRelatedBelongsToDocumentMarket();
         });
     }
 
@@ -388,5 +401,54 @@ class MarketDocument extends Model
         if (blank($this->original_name)) {
             $this->original_name = basename($path);
         }
+    }
+
+    private function assertOwnerBelongsToDocumentMarket(): void
+    {
+        if (! $this->owner_user_id || ! $this->market_id || ! Schema::hasTable('users')) {
+            return;
+        }
+
+        $ownerMarketId = User::query()
+            ->whereKey((int) $this->owner_user_id)
+            ->value('market_id');
+
+        if ($ownerMarketId === null) {
+            return;
+        }
+
+        app(MarketWriteGuard::class)->assertSameMarketId(
+            $this->market_id,
+            $ownerMarketId,
+            'owner_user_id',
+            'Document owner belongs to another market.',
+        );
+    }
+
+    private function assertRelatedBelongsToDocumentMarket(): void
+    {
+        if (! $this->market_id || blank($this->related_type) || blank($this->related_id)) {
+            return;
+        }
+
+        $relatedType = (string) $this->related_type;
+
+        if (! is_a($relatedType, Model::class, true)) {
+            return;
+        }
+
+        /** @var Model|null $related */
+        $related = $relatedType::query()->find((int) $this->related_id);
+
+        if (! $related || ! array_key_exists('market_id', $related->getAttributes())) {
+            return;
+        }
+
+        app(MarketWriteGuard::class)->assertSameMarketId(
+            $this->market_id,
+            $related->getAttribute('market_id'),
+            'related_id',
+            'Related record belongs to another market.',
+        );
     }
 }

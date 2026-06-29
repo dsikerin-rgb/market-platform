@@ -73,4 +73,34 @@ class MarketWriteGuardIntegrationSourceTest extends TestCase
         self::assertStringContainsString("'Created payment belongs to another market.'", $paymentController);
         self::assertSame(4, substr_count($paymentController, '$marketWriteGuard->assertSameMarketId('));
     }
+
+    public function test_market_document_write_models_use_market_write_guard(): void
+    {
+        $document = file_get_contents(app_path('Models/MarketDocument.php'));
+        $folder = file_get_contents(app_path('Models/MarketDocumentFolder.php'));
+        $share = file_get_contents(app_path('Models/MarketDocumentShare.php'));
+
+        self::assertIsString($document);
+        self::assertIsString($folder);
+        self::assertIsString($share);
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $document);
+        self::assertStringContainsString('assertOwnerBelongsToDocumentMarket', $document);
+        self::assertStringContainsString('assertRelatedBelongsToDocumentMarket', $document);
+        self::assertStringContainsString("'Selected folder belongs to another market.'", $document);
+        self::assertStringContainsString("'Related record belongs to another market.'", $document);
+        self::assertSame(3, substr_count($document, 'assertSameMarketId('));
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $folder);
+        self::assertStringContainsString('assertOwnerBelongsToFolderMarket', $folder);
+        self::assertStringContainsString("'Parent folder belongs to another market.'", $folder);
+        self::assertStringContainsString("'Folder owner belongs to another market.'", $folder);
+        self::assertSame(2, substr_count($folder, 'assertSameMarketId('));
+
+        self::assertStringContainsString('use App\Support\MarketWriteGuard;', $share);
+        self::assertStringContainsString('assertUsersBelongToDocumentMarket', $share);
+        self::assertStringContainsString("'Share recipient belongs to another market.'", $share);
+        self::assertStringContainsString("'Share author belongs to another market.'", $share);
+        self::assertSame(2, substr_count($share, 'assertSameMarketId('));
+    }
 }
