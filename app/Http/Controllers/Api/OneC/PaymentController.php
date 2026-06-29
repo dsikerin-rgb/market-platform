@@ -11,6 +11,7 @@ use App\Models\TenantContract;
 use App\Models\TenantPayment;
 use App\Services\Tenants\OneCTenantResolver;
 use App\Support\MarketContext;
+use App\Support\MarketWriteGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,7 @@ class PaymentController extends Controller
 
     private const ENTITY_TYPE = 'payments';
 
-    public function store(Request $request, OneCTenantResolver $tenantResolver): JsonResponse
+    public function store(Request $request, OneCTenantResolver $tenantResolver, MarketWriteGuard $marketWriteGuard): JsonResponse
     {
         $startedAt = now();
         $exchange = null;
@@ -82,7 +83,7 @@ class PaymentController extends Controller
 
             return app(MarketContext::class)->withMarket(
                 $marketId,
-                function () use ($request, $tenantResolver, $integration, $marketId, $startedAt, &$exchange): JsonResponse {
+                function () use ($request, $tenantResolver, $marketWriteGuard, $integration, $marketId, $startedAt, &$exchange): JsonResponse {
                     $exchange = IntegrationExchange::query()->create([
                         'market_id' => $marketId,
                         'direction' => IntegrationExchange::DIRECTION_IN,
@@ -213,6 +214,13 @@ class PaymentController extends Controller
                             continue;
                         }
 
+                        $marketWriteGuard->assertSameMarketId(
+                            $tenant->market_id,
+                            $marketId,
+                            'tenant_external_id',
+                            'Resolved tenant belongs to another market.',
+                        );
+
                         if ($tenantResolution['mode'] === 'created') {
                             $tenantsCreated++;
                         } elseif ($tenantResolution['mode'] === 'matched_inn') {
@@ -222,6 +230,12 @@ class PaymentController extends Controller
                         $contract = $this->resolveContract($marketId, (int) $tenant->id, $contractExternalId);
 
                         if ($contract) {
+                            $marketWriteGuard->assertSameMarketId(
+                                $contract->market_id,
+                                $marketId,
+                                'contract_external_id',
+                                'Resolved contract belongs to another market.',
+                            );
                             $linkedContracts++;
                         } elseif ($contractExternalId !== '') {
                             $unresolvedContracts++;
@@ -250,6 +264,13 @@ class PaymentController extends Controller
                             ->first();
 
                         if ($existing) {
+                            $marketWriteGuard->assertSameMarketId(
+                                $existing->market_id,
+                                $marketId,
+                                'source_row_hash',
+                                'Existing payment belongs to another market.',
+                            );
+
                             $touchedPaymentIdsByPeriod[$periodDate] ??= [];
                             $touchedPaymentIdsByPeriod[$periodDate][] = (int) $existing->id;
                             $skipped++;
@@ -280,6 +301,13 @@ class PaymentController extends Controller
                             'imported_at' => $now,
                             'source_row_hash' => $sourceRowHash,
                         ]);
+
+                        $marketWriteGuard->assertSameMarketId(
+                            $payment->market_id,
+                            $marketId,
+                            'market_id',
+                            'Created payment belongs to another market.',
+                        );
 
                         $touchedPaymentIdsByPeriod[$periodDate] ??= [];
                         $touchedPaymentIdsByPeriod[$periodDate][] = (int) $payment->id;
