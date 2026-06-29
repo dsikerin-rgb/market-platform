@@ -1,5 +1,6 @@
 <?php
-# app/Console/Commands/ImportTenantAccrualsFromCsv.php
+
+// app/Console/Commands/ImportTenantAccrualsFromCsv.php
 
 namespace App\Console\Commands;
 
@@ -19,6 +20,7 @@ class ImportTenantAccrualsFromCsv extends Command
         {--market-id= : Market ID. If omitted, will use the only active market, otherwise asks to specify}
         {--period= : Period in YYYY-MM (e.g. 2026-01). If omitted, will try to infer from filename}
         {--dry-run : Parse only (transaction rollback), do not write into DB}
+        {--execute : Import rows into DB (default: dry-run)}
         {--delimiter= : Force delimiter (; , or \t). If omitted, auto-detect}
         {--encoding=utf-8 : Source encoding: utf-8 or win-1251}
         {--limit=0 : Limit rows for testing (0 = no limit)}
@@ -33,6 +35,14 @@ class ImportTenantAccrualsFromCsv extends Command
     public function handle(TenantAccrualContractResolver $contractResolver): int
     {
         $startedAt = microtime(true);
+        $execute = (bool) $this->option('execute');
+        $dryRun = ! $execute || (bool) $this->option('dry-run');
+
+        if ($execute && (bool) $this->option('dry-run')) {
+            $this->error('Use either --execute or --dry-run, not both.');
+
+            return self::FAILURE;
+        }
 
         $fileArg = (string) $this->argument('file');
         $filePath = $this->resolveFilePath($fileArg);
@@ -41,12 +51,14 @@ class ImportTenantAccrualsFromCsv extends Command
             $this->error("File not found: {$fileArg}");
             $this->line("Tried: {$filePath}");
             $this->line('Tip: put files under storage/app/imports/tenant_accruals and pass relative path, e.g.: imports/tenant_accruals/eco_yarmarka/out/2025-01__январь 2025__import.csv');
+
             return self::FAILURE;
         }
 
         $encoding = strtolower((string) $this->option('encoding'));
         if (! in_array($encoding, ['utf-8', 'win-1251'], true)) {
             $this->error("Unsupported encoding: {$encoding}. Use utf-8 or win-1251.");
+
             return self::FAILURE;
         }
 
@@ -64,22 +76,22 @@ class ImportTenantAccrualsFromCsv extends Command
         $period = $this->resolvePeriod($fileArg);
         if (! $period) {
             $this->error('Period is required. Pass --period=YYYY-MM or include YYYY-MM in filename (e.g. accruals_2026-01.csv).');
+
             return self::FAILURE;
         }
 
-        $dryRun = (bool) $this->option('dry-run');
         $limit = (int) ($this->option('limit') ?? 0);
         $setSpaceTenant = (bool) $this->option('set-space-tenant');
 
         $this->info('Import settings:');
         $this->line("  file: {$filePath}");
-        $this->line('  delimiter: ' . ($delimiter === "\t" ? '\t' : $delimiter));
+        $this->line('  delimiter: '.($delimiter === "\t" ? '\t' : $delimiter));
         $this->line("  encoding: {$encoding}");
         $this->line("  market_id: {$marketId}");
         $this->line("  period: {$period->format('Y-m-d')}");
-        $this->line('  dry_run: ' . ($dryRun ? 'yes' : 'no'));
+        $this->line('  dry_run: '.($dryRun ? 'yes' : 'no'));
         $this->line("  limit: {$limit}");
-        $this->line('  set_space_tenant: ' . ($setSpaceTenant ? 'yes' : 'no'));
+        $this->line('  set_space_tenant: '.($setSpaceTenant ? 'yes' : 'no'));
         $this->newLine();
 
         $stats = [
@@ -135,6 +147,7 @@ class ImportTenantAccrualsFromCsv extends Command
 
             if (! $headers) {
                 $this->error('Cannot read header row from CSV.');
+
                 return self::FAILURE;
             }
 
@@ -142,7 +155,8 @@ class ImportTenantAccrualsFromCsv extends Command
 
             if (! isset($col['tenant_name'])) {
                 $this->error('Cannot find required column "ФИО" (tenant name).');
-                $this->line('Found headers: ' . implode(' | ', array_map(fn ($h) => (string) $h, $headers)));
+                $this->line('Found headers: '.implode(' | ', array_map(fn ($h) => (string) $h, $headers)));
+
                 return self::FAILURE;
             }
 
@@ -245,6 +259,7 @@ class ImportTenantAccrualsFromCsv extends Command
 
                     if ($this->looksLikeHeaderRepeat($headers, $row)) {
                         $stats['rows_skipped']++;
+
                         continue;
                     }
 
@@ -305,12 +320,14 @@ class ImportTenantAccrualsFromCsv extends Command
                     // Section-like rows: tenant text, but no place/area/amounts
                     if ($this->isSectionLikeRow($tenantName, $placeCode, $area, $rentRate, $days, $hasAnyAmounts)) {
                         $stats['rows_skipped']++;
+
                         continue;
                     }
 
                     // Summary/total rows
                     if ($this->isSummaryRow($tenantName, $placeCode, $area, $hasAnyAmounts)) {
                         $stats['rows_skipped']++;
+
                         continue;
                     }
 
@@ -318,6 +335,7 @@ class ImportTenantAccrualsFromCsv extends Command
                     $looksMeaningful = ($tenantName !== '') || ($placeCode !== '') || ($area > 0) || $hasAnyAmounts;
                     if (! $looksMeaningful) {
                         $stats['rows_skipped']++;
+
                         continue;
                     }
 
@@ -360,7 +378,7 @@ class ImportTenantAccrualsFromCsv extends Command
                         );
                     }
 
-                    $displayNameValue = trim($placeName) !== '' ? trim($placeName) : ($placeCode !== '' ? ('Место ' . $placeCode) : '');
+                    $displayNameValue = trim($placeName) !== '' ? trim($placeName) : ($placeCode !== '' ? ('Место '.$placeCode) : '');
 
                     // Upsert space (for both free and occupied)
                     $marketSpaceId = null;
@@ -436,13 +454,13 @@ class ImportTenantAccrualsFromCsv extends Command
                                         END"
                                     );
                                 } else {
-                                    $update[$areaColumn] = DB::raw('COALESCE(NULLIF(' . $areaColumn . ', 0), ' . $sqlArea . ')');
+                                    $update[$areaColumn] = DB::raw('COALESCE(NULLIF('.$areaColumn.', 0), '.$sqlArea.')');
                                 }
                             }
                         }
 
                         if ($marketSpacesHasLocationId && $locationId) {
-                            $update['location_id'] = DB::raw('COALESCE(location_id, ' . (int) $locationId . ')');
+                            $update['location_id'] = DB::raw('COALESCE(location_id, '.(int) $locationId.')');
                             $stats['spaces_location_set']++;
                         }
 
@@ -531,6 +549,7 @@ class ImportTenantAccrualsFromCsv extends Command
                         $stats['rows_errors']++;
                         $stats['accruals_skipped_no_tenant']++;
                         $this->warn("Row {$sourceRowNumber}: amounts present but tenant name is empty. Accrual skipped for place \"{$placeCode}\".");
+
                         continue;
                     }
 
@@ -660,7 +679,8 @@ class ImportTenantAccrualsFromCsv extends Command
                 });
             }
         } catch (Throwable $e) {
-            $this->error('Import failed: ' . $e->getMessage());
+            $this->error('Import failed: '.$e->getMessage());
+
             return self::FAILURE;
         }
 
@@ -774,7 +794,7 @@ class ImportTenantAccrualsFromCsv extends Command
         $code = Str::slug($name, '-');
 
         if ($code === '') {
-            $code = 'loc-' . substr(hash('sha1', $name), 0, 10);
+            $code = 'loc-'.substr(hash('sha1', $name), 0, 10);
         }
 
         return $code;
@@ -788,7 +808,7 @@ class ImportTenantAccrualsFromCsv extends Command
             return $fileArg;
         }
 
-        return storage_path('app/' . ltrim($fileArg, '/'));
+        return storage_path('app/'.ltrim($fileArg, '/'));
     }
 
     private function normalizeDelimiter(string $delimiter): string
@@ -797,6 +817,7 @@ class ImportTenantAccrualsFromCsv extends Command
         if ($d === '\t' || $d === 'tab') {
             return "\t";
         }
+
         return $d !== '' ? $d[0] : ';';
     }
 
@@ -833,6 +854,7 @@ class ImportTenantAccrualsFromCsv extends Command
 
         if ($markets->isEmpty()) {
             $this->error('No active markets found. Please create a market first.');
+
             return null;
         }
 
@@ -850,9 +872,11 @@ class ImportTenantAccrualsFromCsv extends Command
         if ($periodOpt !== '') {
             if (! preg_match('/^\d{4}-\d{2}$/', $periodOpt)) {
                 $this->error("Invalid --period format: {$periodOpt}. Use YYYY-MM (e.g. 2026-01).");
+
                 return null;
             }
-            return Carbon::createFromFormat('Y-m-d', $periodOpt . '-01')->startOfDay();
+
+            return Carbon::createFromFormat('Y-m-d', $periodOpt.'-01')->startOfDay();
         }
 
         if (preg_match('/(\d{4})[-_.](\d{2})/', $fileArg, $m)) {
@@ -867,6 +891,7 @@ class ImportTenantAccrualsFromCsv extends Command
         if (isset($row[0]) && is_string($row[0])) {
             $row[0] = preg_replace('/^\xEF\xBB\xBF/', '', $row[0]) ?? $row[0];
         }
+
         return $row;
     }
 
@@ -876,6 +901,7 @@ class ImportTenantAccrualsFromCsv extends Command
             if (is_string($v)) {
                 return preg_replace('/^\xEF\xBB\xBF/', '', $v) ?? $v;
             }
+
             return $v;
         }, $row);
 
@@ -891,6 +917,7 @@ class ImportTenantAccrualsFromCsv extends Command
             if (! is_string($v)) {
                 return $v;
             }
+
             return mb_convert_encoding($v, 'UTF-8', 'Windows-1251');
         }, $row);
     }
@@ -905,6 +932,7 @@ class ImportTenantAccrualsFromCsv extends Command
                 return false;
             }
         }
+
         return true;
     }
 
@@ -913,6 +941,7 @@ class ImportTenantAccrualsFromCsv extends Command
         $s = mb_strtolower(trim($h));
         $s = str_replace(["\xC2\xA0", "\t"], ' ', $s);
         $s = preg_replace('/\s+/', ' ', $s) ?? $s;
+
         return $s;
     }
 
@@ -930,51 +959,61 @@ class ImportTenantAccrualsFromCsv extends Command
 
             if (! isset($idx['location_type']) && Str::contains($n, ['тип локации', 'тип места'])) {
                 $idx['location_type'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['tenant_name']) && Str::contains($n, ['фио'])) {
                 $idx['tenant_name'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['place_code']) && Str::contains($n, ['№ отдела', 'номер отдела', 'отдел №', 'место'])) {
                 $idx['place_code'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['place_name']) && Str::contains($n, ['название отдела', 'наименование отдела'])) {
                 $idx['place_name'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['activity_type']) && Str::contains($n, ['вид деятельности'])) {
                 $idx['activity_type'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['free_area_sqm']) && Str::contains($n, ['свободная площадь'])) {
                 $idx['free_area_sqm'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['leased_area_sqm']) && Str::contains($n, ['сданная площадь'])) {
                 $idx['leased_area_sqm'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['area_sqm']) && Str::contains($n, ['площадь'])) {
                 $idx['area_sqm'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['rent_rate']) && Str::contains($n, ['ставка аренды'])) {
                 $idx['rent_rate'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['rent_amount']) && Str::contains($n, ['сумма аренды'])) {
                 $idx['rent_amount'] = $i;
+
                 continue;
             }
 
@@ -984,41 +1023,49 @@ class ImportTenantAccrualsFromCsv extends Command
                 } else {
                     $idx['management_fee_1'] = $i;
                 }
+
                 continue;
             }
 
             if (! isset($idx['electricity_amount']) && Str::contains($n, ['электроэнергия'])) {
                 $idx['electricity_amount'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['utilities_amount']) && Str::contains($n, ['коммунальные услуги'])) {
                 $idx['utilities_amount'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['total_no_vat']) && Str::contains($n, ['итого к оплате, без ндс', 'итого без ндс'])) {
                 $idx['total_no_vat'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['total_with_vat']) && Str::contains($n, ['итого к оплате, с ндс', 'итого с ндс'])) {
                 $idx['total_with_vat'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['days']) && Str::contains($n, ['кол-во дней', 'количество дней'])) {
                 $idx['days'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['discount_note']) && Str::contains($n, ['дополнит', 'скидк'])) {
                 $idx['discount_note'] = $i;
+
                 continue;
             }
 
             if (! isset($idx['cash_amount']) && Str::contains($n, ['наличные', 'в том числе наличные'])) {
                 $idx['cash_amount'] = $i;
+
                 continue;
             }
         }
@@ -1048,6 +1095,7 @@ class ImportTenantAccrualsFromCsv extends Command
         if (is_numeric($v)) {
             return (string) $v;
         }
+
         return is_string($v) ? trim($v) : (string) $v;
     }
 
@@ -1081,16 +1129,25 @@ class ImportTenantAccrualsFromCsv extends Command
     private function inferTenantType(string $tenantName): ?string
     {
         $n = mb_strtoupper($tenantName);
-        if (Str::contains($n, ['ООО'])) return 'ООО';
-        if (Str::contains($n, ['АО'])) return 'АО';
-        if (Str::contains($n, ['ИП'])) return 'ИП';
+        if (Str::contains($n, ['ООО'])) {
+            return 'ООО';
+        }
+        if (Str::contains($n, ['АО'])) {
+            return 'АО';
+        }
+        if (Str::contains($n, ['ИП'])) {
+            return 'ИП';
+        }
+
         return null;
     }
 
     private function parseNumber(string $value): float
     {
         $v = trim($value);
-        if ($v === '') return 0.0;
+        if ($v === '') {
+            return 0.0;
+        }
 
         $v = str_replace(["\xC2\xA0", ' '], '', $v);
         $v = str_replace(',', '.', $v);
@@ -1107,7 +1164,9 @@ class ImportTenantAccrualsFromCsv extends Command
     private function parseIntNullable(string $value): ?int
     {
         $v = trim($value);
-        if ($v === '') return null;
+        if ($v === '') {
+            return null;
+        }
 
         $v = str_replace(["\xC2\xA0", ' '], '', $v);
         $v = preg_replace('/[^0-9\-]/', '', $v) ?? $v;
@@ -1125,8 +1184,12 @@ class ImportTenantAccrualsFromCsv extends Command
         }
 
         $h = mb_strtolower(implode(' ', array_map(fn ($x) => is_string($x) ? $x : (string) $x, $headers)));
-        if (Str::contains($h, ['ндс 5', '5 %', '5%'])) return 0.05;
-        if (Str::contains($h, ['ндс 20', '20 %', '20%'])) return 0.20;
+        if (Str::contains($h, ['ндс 5', '5 %', '5%'])) {
+            return 0.05;
+        }
+        if (Str::contains($h, ['ндс 20', '20 %', '20%'])) {
+            return 0.20;
+        }
 
         return null;
     }
@@ -1138,6 +1201,7 @@ class ImportTenantAccrualsFromCsv extends Command
             $key = is_string($h) ? trim($h) : (string) $h;
             $payload[$key] = $row[$i] ?? null;
         }
+
         return $payload;
     }
 
@@ -1172,6 +1236,7 @@ class ImportTenantAccrualsFromCsv extends Command
                 $cols = Schema::getColumnListing($table);
                 $this->tableColumnsCache[$table] = $cols;
             }
+
             return in_array($column, $cols, true);
         } catch (Throwable) {
             return false;
@@ -1183,7 +1248,7 @@ class ImportTenantAccrualsFromCsv extends Command
         try {
             return DB::getPdo()->quote($value);
         } catch (Throwable) {
-            return "'" . str_replace("'", "''", $value) . "'";
+            return "'".str_replace("'", "''", $value)."'";
         }
     }
 
@@ -1191,6 +1256,7 @@ class ImportTenantAccrualsFromCsv extends Command
     {
         $s = number_format($value, 6, '.', '');
         $s = rtrim(rtrim($s, '0'), '.');
+
         return $s === '' ? '0' : $s;
     }
 
@@ -1211,7 +1277,7 @@ class ImportTenantAccrualsFromCsv extends Command
             return $baseSpaceId;
         }
 
-        $subCode = $placeCode . '__t' . $tenantId;
+        $subCode = $placeCode.'__t'.$tenantId;
 
         try {
             $id = DB::table('market_spaces')
