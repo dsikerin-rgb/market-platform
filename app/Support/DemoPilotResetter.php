@@ -36,7 +36,7 @@ class DemoPilotResetter
         ],
         'map_shapes' => [
             'table' => 'market_space_map_shapes',
-            'required_columns' => ['market_id', 'market_space_id', 'meta'],
+            'required_columns' => ['market_id', 'market_space_id', 'page', 'version', 'meta'],
         ],
         'tenants' => [
             'table' => 'tenants',
@@ -446,11 +446,11 @@ class DemoPilotResetter
     {
         $query = DB::table('market_space_map_shapes')
             ->where('market_id', $marketId)
-            ->where('meta->synthetic_source', $this->source($dataSet));
+            ->where('meta->demo_pilot->synthetic_source', $this->source($dataSet));
 
         $query = $this->whereInOrNone($query, 'market_space_id', $this->targetSpaceIds($dataSet, $marketId));
 
-        return $this->whereInOrNone($query, 'meta->demo_key', $this->mapShapeKeys($dataSet));
+        return $this->whereInOrNone($query, 'meta->demo_pilot->key', $this->mapShapeKeys($dataSet));
     }
 
     /**

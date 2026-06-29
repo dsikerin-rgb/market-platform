@@ -46,10 +46,20 @@ class DemoPilotDataBuilderTest extends TestCase
         $contractKeys = $this->keys($dataSet['contracts']);
         $categoryKeys = $this->keys($dataSet['marketplace_categories']);
 
+        foreach ($dataSet['users'] as $user) {
+            if (($user['tenant_key'] ?? null) !== null) {
+                self::assertContains($user['tenant_key'], $tenantKeys);
+            }
+        }
+
         foreach ($dataSet['spaces'] as $space) {
             if (($space['tenant_key'] ?? null) !== null) {
                 self::assertContains($space['tenant_key'], $tenantKeys);
             }
+        }
+
+        foreach ($dataSet['map_shapes'] as $shape) {
+            self::assertContains($shape['market_space_key'], $spaceKeys);
         }
 
         foreach ($dataSet['contracts'] as $contract) {
@@ -89,6 +99,8 @@ class DemoPilotDataBuilderTest extends TestCase
         self::assertSame('Анна Волкова', $dataSet['users'][0]['name']);
         self::assertSame('Основной павильон', $dataSet['locations'][0]['name']);
         self::assertSame('Продукты у дома', $dataSet['spaces'][1]['display_name']);
+        self::assertSame('space-a-02', $dataSet['map_shapes'][1]['market_space_key']);
+        self::assertCount(4, $dataSet['map_shapes'][1]['polygon']);
         self::assertSame('ООО "Продукты у дома"', $dataSet['tenants'][1]['name']);
         self::assertSame('demo-grocery', $dataSet['tenants'][1]['slug']);
         self::assertSame('Бакалея', $dataSet['marketplace_categories'][1]['name']);
