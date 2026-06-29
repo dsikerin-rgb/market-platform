@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Демо-набор русифицирован для пользователей из России: рынок, локации, арендаторы, места, товары, анонс и будущие demo users теперь имеют русские видимые названия; технические slug/source/email остаются стабильными для reset/provision.',
-    'next_step' => 'Следующий малый пакет: добавить demo-пользователей/сотрудников в write adapter, затем отдельным пакетом добавить простую карту рынка с привязкой фигур к market_spaces; demo flags и DB writes на prod не включаем без отдельного решения.',
+    'current_focus' => 'demo:provision теперь создаёт demo users/staff в существующей модели users: директор, админ, оператор и tenant user получают market/tenant привязку и роли без сброса пароля при повторном запуске.',
+    'next_step' => 'Следующий малый пакет: добавить простую карту рынка с привязкой фигур к market_spaces; demo flags и DB writes на prod не включаем без отдельного решения.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -118,7 +118,7 @@ return [
                 ['title' => 'demo:reset dry-run/execute с удалением только synthetic demo-записей без удаления market shell', 'status' => 'done'],
                 ['title' => 'Состав синтетических арендаторов, мест, договоров, финансов и marketplace описан в data builder', 'status' => 'done'],
                 ['title' => 'Синтетические арендаторы, места, договоры и финансы', 'status' => 'done'],
-                ['title' => 'Демо-пользователи директор/админ/арендатор', 'status' => 'pending'],
+                ['title' => 'Демо-пользователи директор/админ/оператор/арендатор', 'status' => 'done'],
                 ['title' => 'Внешние интеграции в демо выключены', 'status' => 'pending'],
                 ['title' => 'Demo script на 15 минут', 'status' => 'pending'],
             ],

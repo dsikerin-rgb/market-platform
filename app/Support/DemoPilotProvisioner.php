@@ -11,7 +11,9 @@ use App\Models\Tenant;
 use App\Models\TenantAccrual;
 use App\Models\TenantContract;
 use App\Models\TenantPayment;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use LogicException;
 use Throwable;
@@ -177,6 +179,16 @@ class DemoPilotProvisioner
     ];
 
     /**
+     * @var array<string, string>
+     */
+    private const USER_ROLE_MAP = [
+        'director' => 'market-owner-director',
+        'admin' => 'market-admin',
+        'operator' => 'market-operator',
+        'tenant' => 'merchant-user',
+    ];
+
+    /**
      * @param array<string, mixed> $dataSet
      * @return array{status:string, writes_enabled:bool, sections:list<array{section:string, table:string, records:int, status:string, details:string}>, issues:list<string>}
      */
@@ -241,31 +253,40 @@ class DemoPilotProvisioner
         $tenantWrite = $marketWrite['status'] === 'blocked' || $locationWrite['status'] === 'blocked'
             ? ['status' => 'skipped', 'details' => 'market or location write was blocked']
             : $this->writeTenants($dataSet, (int) $marketWrite['market_id']);
-        $spaceWrite = $marketWrite['status'] === 'blocked'
+        $userWrite = $marketWrite['status'] === 'blocked'
             || $locationWrite['status'] === 'blocked'
             || $tenantWrite['status'] === 'blocked'
             ? ['status' => 'skipped', 'details' => 'market, location, or tenant write was blocked']
+            : $this->writeUsers($dataSet, (int) $marketWrite['market_id']);
+        $spaceWrite = $marketWrite['status'] === 'blocked'
+            || $locationWrite['status'] === 'blocked'
+            || $tenantWrite['status'] === 'blocked'
+            || $userWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, or user write was blocked']
             : $this->writeSpaces($dataSet, (int) $marketWrite['market_id']);
         $contractWrite = $marketWrite['status'] === 'blocked'
             || $locationWrite['status'] === 'blocked'
             || $tenantWrite['status'] === 'blocked'
+            || $userWrite['status'] === 'blocked'
             || $spaceWrite['status'] === 'blocked'
-            ? ['status' => 'skipped', 'details' => 'market, location, tenant, or space write was blocked']
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, user, or space write was blocked']
             : $this->writeContracts($dataSet, (int) $marketWrite['market_id']);
         $accrualWrite = $marketWrite['status'] === 'blocked'
             || $locationWrite['status'] === 'blocked'
             || $tenantWrite['status'] === 'blocked'
+            || $userWrite['status'] === 'blocked'
             || $spaceWrite['status'] === 'blocked'
             || $contractWrite['status'] === 'blocked'
-            ? ['status' => 'skipped', 'details' => 'market, location, tenant, space, or contract write was blocked']
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, user, space, or contract write was blocked']
             : $this->writeAccruals($dataSet, (int) $marketWrite['market_id']);
         $paymentWrite = $marketWrite['status'] === 'blocked'
             || $locationWrite['status'] === 'blocked'
             || $tenantWrite['status'] === 'blocked'
+            || $userWrite['status'] === 'blocked'
             || $spaceWrite['status'] === 'blocked'
             || $contractWrite['status'] === 'blocked'
             || $accrualWrite['status'] === 'blocked'
-            ? ['status' => 'skipped', 'details' => 'market, location, tenant, space, contract, or accrual write was blocked']
+            ? ['status' => 'skipped', 'details' => 'market, location, tenant, user, space, contract, or accrual write was blocked']
             : $this->writePayments($dataSet, (int) $marketWrite['market_id']);
         $sections = [];
         $issues = [];
@@ -274,6 +295,9 @@ class DemoPilotProvisioner
             if ($section['section'] === 'market') {
                 $section['status'] = $marketWrite['status'];
                 $section['details'] = $marketWrite['details'];
+            } elseif ($section['section'] === 'users') {
+                $section['status'] = $userWrite['status'];
+                $section['details'] = $userWrite['details'];
             } elseif ($section['section'] === 'locations') {
                 $section['status'] = $locationWrite['status'];
                 $section['details'] = $locationWrite['details'];
@@ -310,6 +334,10 @@ class DemoPilotProvisioner
 
         if ($tenantWrite['status'] === 'blocked') {
             $issues[] = $tenantWrite['details'];
+        }
+
+        if ($userWrite['status'] === 'blocked') {
+            $issues[] = $userWrite['details'];
         }
 
         if ($spaceWrite['status'] === 'blocked') {
@@ -615,6 +643,173 @@ class DemoPilotProvisioner
                 ? (string) $tenantPayload['debt_status']
                 : null,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writeUsers(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'users');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'users payload is empty'];
+        }
+
+        if (! Schema::hasTable('roles') || ! Schema::hasTable('model_has_roles')) {
+            return ['status' => 'blocked', 'details' => 'roles and model_has_roles tables are required for demo users'];
+        }
+
+        return DB::transaction(function () use ($dataSet, $records, $marketId): array {
+            $tenantIdsByKey = $this->tenantIdsByKey($dataSet, $marketId);
+            $seenEmails = [];
+            $planned = [];
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $email = trim((string) ($record['email'] ?? ''));
+                $name = trim((string) ($record['name'] ?? ''));
+                $payloadRole = trim((string) ($record['role'] ?? ''));
+                $roleName = self::USER_ROLE_MAP[$payloadRole] ?? null;
+                $tenantKey = $record['tenant_key'] ?? null;
+                $tenantKey = $tenantKey === null ? null : trim((string) $tenantKey);
+                $tenantId = null;
+
+                if ($email === '' || $name === '' || $payloadRole === '' || $roleName === null) {
+                    return ['status' => 'blocked', 'details' => 'user name, email, and known role are required'];
+                }
+
+                if (in_array($email, $seenEmails, true)) {
+                    return ['status' => 'blocked', 'details' => 'users payload has duplicate email [' . $email . ']'];
+                }
+
+                if ($tenantKey !== null && $tenantKey !== '') {
+                    if (! array_key_exists($tenantKey, $tenantIdsByKey)) {
+                        return ['status' => 'blocked', 'details' => 'user [' . $email . '] references missing tenant [' . $tenantKey . ']'];
+                    }
+
+                    $tenantId = $tenantIdsByKey[$tenantKey];
+                }
+
+                if ($payloadRole === 'tenant' && $tenantId === null) {
+                    return ['status' => 'blocked', 'details' => 'tenant user [' . $email . '] must reference a tenant'];
+                }
+
+                $roleId = $this->roleIdByName($roleName);
+
+                if ($roleId === null) {
+                    return ['status' => 'blocked', 'details' => 'role [' . $roleName . '] is missing for user [' . $email . ']'];
+                }
+
+                $matches = User::query()->where('email', $email)->get();
+
+                if ($matches->count() > 1) {
+                    return ['status' => 'blocked', 'details' => 'user email [' . $email . '] matches multiple existing users'];
+                }
+
+                $user = $matches->first();
+
+                if ($user !== null && (int) ($user->market_id ?? 0) !== $marketId) {
+                    return ['status' => 'blocked', 'details' => 'user email [' . $email . '] already belongs to another market or has no demo market'];
+                }
+
+                $seenEmails[] = $email;
+                $planned[] = [$this->userAttributes($record, $marketId, $tenantId), $user, $roleId];
+            }
+
+            foreach ($planned as [$attributes, $user, $roleId]) {
+                if ($user === null) {
+                    $user = User::withoutEvents(static fn (): User => User::query()->create($attributes));
+                    $this->syncUserRole($user, $roleId);
+                    $created++;
+
+                    continue;
+                }
+
+                $existingAttributes = $attributes;
+                unset($existingAttributes['password']);
+                $user->fill($existingAttributes);
+                $roleChanged = $this->syncUserRole($user, $roleId);
+
+                if (! $user->isDirty()) {
+                    $unchanged += $roleChanged ? 0 : 1;
+                    $updated += $roleChanged ? 1 : 0;
+
+                    continue;
+                }
+
+                User::withoutEvents(static function () use ($user): void {
+                    $user->save();
+                });
+
+                $updated++;
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] users for market id [' . $marketId . ']',
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $userPayload
+     * @return array{name:string, email:string, password:string, market_id:int, tenant_id:int|null}
+     */
+    private function userAttributes(array $userPayload, int $marketId, ?int $tenantId): array
+    {
+        return [
+            'name' => trim((string) ($userPayload['name'] ?? '')),
+            'email' => trim((string) ($userPayload['email'] ?? '')),
+            'password' => Hash::make(bin2hex(random_bytes(16))),
+            'market_id' => $marketId,
+            'tenant_id' => $tenantId,
+        ];
+    }
+
+    private function roleIdByName(string $roleName): ?int
+    {
+        $roleId = DB::table('roles')
+            ->where('name', $roleName)
+            ->where('guard_name', 'web')
+            ->value('id');
+
+        return $roleId === null ? null : (int) $roleId;
+    }
+
+    private function syncUserRole(User $user, int $roleId): bool
+    {
+        $userId = (int) $user->getKey();
+        $existingRoleIds = DB::table('model_has_roles')
+            ->where('model_type', User::class)
+            ->where('model_id', $userId)
+            ->pluck('role_id')
+            ->map(static fn (mixed $id): int => (int) $id)
+            ->sort()
+            ->values()
+            ->all();
+
+        if ($existingRoleIds === [$roleId]) {
+            return false;
+        }
+
+        DB::table('model_has_roles')
+            ->where('model_type', User::class)
+            ->where('model_id', $userId)
+            ->delete();
+
+        DB::table('model_has_roles')->insert([
+            'role_id' => $roleId,
+            'model_type' => User::class,
+            'model_id' => $userId,
+        ]);
+
+        return true;
     }
 
     /**
@@ -1446,6 +1641,7 @@ class DemoPilotProvisioner
         $categoryKeys = $this->keys($dataSet, 'marketplace_categories', $issues);
 
         $this->assertReferences($this->recordsForSection($dataSet, 'users'), 'tenant_key', $tenantKeys, 'users', $issues, true);
+        $this->assertKnownUserRoles($this->recordsForSection($dataSet, 'users'), $issues);
         $this->assertReferences($this->recordsForSection($dataSet, 'spaces'), 'tenant_key', $tenantKeys, 'spaces', $issues, true);
         $this->assertReferences($this->recordsForSection($dataSet, 'contracts'), 'tenant_key', $tenantKeys, 'contracts', $issues);
         $this->assertReferences($this->recordsForSection($dataSet, 'contracts'), 'market_space_key', $spaceKeys, 'contracts', $issues);
@@ -1489,6 +1685,21 @@ class DemoPilotProvisioner
         }
 
         return $keys;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $records
+     * @param list<string> $issues
+     */
+    private function assertKnownUserRoles(array $records, array &$issues): void
+    {
+        foreach ($records as $record) {
+            $role = trim((string) ($record['role'] ?? ''));
+
+            if ($role === '' || ! array_key_exists($role, self::USER_ROLE_MAP)) {
+                $issues[] = 'users record [' . ($record['key'] ?? 'unknown') . '] has unknown role [' . $role . '].';
+            }
+        }
     }
 
     /**
