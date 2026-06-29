@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Готовится безопасный пакет MarketWriteGuard для live 1C accruals/payments: проверки tenant, contract, space, existing и created finance records перед записью.',
-    'next_step' => 'Провести пакет через PR, staging smoke и prod deploy без миграций и без включения tenant-scope flags; после деплоя проверить здоровье prod и 1C exchange health.',
+    'current_focus' => 'MarketWriteGuard для live 1C accruals/payments выведен на prod: tenant, contract, space, existing и created finance records проверяются перед записью.',
+    'next_step' => 'Следующий малый пакет: добавить write guards для документов и шаринга, затем провести через PR, staging smoke и prod deploy без миграций и без включения tenant-scope flags.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
