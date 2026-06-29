@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\Market;
+use App\Models\MarketLocation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use LogicException;
@@ -229,6 +230,9 @@ class DemoPilotProvisioner
         }
 
         $marketWrite = $this->writeMarket($dataSet);
+        $locationWrite = $marketWrite['status'] === 'blocked'
+            ? ['status' => 'skipped', 'details' => 'market write was blocked']
+            : $this->writeLocations($dataSet, (int) $marketWrite['market_id']);
         $sections = [];
         $issues = [];
 
@@ -236,6 +240,9 @@ class DemoPilotProvisioner
             if ($section['section'] === 'market') {
                 $section['status'] = $marketWrite['status'];
                 $section['details'] = $marketWrite['details'];
+            } elseif ($section['section'] === 'locations') {
+                $section['status'] = $locationWrite['status'];
+                $section['details'] = $locationWrite['details'];
             } else {
                 $section['status'] = 'skipped';
                 $section['details'] = 'write adapter is not implemented in this package';
@@ -248,6 +255,10 @@ class DemoPilotProvisioner
             $issues[] = $marketWrite['details'];
         }
 
+        if ($locationWrite['status'] === 'blocked') {
+            $issues[] = $locationWrite['details'];
+        }
+
         $report['status'] = $issues === [] ? 'partial' : 'blocked';
         $report['writes_enabled'] = $issues === [];
         $report['sections'] = $sections;
@@ -258,7 +269,7 @@ class DemoPilotProvisioner
 
     /**
      * @param array<string, mixed> $dataSet
-     * @return array{status:string, details:string}
+     * @return array{status:string, details:string, market_id?:int}
      */
     private function writeMarket(array $dataSet): array
     {
@@ -304,6 +315,7 @@ class DemoPilotProvisioner
                 return [
                     'status' => 'created',
                     'details' => 'created market id [' . $market->getKey() . '] for slug [' . $slug . ']',
+                    'market_id' => (int) $market->getKey(),
                 ];
             }
 
@@ -313,6 +325,7 @@ class DemoPilotProvisioner
                 return [
                     'status' => 'unchanged',
                     'details' => 'market id [' . $market->getKey() . '] already matches demo payload',
+                    'market_id' => (int) $market->getKey(),
                 ];
             }
 
@@ -322,6 +335,66 @@ class DemoPilotProvisioner
             return [
                 'status' => 'updated',
                 'details' => 'updated market id [' . $market->getKey() . '] fields [' . implode(', ', $dirty) . ']',
+                'market_id' => (int) $market->getKey(),
+            ];
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return array{status:string, details:string}
+     */
+    private function writeLocations(array $dataSet, int $marketId): array
+    {
+        $records = $this->recordsForSection($dataSet, 'locations');
+
+        if ($records === []) {
+            return ['status' => 'blocked', 'details' => 'locations payload is empty'];
+        }
+
+        return DB::transaction(function () use ($records, $marketId): array {
+            $created = 0;
+            $updated = 0;
+            $unchanged = 0;
+
+            foreach ($records as $record) {
+                $attributes = $this->locationAttributes($record, $marketId);
+                $name = $attributes['name'];
+                $code = $attributes['code'];
+
+                if ($name === '' || $code === '') {
+                    return ['status' => 'blocked', 'details' => 'location name and code are required'];
+                }
+
+                $location = MarketLocation::query()
+                    ->where('market_id', $marketId)
+                    ->where('code', $code)
+                    ->first();
+
+                if ($location === null) {
+                    MarketLocation::query()->create($attributes);
+                    $created++;
+
+                    continue;
+                }
+
+                $location->fill($attributes);
+
+                if (! $location->isDirty()) {
+                    $unchanged++;
+
+                    continue;
+                }
+
+                $location->save();
+                $updated++;
+            }
+
+            $status = $updated > 0 ? 'updated' : ($created > 0 ? 'created' : 'unchanged');
+
+            return [
+                'status' => $status,
+                'details' => 'created [' . $created . '], updated [' . $updated . '], unchanged [' . $unchanged . '] locations for market id [' . $marketId . ']',
             ];
         });
     }
@@ -341,6 +414,23 @@ class DemoPilotProvisioner
             'is_active' => (bool) ($marketPayload['is_active'] ?? true),
             'settings' => is_array($marketPayload['settings'] ?? null) ? $marketPayload['settings'] : [],
             'features' => is_array($marketPayload['features'] ?? null) ? $marketPayload['features'] : [],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $locationPayload
+     * @return array{market_id:int, name:string, code:string, type:string, parent_id:null, sort_order:int, is_active:bool}
+     */
+    private function locationAttributes(array $locationPayload, int $marketId): array
+    {
+        return [
+            'market_id' => $marketId,
+            'name' => trim((string) ($locationPayload['name'] ?? '')),
+            'code' => trim((string) ($locationPayload['code'] ?? '')),
+            'type' => trim((string) ($locationPayload['type'] ?? '')),
+            'parent_id' => null,
+            'sort_order' => (int) ($locationPayload['sort_order'] ?? 0),
+            'is_active' => (bool) ($locationPayload['is_active'] ?? true),
         ];
     }
 

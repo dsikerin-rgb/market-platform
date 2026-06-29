@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit;
 
 use App\Models\Market;
+use App\Models\MarketLocation;
 use App\Support\DemoPilotDataBuilder;
 use App\Support\DemoPilotProvisioner;
 use Illuminate\Database\Schema\Blueprint;
@@ -39,6 +40,18 @@ class DemoPilotProvisionerWriteTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('market_locations', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('market_id');
+            $table->string('name');
+            $table->string('code')->nullable();
+            $table->string('type')->nullable();
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+        });
+
         Schema::shouldReceive('hasTable')->andReturn(true);
         Schema::shouldReceive('hasColumn')->andReturn(true);
     }
@@ -54,9 +67,12 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('partial', $firstReport['status']);
         self::assertTrue($firstReport['writes_enabled']);
         self::assertSame('created', $this->sectionStatus($firstReport, 'market'));
+        self::assertSame('created', $this->sectionStatus($firstReport, 'locations'));
         self::assertSame('partial', $secondReport['status']);
         self::assertSame('unchanged', $this->sectionStatus($secondReport, 'market'));
+        self::assertSame('unchanged', $this->sectionStatus($secondReport, 'locations'));
         self::assertSame(1, Market::query()->where('slug', 'demo-market')->count());
+        self::assertSame(2, MarketLocation::query()->count());
     }
 
     public function test_execute_updates_existing_demo_market(): void
@@ -87,6 +103,51 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('Demo Market', $market->name);
         self::assertSame('Demo address, 1', $market->address);
         self::assertTrue((bool) data_get($market->features, 'marketplace'));
+        self::assertSame(2, MarketLocation::query()->where('market_id', $market->getKey())->count());
+    }
+
+    public function test_execute_updates_existing_demo_locations(): void
+    {
+        $market = Market::query()->create([
+            'name' => 'Demo Market',
+            'slug' => 'demo-market',
+            'code' => 'DEMO_MARKET',
+            'address' => 'Demo address, 1',
+            'timezone' => 'Asia/Novosibirsk',
+            'is_active' => true,
+            'settings' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                ],
+            ],
+            'features' => [],
+        ]);
+
+        MarketLocation::query()->create([
+            'market_id' => $market->getKey(),
+            'name' => 'Old Main Hall',
+            'code' => 'main-hall',
+            'type' => 'old',
+            'sort_order' => 99,
+            'is_active' => false,
+        ]);
+
+        $report = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        $location = MarketLocation::query()
+            ->where('market_id', $market->getKey())
+            ->where('code', 'main-hall')
+            ->firstOrFail();
+
+        self::assertSame('partial', $report['status']);
+        self::assertSame('updated', $this->sectionStatus($report, 'locations'));
+        self::assertSame('Main Hall', $location->name);
+        self::assertSame('hall', $location->type);
+        self::assertSame(10, $location->sort_order);
+        self::assertTrue($location->is_active);
+        self::assertSame(2, MarketLocation::query()->where('market_id', $market->getKey())->count());
     }
 
     public function test_execute_does_not_overwrite_real_market_with_same_slug(): void
@@ -113,6 +174,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
             $report['issues'],
         );
         self::assertSame('Real Market', Market::query()->where('slug', 'demo-market')->value('name'));
+        self::assertSame(0, MarketLocation::query()->count());
     }
 
     public function test_execute_blocks_market_code_conflict(): void
@@ -138,6 +200,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
             $report['issues'],
         );
         self::assertSame(1, Market::query()->count());
+        self::assertSame(0, MarketLocation::query()->count());
     }
 
     /**
