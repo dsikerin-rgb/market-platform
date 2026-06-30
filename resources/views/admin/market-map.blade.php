@@ -3483,11 +3483,13 @@
         const MAP_EDGE_SNAP_SCREEN_PX = 8;
         const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 15;
         const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 16;
-        const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 20;
-        const MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX = 32;
+        const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 28;
+        const MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX = 44;
         const MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS = 36;
-        const MAP_BACKGROUND_INTERSECTION_EXTENSION_PX = 2.5;
+        const MAP_BACKGROUND_INTERSECTION_EXTENSION_PX = 8;
         const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
+        const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 30;
+        const MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX = 7;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
         const MAP_BACKGROUND_SNAP_MAX_POINTS = 16000;
@@ -7436,6 +7438,172 @@
             return best;
           }
 
+          function backgroundCanvasInkValue(data, offset) {
+            const alpha = Number(data?.[offset + 3] || 0);
+            if (alpha < 64) return 0;
+
+            const r = Number(data[offset] || 0);
+            const g = Number(data[offset + 1] || 0);
+            const b = Number(data[offset + 2] || 0);
+            const luma = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+            if (luma > MAP_BACKGROUND_CANVAS_INK_LUMA_MAX) return 0;
+
+            return Math.max(1, 255 - luma);
+          }
+
+          function collectBackgroundCanvasInkBands(scores, minScore) {
+            const bands = [];
+            let start = -1;
+            let total = 0;
+            let weighted = 0;
+
+            const flush = (endExclusive) => {
+              if (start < 0) return;
+              if (total >= minScore) {
+                bands.push({
+                  start,
+                  end: endExclusive - 1,
+                  center: weighted / Math.max(1, total),
+                  score: total,
+                });
+              }
+              start = -1;
+              total = 0;
+              weighted = 0;
+            };
+
+            for (let i = 0; i < scores.length; i++) {
+              const score = Number(scores[i] || 0);
+              if (score >= minScore) {
+                if (start < 0) start = i;
+                total += score;
+                weighted += score * i;
+              } else {
+                flush(i);
+              }
+            }
+
+            flush(scores.length);
+            return bands;
+          }
+
+          function findBackgroundCanvasCornerSnapPoint(xPdf, yPdf, options = {}) {
+            if (!currentViewport || !canvas || !ctx) return null;
+
+            const sourcePoint = currentViewport.convertToViewportPoint(Number(xPdf), Number(yPdf));
+            if (!Array.isArray(sourcePoint)) return null;
+
+            const sx = Number(sourcePoint[0]);
+            const sy = Number(sourcePoint[1]);
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+
+            const threshold = Math.max(1, Number(options.backgroundCanvasCornerThresholdPx || MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX));
+            const radius = Math.ceil(threshold);
+            const centerX = Math.round(sx);
+            const centerY = Math.round(sy);
+            const left = Math.max(0, centerX - radius);
+            const top = Math.max(0, centerY - radius);
+            const right = Math.min(Number(canvas.width || 0), centerX + radius + 1);
+            const bottom = Math.min(Number(canvas.height || 0), centerY + radius + 1);
+            const width = right - left;
+            const height = bottom - top;
+
+            if (width <= 0 || height <= 0) return null;
+
+            let imageData = null;
+            try {
+              imageData = ctx.getImageData(left, top, width, height);
+            } catch (error) {
+              return null;
+            }
+
+            const data = imageData?.data;
+            if (!data || data.length < 4) return null;
+
+            const rows = Array.from({ length: height }, () => 0);
+            const cols = Array.from({ length: width }, () => 0);
+            const isInkAt = (x, y) => {
+              if (x < 0 || y < 0 || x >= width || y >= height) return false;
+              return backgroundCanvasInkValue(data, ((y * width) + x) * 4) > 0;
+            };
+
+            for (let y = 0; y < height; y++) {
+              for (let x = 0; x < width; x++) {
+                const ink = backgroundCanvasInkValue(data, ((y * width) + x) * 4);
+                if (ink <= 0) continue;
+                rows[y] += 1;
+                cols[x] += 1;
+              }
+            }
+
+            const rowBands = collectBackgroundCanvasInkBands(rows, Math.max(6, width * 0.22));
+            const colBands = collectBackgroundCanvasInkBands(cols, Math.max(6, height * 0.22));
+            if (rowBands.length === 0 || colBands.length === 0) return null;
+
+            const maxArm = Math.max(8, Math.floor(radius * 0.72));
+            const minArm = Math.max(4, Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX));
+
+            const hasArm = (cx, cy, dx, dy) => {
+              let hits = 0;
+              for (let step = 2; step <= maxArm; step++) {
+                const x = Math.round(cx + (dx * step));
+                const y = Math.round(cy + (dy * step));
+                let found = false;
+
+                for (let offset = -1; offset <= 1 && !found; offset++) {
+                  const px = dx === 0 ? x + offset : x;
+                  const py = dy === 0 ? y + offset : y;
+                  found = isInkAt(px, py);
+                }
+
+                if (found) hits += 1;
+              }
+
+              return hits >= minArm;
+            };
+
+            let best = null;
+            let bestScore = threshold * threshold;
+
+            for (const row of rowBands) {
+              for (const col of colBands) {
+                const cx = Number(col.center);
+                const cy = Number(row.center);
+                if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+
+                const px = left + cx + 0.5;
+                const py = top + cy + 0.5;
+                const d2 = distanceSq(sx, sy, px, py);
+                if (d2 > threshold * threshold) continue;
+
+                const hasHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
+                const hasVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
+                if (!hasHorizontal || !hasVertical) continue;
+
+                const score = d2 - ((Number(row.score || 0) + Number(col.score || 0)) * 0.015);
+                if (score <= bestScore) {
+                  bestScore = score;
+                  best = { x: px, y: py };
+                }
+              }
+            }
+
+            if (!best) return null;
+
+            const pdfPoint = currentViewport.convertToPdfPoint(best.x, best.y);
+            if (!Array.isArray(pdfPoint)) return null;
+
+            const pxPdf = Number(pdfPoint[0]);
+            const pyPdf = Number(pdfPoint[1]);
+            if (!Number.isFinite(pxPdf) || !Number.isFinite(pyPdf)) return null;
+
+            return {
+              x: pxPdf,
+              y: pyPdf,
+              source: 'background-canvas-corner',
+            };
+          }
+
           function findBackgroundCanvasSnapPoint(xPdf, yPdf, options = {}) {
             if (!currentViewport || !canvas || !ctx) return null;
 
@@ -7475,22 +7643,15 @@
             for (let y = 0; y < height; y++) {
               for (let x = 0; x < width; x++) {
                 const offset = ((y * width) + x) * 4;
-                const alpha = Number(data[offset + 3] || 0);
-                if (alpha < 64) continue;
-
-                const r = Number(data[offset] || 0);
-                const g = Number(data[offset + 1] || 0);
-                const b = Number(data[offset + 2] || 0);
-                const luma = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
-                if (luma > MAP_BACKGROUND_CANVAS_INK_LUMA_MAX) continue;
+                const ink = backgroundCanvasInkValue(data, offset);
+                if (ink <= 0) continue;
 
                 const px = left + x + 0.5;
                 const py = top + y + 0.5;
                 const d2 = distanceSq(sx, sy, px, py);
                 if (d2 > threshold * threshold) continue;
 
-                const darkness = Math.max(0, 255 - luma);
-                const score = d2 - (darkness * 0.015);
+                const score = d2 - (ink * 0.015);
                 if (score <= bestScore) {
                   bestScore = score;
                   best = { x: px, y: py };
@@ -7590,7 +7751,9 @@
               case 'background-vertex':
                 return 0.48;
               case 'background-intersection':
-                return 0.32;
+                return 0.28;
+              case 'background-canvas-corner':
+                return 0.3;
               case 'background-edge':
                 return 0.56;
               case 'background-canvas':
@@ -7604,8 +7767,17 @@
             return sourceType === 'shape-vertex' || sourceType === 'shape-edge';
           }
 
+          function isPointSnapSource(sourceType) {
+            return sourceType === 'shape-vertex'
+              || sourceType === 'background-vertex'
+              || sourceType === 'background-intersection'
+              || sourceType === 'background-canvas-corner';
+          }
+
           function isBackgroundPointSnapSource(sourceType) {
-            return sourceType === 'background-vertex' || sourceType === 'background-intersection';
+            return sourceType === 'background-vertex'
+              || sourceType === 'background-intersection'
+              || sourceType === 'background-canvas-corner';
           }
 
           function selectBestMapSnapPoint(xPdf, yPdf, candidates) {
@@ -7638,11 +7810,12 @@
 
             if (viable.length === 0) return null;
 
+            const pointCandidates = viable.filter((item) => isPointSnapSource(item.candidate.snapSourceType));
             const shapeCandidates = viable.filter((item) => isShapeSnapSource(item.candidate.snapSourceType));
             const backgroundPointCandidates = viable.filter((item) => isBackgroundPointSnapSource(item.candidate.snapSourceType));
-            const pool = shapeCandidates.length > 0
-              ? shapeCandidates
-              : (backgroundPointCandidates.length > 0 ? backgroundPointCandidates : viable);
+            const pool = pointCandidates.length > 0
+              ? pointCandidates
+              : (shapeCandidates.length > 0 ? shapeCandidates : (backgroundPointCandidates.length > 0 ? backgroundPointCandidates : viable));
             let best = null;
             let bestScore = Infinity;
 
@@ -7673,6 +7846,7 @@
               withSnapSource(findVertexSnapPoint(fallback.x, fallback.y, options), 'shape-vertex'),
               withSnapSource(findBackgroundVertexSnapPoint(fallback.x, fallback.y, options), 'background-vertex'),
               withSnapSource(findBackgroundIntersectionSnapPoint(fallback.x, fallback.y, options), 'background-intersection'),
+              withSnapSource(findBackgroundCanvasCornerSnapPoint(fallback.x, fallback.y, options), 'background-canvas-corner'),
               withSnapSource(findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options), 'background-edge'),
               withSnapSource(findBackgroundCanvasSnapPoint(fallback.x, fallback.y, options), 'background-canvas'),
               withSnapSource(findEdgeSnapPoint(fallback.x, fallback.y, options), 'shape-edge'),
