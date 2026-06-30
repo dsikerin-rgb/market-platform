@@ -3483,12 +3483,12 @@
         const MAP_EDGE_SNAP_SCREEN_PX = 8;
         const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 15;
         const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 16;
-        const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 36;
-        const MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX = 58;
-        const MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS = 64;
+        const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 28;
+        const MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX = 44;
+        const MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS = 36;
         const MAP_BACKGROUND_INTERSECTION_EXTENSION_PX = 8;
         const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
-        const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 40;
+        const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 30;
         const MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX = 7;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
@@ -7776,11 +7776,6 @@
               || sourceType === 'background-canvas-corner';
           }
 
-          function isBackgroundCornerSnapSource(sourceType) {
-            return sourceType === 'background-intersection'
-              || sourceType === 'background-canvas-corner';
-          }
-
           function isBackgroundPointSnapSource(sourceType) {
             return sourceType === 'background-vertex'
               || sourceType === 'background-intersection'
@@ -7817,15 +7812,12 @@
 
             if (viable.length === 0) return null;
 
-            const backgroundCornerCandidates = viable.filter((item) => isBackgroundCornerSnapSource(item.candidate.snapSourceType));
             const pointCandidates = viable.filter((item) => isPointSnapSource(item.candidate.snapSourceType));
             const shapeCandidates = viable.filter((item) => isShapeSnapSource(item.candidate.snapSourceType));
             const backgroundPointCandidates = viable.filter((item) => isBackgroundPointSnapSource(item.candidate.snapSourceType));
-            const pool = backgroundCornerCandidates.length > 0
-              ? backgroundCornerCandidates
-              : (pointCandidates.length > 0
-                ? pointCandidates
-                : (shapeCandidates.length > 0 ? shapeCandidates : (backgroundPointCandidates.length > 0 ? backgroundPointCandidates : viable)));
+            const pool = pointCandidates.length > 0
+              ? pointCandidates
+              : (shapeCandidates.length > 0 ? shapeCandidates : (backgroundPointCandidates.length > 0 ? backgroundPointCandidates : viable));
             let best = null;
             let bestScore = Infinity;
 
@@ -7883,7 +7875,6 @@
               index: snapPoint.index,
               edgeIndex: snapPoint.edgeIndex,
               source: snapPoint.source || 'shape',
-              snapSourceType: snapPoint.snapSourceType || null,
             };
           }
 
@@ -9415,12 +9406,6 @@
               : { ...point, x: startX, y };
           }
 
-          function resetVertexAxisLock() {
-            if (draggingVertex) {
-              draggingVertex.axis = null;
-            }
-          }
-
           function onDown(e) {
             if (draggingVertex) return;
 
@@ -9542,12 +9527,8 @@
               if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
 
               const snappedPoint = applyMapSnapPoint(nx, ny, { excludeShapeId: sid });
-              const keepExactBackgroundCorner = draggingVertex.axis && isBackgroundCornerSnapSource(snappedPoint.snapSourceType);
-              const lockedPoint = keepExactBackgroundCorner
-                ? snappedPoint
-                : applyVertexAxisLockToPdfPoint(snappedPoint, draggingVertex);
-
-              if (draggingVertex.axis && snapPreviewPoint && !keepExactBackgroundCorner) {
+              const lockedPoint = applyVertexAxisLockToPdfPoint(snappedPoint, draggingVertex);
+              if (draggingVertex.axis && snapPreviewPoint) {
                 const lockedPreviewPoint = applyVertexAxisLockToPdfPoint(snapPreviewPoint, draggingVertex);
                 snapPreviewPoint = {
                   ...snapPreviewPoint,
@@ -10794,17 +10775,6 @@
           window.addEventListener('mouseup', onUp);
           window.addEventListener('mouseup', onGlobalUp);
           window.addEventListener('mousemove', onMove);
-          window.addEventListener('keyup', (event) => {
-            if (event.key === 'Shift') {
-              resetVertexAxisLock();
-            }
-          });
-          window.addEventListener('blur', resetVertexAxisLock);
-          document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-              resetVertexAxisLock();
-            }
-          });
           window.addEventListener('beforeunload', (event) => {
             if (!hasActiveShapePolygonSaves()) return;
 
