@@ -3124,7 +3124,7 @@
               <div class="map-edit-hint-anchor">
                 <div class="toolbar-row toolbar-row--edit-hint map-edit-hint" id="editHintRow" aria-hidden="true">
                   <div class="toolbar-group toolbar-group--accent map-edit-hint__group">
-                    <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить">Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить</span>
+                    <span class="pill" id="editHint" style="display:none;" title="Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить точку • Delete/Backspace по точке — удалить точку • Delete без точки — удалить фигуру">Редактировать: тащи точки • Alt+клик — добавить • Delete/Backspace — удалить точку</span>
                   </div>
                 </div>
               </div>
@@ -6528,7 +6528,7 @@
               if (tool === 'rect') {
                 setHint('Прямоугольник: Shift+drag — создать • клик — карточка');
               } else {
-                setHint('Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить');
+                setHint('Редактировать: тащи точки • Alt+клик — добавить • Delete/Backspace — удалить точку');
               }
               redrawShapes();
             }
@@ -7982,6 +7982,49 @@
             toast('Полигон удалён');
           }
 
+          async function deleteSelectedVertex() {
+            if (!selectedShapeId) return false;
+
+            const shape = findShapeById(selectedShapeId);
+            if (!shape) return false;
+
+            const idx = Number(activeVertexIndex);
+            if (!Number.isInteger(idx) || idx < 0) return false;
+
+            const poly = Array.isArray(shape.polygon) ? [...shape.polygon] : [];
+            if (idx >= poly.length) return false;
+
+            if (poly.length <= 3) {
+              toast('Нельзя удалить точку: у полигона должно остаться минимум 3 точки');
+              return true;
+            }
+
+            poly.splice(idx, 1);
+            activeVertexIndex = Math.min(idx, poly.length - 1);
+            shape.polygon = poly;
+
+            redrawShapes();
+            renderHandles();
+
+            try {
+              await patchShape(shape.id, { polygon: poly });
+              await loadShapes();
+              snapPreviewPoint = null;
+              redrawShapes();
+              renderHandles();
+              toast('Точка удалена');
+            } catch (e) {
+              console.error(e);
+              toast('Ошибка удаления точки: ' + String(e?.message || e));
+              await loadShapes();
+              snapPreviewPoint = null;
+              redrawShapes();
+              renderHandles();
+            }
+
+            return true;
+          }
+
           function distanceSq(ax, ay, bx, by) {
             const dx = ax - bx;
             const dy = ay - by;
@@ -8365,7 +8408,7 @@
 
               if (editMode) {
                 setTool('select');
-                setHint('Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить');
+                setHint('Редактировать: тащи точки • Alt+клик — добавить • Delete/Backspace — удалить точку');
                 toast('Разметка включена');
               } else {
                 cancelPolygon();
@@ -8787,7 +8830,7 @@
                   updateScenarioUi();
                   syncMapEditRail();
                   setTool('select');
-                  setHint('Редактировать: клик — выбрать • тащи точки • Alt+клик — вставить вершину • Delete — удалить');
+                  setHint('Редактировать: тащи точки • Alt+клик — добавить • Delete/Backspace — удалить точку');
                   toast('Разметка включена');
                 }
 
@@ -10165,6 +10208,11 @@
           window.addEventListener('keydown', async (e) => {
             if (!CAN_EDIT || !editMode) return;
 
+            const keyTarget = e.target;
+            if (keyTarget instanceof HTMLElement && (keyTarget.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(keyTarget.tagName))) {
+              return;
+            }
+
             if (tool === 'poly' && polyDrawing) {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -10187,8 +10235,15 @@
               }
             }
 
-            if (tool === 'select' && selectedShapeId && (e.key === 'Delete')) {
+            if (tool === 'select' && selectedShapeId && (e.key === 'Delete' || e.key === 'Backspace')) {
               e.preventDefault();
+              if (activeVertexIndex !== null) {
+                await deleteSelectedVertex();
+                return;
+              }
+
+              if (e.key === 'Backspace') return;
+
               deleteShape(selectedShapeId).catch((err) => {
                 console.error(err);
                 toast('Ошибка удаления: ' + String(err?.message || err));
