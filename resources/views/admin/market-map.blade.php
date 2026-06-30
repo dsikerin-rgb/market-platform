@@ -9079,11 +9079,16 @@
               return;
             }
 
-            showPopoverAt(
-              e.clientX, e.clientY,
-              '<div class="t">Поиск…</div><div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>',
-              false
-            );
+            const suppressPopoverInEditMode = CAN_EDIT && editMode;
+            if (suppressPopoverInEditMode) {
+              hidePopover();
+            } else {
+              showPopoverAt(
+                e.clientX, e.clientY,
+                '<div class="t">Поиск…</div><div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>',
+                false
+              );
+            }
 
             try {
               const url = new URL(HIT_URL, window.location.origin);
@@ -9097,6 +9102,11 @@
 
               if (!json || json.ok !== true) {
                 const msg = escapeHtml(json?.message || 'Ошибка hit-test');
+                if (suppressPopoverInEditMode) {
+                  toast(msg);
+                  return;
+                }
+
                 showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">' + msg + '</div>', false);
                 return;
               }
@@ -9107,6 +9117,11 @@
                 if (CAN_EDIT && editMode && tool === 'select') {
                   setSelectedShape(null);
                   clearHandles();
+                }
+
+                if (suppressPopoverInEditMode) {
+                  hidePopover();
+                  return;
                 }
 
                 const msg = escapeHtml(json?.message || 'Ничего не найдено');
@@ -9173,6 +9188,11 @@
                   }
                   return;
                 }
+              }
+
+              if (suppressPopoverInEditMode) {
+                hidePopover();
+                return;
               }
 
               let title = 'Торговое место';
@@ -9710,6 +9730,12 @@
             } catch (err) {
               console.error(err);
               const errorMessage = err?.message ? String(err.message) : 'Не удалось выполнить запрос hit-test.';
+              if (suppressPopoverInEditMode) {
+                hidePopover();
+                toast(errorMessage);
+                return;
+              }
+
               showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">' + escapeHtml(errorMessage) + '</div>', false);
             }
           }
