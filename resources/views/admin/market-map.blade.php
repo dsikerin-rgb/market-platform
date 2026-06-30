@@ -3480,6 +3480,7 @@
         const MAP_MIN_SCALE = 0.2;
         const MAP_MAX_SCALE = 11.8;
         const MAP_VERTEX_SNAP_SCREEN_PX = 10;
+        const MAP_EDGE_SNAP_SCREEN_PX = 8;
 
         const viewerRoot = document.getElementById('viewerRoot');
 
@@ -6873,6 +6874,21 @@
             }
 
             if (snapPreviewPoint && editMode && currentViewport) {
+              const edge = snapPreviewPoint.edge || null;
+              if (edge) {
+                const edgeA = currentViewport.convertToViewportPoint(Number(edge.ax), Number(edge.ay));
+                const edgeB = currentViewport.convertToViewportPoint(Number(edge.bx), Number(edge.by));
+                if (Array.isArray(edgeA) && Array.isArray(edgeB)) {
+                  parts.push(
+                    '<line x1="' + Number(edgeA[0]).toFixed(2) +
+                    '" y1="' + Number(edgeA[1]).toFixed(2) +
+                    '" x2="' + Number(edgeB[0]).toFixed(2) +
+                    '" y2="' + Number(edgeB[1]).toFixed(2) +
+                    '" stroke="#2563eb" stroke-width="3" stroke-opacity="0.72" stroke-linecap="round"></line>'
+                  );
+                }
+              }
+
               const v = currentViewport.convertToViewportPoint(Number(snapPreviewPoint.x), Number(snapPreviewPoint.y));
               if (Array.isArray(v)) {
                 const cx = Number(v[0]).toFixed(2);
@@ -6938,16 +6954,101 @@
             return best;
           }
 
-          function applyVertexSnapPoint(xPdf, yPdf, options = {}) {
+          function closestPointOnViewportSegment(px, py, ax, ay, bx, by) {
+            const abx = bx - ax;
+            const aby = by - ay;
+            const abLenSq = abx * abx + aby * aby;
+
+            if (abLenSq <= 1e-12) {
+              return { x: ax, y: ay };
+            }
+
+            let t = ((px - ax) * abx + (py - ay) * aby) / abLenSq;
+            t = Math.max(0, Math.min(1, t));
+
+            return {
+              x: ax + t * abx,
+              y: ay + t * aby,
+            };
+          }
+
+          function findEdgeSnapPoint(xPdf, yPdf, options = {}) {
+            if (!currentViewport || !Array.isArray(shapes) || shapes.length === 0) return null;
+
+            const sourcePoint = currentViewport.convertToViewportPoint(Number(xPdf), Number(yPdf));
+            if (!Array.isArray(sourcePoint)) return null;
+
+            const sx = Number(sourcePoint[0]);
+            const sy = Number(sourcePoint[1]);
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+
+            const excludeShapeId = Number(options.excludeShapeId || 0);
+            const threshold = Number(options.edgeThresholdPx || MAP_EDGE_SNAP_SCREEN_PX);
+            let best = null;
+            let bestD2 = Math.max(1, threshold) * Math.max(1, threshold);
+
+            for (const shape of shapes) {
+              const shapeId = Number(shape?.id || 0);
+              if (excludeShapeId > 0 && shapeId === excludeShapeId) continue;
+
+              const poly = Array.isArray(shape?.polygon) ? shape.polygon : [];
+              if (poly.length < 2) continue;
+
+              for (let i = 0; i < poly.length; i++) {
+                const a = poly[i];
+                const b = poly[(i + 1) % poly.length];
+
+                const axPdf = Number((a && (a.x ?? a[0])) ?? NaN);
+                const ayPdf = Number((a && (a.y ?? a[1])) ?? NaN);
+                const bxPdf = Number((b && (b.x ?? b[0])) ?? NaN);
+                const byPdf = Number((b && (b.y ?? b[1])) ?? NaN);
+                if (!Number.isFinite(axPdf) || !Number.isFinite(ayPdf) || !Number.isFinite(bxPdf) || !Number.isFinite(byPdf)) continue;
+
+                const av = currentViewport.convertToViewportPoint(axPdf, ayPdf);
+                const bv = currentViewport.convertToViewportPoint(bxPdf, byPdf);
+                if (!Array.isArray(av) || !Array.isArray(bv)) continue;
+
+                const ax = Number(av[0]);
+                const ay = Number(av[1]);
+                const bx = Number(bv[0]);
+                const by = Number(bv[1]);
+                if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(bx) || !Number.isFinite(by)) continue;
+
+                const closest = closestPointOnViewportSegment(sx, sy, ax, ay, bx, by);
+                const d2 = distanceSq(sx, sy, closest.x, closest.y);
+                if (d2 > bestD2) continue;
+
+                const pdfPoint = currentViewport.convertToPdfPoint(closest.x, closest.y);
+                if (!Array.isArray(pdfPoint)) continue;
+
+                const pxPdf = Number(pdfPoint[0]);
+                const pyPdf = Number(pdfPoint[1]);
+                if (!Number.isFinite(pxPdf) || !Number.isFinite(pyPdf)) continue;
+
+                bestD2 = d2;
+                best = {
+                  x: pxPdf,
+                  y: pyPdf,
+                  shapeId,
+                  edgeIndex: i,
+                  edge: { ax: axPdf, ay: ayPdf, bx: bxPdf, by: byPdf },
+                };
+              }
+            }
+
+            return best;
+          }
+
+          function applyMapSnapPoint(xPdf, yPdf, options = {}) {
             const fallback = { x: Number(xPdf), y: Number(yPdf), snapped: false };
-            const snapPoint = findVertexSnapPoint(fallback.x, fallback.y, options);
+            const snapPoint = findVertexSnapPoint(fallback.x, fallback.y, options) || findEdgeSnapPoint(fallback.x, fallback.y, options);
 
             if (!snapPoint) {
               snapPreviewPoint = null;
               return fallback;
             }
 
-            snapPreviewPoint = { x: snapPoint.x, y: snapPoint.y };
+            snapPreviewPoint = { x: snapPoint.x, y: snapPoint.y, edge: snapPoint.edge || null };
 
             return {
               x: Number(snapPoint.x),
@@ -6955,6 +7056,7 @@
               snapped: true,
               shapeId: snapPoint.shapeId,
               index: snapPoint.index,
+              edgeIndex: snapPoint.edgeIndex,
             };
           }
 
@@ -7428,7 +7530,7 @@
 
             if (bestI < 0) return;
 
-            const snappedPoint = applyVertexSnapPoint(xPdf, yPdf, { excludeShapeId: selectedShapeId });
+            const snappedPoint = applyMapSnapPoint(xPdf, yPdf, { excludeShapeId: selectedShapeId });
             poly.splice(bestI + 1, 0, { x: Number(snappedPoint.x), y: Number(snappedPoint.y) });
 
             shape.polygon = poly;
@@ -8315,7 +8417,7 @@
 
               if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
 
-              const snappedPoint = applyVertexSnapPoint(nx, ny, { excludeShapeId: sid });
+              const snappedPoint = applyMapSnapPoint(nx, ny, { excludeShapeId: sid });
               poly[idx] = { x: Number(snappedPoint.x), y: Number(snappedPoint.y) };
 
               shape.polygon = poly;
@@ -8337,7 +8439,7 @@
               const pCanvas = getCanvasPointFromClient(e.clientX, e.clientY);
               const pPdf = currentViewport.convertToPdfPoint(pCanvas.x, pCanvas.y);
               if (Array.isArray(pPdf)) {
-                applyVertexSnapPoint(Number(pPdf[0]), Number(pPdf[1]));
+                applyMapSnapPoint(Number(pPdf[0]), Number(pPdf[1]));
                 redrawShapes();
               }
               return;
@@ -8431,7 +8533,7 @@
                 }
               }
 
-              const snappedPoint = applyVertexSnapPoint(xPdf, yPdf);
+              const snappedPoint = applyMapSnapPoint(xPdf, yPdf);
               polyDraft.push({ x: Number(snappedPoint.x), y: Number(snappedPoint.y) });
               redrawShapes();
               toast('Точка: ' + String(polyDraft.length));
