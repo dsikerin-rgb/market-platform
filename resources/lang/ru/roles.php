@@ -7,6 +7,7 @@ return [
 
     // Администрация рынка
     'market-admin'     => 'Администратор рынка',
+    'demo-market-admin' => 'Демо-директор рынка',
     'market-manager'   => 'Управляющий рынком',
     'market-operator'  => 'Оператор рынка',
     'market-hr'        => 'Кадровая служба',

@@ -859,7 +859,7 @@ class DemoPilotProvisioner
 
         return match ($role) {
             'director' => 'market-owner-director',
-            'admin' => 'market-admin',
+            'admin' => 'demo-market-admin',
             'operator' => 'market-operator',
             'tenant' => 'merchant',
             default => $role,

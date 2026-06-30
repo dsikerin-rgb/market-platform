@@ -277,6 +277,7 @@ class AiKnowledgeService
         if ($this->looksLikeAuthorityClaim($claim) && ! $this->hasAnyRole($roles, [
             'super-admin',
             'market-admin',
+            'demo-market-admin',
             'market-owner',
             'market-owner-director',
         ])) {

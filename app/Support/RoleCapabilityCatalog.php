@@ -9,6 +9,7 @@ class RoleCapabilityCatalog
     private const DIRECTORY_MANAGER_ROLES = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-manager',
         'market-legal-admin',
     ];
@@ -26,6 +27,7 @@ class RoleCapabilityCatalog
         'market-owner',
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-manager',
         'market-legal-admin',
         'market-accountant',
@@ -36,6 +38,7 @@ class RoleCapabilityCatalog
         'market-owner',
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-manager',
         'market-legal-admin',
         'market-accountant',
@@ -45,22 +48,26 @@ class RoleCapabilityCatalog
     private const MARKET_SETTINGS_MANAGER_ROLES = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
     ];
 
     private const MARKET_EVENT_VIEWER_ROLES = [
         'market-owner',
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
     ];
 
     private const MARKET_EVENT_MANAGER_ROLES = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
     ];
 
     private const MARKETPLACE_CONTENT_MANAGER_ROLES = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-marketing',
         'market-advertising',
     ];
@@ -68,6 +75,7 @@ class RoleCapabilityCatalog
     private const MARKETPLACE_ORDER_MANAGER_ROLES = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-marketing',
         'market-advertising',
     ];
@@ -76,6 +84,7 @@ class RoleCapabilityCatalog
         'market-owner',
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-manager',
         'market-legal-admin',
         'market-accountant',
@@ -85,6 +94,7 @@ class RoleCapabilityCatalog
     private const TENANT_CONTRACT_MANAGER_ROLES = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-legal-admin',
     ];
 

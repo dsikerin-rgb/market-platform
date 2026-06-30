@@ -17,6 +17,7 @@ class RolesSeeder extends Seeder
         // Базовые роли системы
         Role::findOrCreate('super-admin', $guard);
         Role::findOrCreate('market-admin', $guard);
+        Role::findOrCreate('demo-market-admin', $guard);
 
         // Если есть другие роли — добавляй тут же
         // Role::findOrCreate('market-staff', $guard);

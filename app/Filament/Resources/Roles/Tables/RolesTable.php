@@ -12,7 +12,7 @@ class RolesTable
 {
     public static function configure(Table $table): Table
     {
-        $systemRoles = ['super-admin', 'market-admin', 'merchant'];
+        $systemRoles = ['super-admin', 'market-admin', 'demo-market-admin', 'merchant'];
 
         $recordActions = [];
 

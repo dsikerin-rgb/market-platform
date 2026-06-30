@@ -233,7 +233,7 @@ class EditTenant extends BaseEditRecord
             return true;
         }
 
-        if (! $user->hasAnyRole(['market-admin', 'market-marketing', 'market-advertising'])) {
+        if (! $user->hasAnyRole(['market-admin', 'demo-market-admin', 'market-marketing', 'market-advertising'])) {
             return false;
         }
 
@@ -266,7 +266,7 @@ class EditTenant extends BaseEditRecord
 
         return $user instanceof User
             && $user->hasAnyRole(['market-marketing', 'market-advertising'])
-            && ! $user->hasAnyRole(['super-admin', 'market-admin', 'market-manager', 'market-owner', 'market-owner-director']);
+            && ! $user->hasAnyRole(['super-admin', 'market-admin', 'demo-market-admin', 'market-manager', 'market-owner', 'market-owner-director']);
     }
 
     protected function buildHeaderChatViewData(): array

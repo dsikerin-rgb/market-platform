@@ -145,6 +145,7 @@ class Login extends BaseLogin
             'market-owner',
             'market-owner-director',
             'market-admin',
+            'demo-market-admin',
             'market-manager',
             'market-operator',
             'market-legal-admin',

@@ -12,6 +12,7 @@ class AdminCapabilities
     private const MARKET_DIRECTORY_MANAGERS = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-manager',
         'market-legal-admin',
     ];
@@ -20,6 +21,7 @@ class AdminCapabilities
         'market-owner',
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-manager',
         'market-legal-admin',
         'market-accountant',
@@ -39,6 +41,7 @@ class AdminCapabilities
         'market-owner',
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-manager',
         'market-legal-admin',
         'market-accountant',
@@ -48,31 +51,37 @@ class AdminCapabilities
     private const MARKET_SETTINGS_MANAGERS = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
     ];
 
     private const MARKET_EVENT_VIEWERS = [
         'market-owner',
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
     ];
 
     private const MARKET_EVENT_CREATORS = [
         'market-owner',
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
     ];
 
     private const MARKET_EVENT_MANAGERS = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
     ];
 
     private const MARKET_EVENT_DELETERS = [
         'market-admin',
+        'demo-market-admin',
     ];
 
     private const MARKETPLACE_CONTENT_MANAGERS = [
         'market-admin',
+        'demo-market-admin',
         'market-owner-director',
         'market-marketing',
         'market-advertising',
@@ -80,6 +89,7 @@ class AdminCapabilities
 
     private const MARKETPLACE_ORDER_MANAGERS = [
         'market-admin',
+        'demo-market-admin',
         'market-owner-director',
         'market-marketing',
         'market-advertising',
@@ -89,6 +99,7 @@ class AdminCapabilities
         'market-owner',
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-manager',
         'market-legal-admin',
         'market-accountant',
@@ -98,6 +109,7 @@ class AdminCapabilities
     private const TENANT_CONTRACT_MANAGERS = [
         'market-owner-director',
         'market-admin',
+        'demo-market-admin',
         'market-legal-admin',
     ];
 

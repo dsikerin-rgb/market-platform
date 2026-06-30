@@ -53,6 +53,7 @@ final class AdminPanelImpersonation
                 'market-owner',
                 'market-owner-director',
                 'market-admin',
+                'demo-market-admin',
                 'market-manager',
                 'market-operator',
                 // Внутренние роли рынка

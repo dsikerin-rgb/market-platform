@@ -2621,8 +2621,8 @@
                         $canManageAssignee = (bool) $user && (
                             ((method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()))
                             || (
-                                method_exists($user, 'hasRole')
-                                && $user->hasRole('market-admin')
+                                method_exists($user, 'isMarketAdmin')
+                                && $user->isMarketAdmin()
                                 && (int) ($user->market_id ?? 0) === (int) $selectedTicket->market_id
                             )
                         );

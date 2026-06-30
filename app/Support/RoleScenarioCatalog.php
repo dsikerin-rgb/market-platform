@@ -32,6 +32,11 @@ class RoleScenarioCatalog
                 'description' => 'Операционное управление рынком, сотрудниками, арендаторами, договорами, финансами и настройками.',
                 'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
             ],
+            'demo-market-admin' => [
+                'label' => 'Демо-директор',
+                'description' => 'Демонстрационный профиль директора рынка: показывает операционное управление демо-рынком без смешивания с реальными администраторами.',
+                'topics' => ['calendar', 'requests', 'messages', 'tasks', 'reminders'],
+            ],
             'market-manager' => [
                 'label' => 'Операционный управляющий',
                 'description' => 'Координация работы подразделений и контроль исполнения задач.',

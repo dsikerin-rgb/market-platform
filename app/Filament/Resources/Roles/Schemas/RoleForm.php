@@ -42,7 +42,7 @@ class RoleForm
             ->preload()
             ->required()
             ->reactive()
-            ->disabled(fn ($record) => $record && in_array($record->name, ['super-admin', 'market-admin', 'merchant'], true))
+            ->disabled(fn ($record) => $record && in_array($record->name, ['super-admin', 'market-admin', 'demo-market-admin', 'merchant'], true))
             ->afterStateHydrated(function ($state, callable $set) use ($roleOptions): void {
                 if (is_string($state) && $state !== '' && ! array_key_exists($state, $roleOptions)) {
                     $set('name_custom', $state);

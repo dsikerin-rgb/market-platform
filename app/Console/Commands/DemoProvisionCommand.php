@@ -147,7 +147,7 @@ class DemoProvisionCommand extends Command
     {
         return match (trim($role)) {
             'market-owner-director', 'director' => 'director',
-            'market-admin', 'admin' => 'admin',
+            'market-admin', 'demo-market-admin', 'admin' => 'admin',
             'market-operator', 'operator' => 'operator',
             'merchant', 'tenant' => 'tenant',
             default => trim($role),

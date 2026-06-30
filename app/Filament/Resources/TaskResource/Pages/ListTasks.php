@@ -196,7 +196,7 @@ class ListTasks extends ListRecords
 
         $canEditHoliday = (bool) $user && (
             $isSuperAdmin
-            || (method_exists($user, 'hasRole') && $user->hasRole('market-admin'))
+            || (method_exists($user, 'isMarketAdmin') && $user->isMarketAdmin())
         );
 
         $holidayCloseUrl = url()->current();

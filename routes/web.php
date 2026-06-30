@@ -167,7 +167,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->firstOrFail();
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin', 'demo-market-admin']);
         $sameMarket = (int) ($user->market_id ?? 0) === (int) $contractModel->market_id;
         abort_unless($isSuperAdmin || ($isMarketAdmin && $sameMarket), 403);
 
@@ -604,7 +604,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $ticketModel = Ticket::query()->whereKey($ticket)->firstOrFail();
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin', 'demo-market-admin']);
         $sameMarket = (int) ($user->market_id ?? 0) === (int) $ticketModel->market_id;
         abort_unless($isSuperAdmin || ($isMarketAdmin && $sameMarket), 403);
 
@@ -682,7 +682,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $ticketModel = Ticket::query()->whereKey($ticket)->firstOrFail();
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin', 'demo-market-admin']);
         $sameMarket = (int) ($user->market_id ?? 0) === (int) $ticketModel->market_id;
         abort_unless($isSuperAdmin || ($isMarketAdmin && $sameMarket), 403);
 
@@ -742,7 +742,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             ->firstOrFail();
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin', 'demo-market-admin']);
         $sameMarket = (int) ($user->market_id ?? 0) === (int) $ticketModel->market_id;
         abort_unless($isSuperAdmin || ($isMarketAdmin && $sameMarket), 403);
 
@@ -866,7 +866,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
             $market = $marketId > 0 ? Market::query()->whereKey($marketId)->first() : null;
 
             $hasRoleAccess = method_exists($user, 'hasAnyRole')
-                && $user->hasAnyRole(['market-admin', 'market-maintenance']);
+                && $user->hasAnyRole(['market-admin', 'demo-market-admin', 'market-maintenance']);
 
             $hasPermissionAccess = method_exists($user, 'can') && (
                 $user->can('markets.view')
@@ -1263,14 +1263,14 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     };
 
     /**
-     * Редактирование разметки: market-admin + super-admin (+ markets.update как запасной вариант).
+     * Редактирование разметки: market-admin/demo-market-admin + super-admin (+ markets.update как запасной вариант).
      */
     $ensureCanEditShapes = static function (): void {
         $user = Filament::auth()->user();
         abort_unless($user, 403);
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin']);
+        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin', 'demo-market-admin']);
         $canByPermission = method_exists($user, 'can') && $user->can('markets.update');
 
         abort_unless($isSuperAdmin || $isMarketAdmin || $canByPermission, 403);
@@ -1286,7 +1286,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin']);
+        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin', 'demo-market-admin']);
         $canByPermission = method_exists($user, 'can') && $user->can('markets.update');
 
         return $isSuperAdmin || $isMarketAdmin || $canByPermission;
@@ -1299,7 +1299,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin']);
+        $isMarketAdmin = method_exists($user, 'hasAnyRole') && $user->hasAnyRole(['market-admin', 'demo-market-admin']);
         $permissionExists = Schema::hasTable('permissions')
             && DB::table('permissions')
                 ->where('name', 'contracts.update')

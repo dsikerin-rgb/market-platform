@@ -265,7 +265,7 @@ class EditTask extends BaseEditRecord
             return $all;
         }
 
-        if ($user->isSuperAdmin() || $user->hasRole('market-admin')) {
+        if ($user->isSuperAdmin() || $user->isMarketAdmin()) {
             return $all;
         }
 

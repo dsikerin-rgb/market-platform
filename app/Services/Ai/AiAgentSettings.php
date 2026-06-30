@@ -188,6 +188,7 @@ PROMPT;
         return [
             'super-admin',
             'market-admin',
+            'demo-market-admin',
             'market-owner',
             'market-owner-director',
             'market-manager',
@@ -210,6 +211,7 @@ PROMPT;
         return [
             'super-admin',
             'market-admin',
+            'demo-market-admin',
             'market-owner',
             'market-owner-director',
             'market-manager',
@@ -229,6 +231,7 @@ PROMPT;
         return [
             'super-admin',
             'market-admin',
+            'demo-market-admin',
             'market-owner',
             'market-owner-director',
             'market-manager',
@@ -244,6 +247,7 @@ PROMPT;
         return [
             'super-admin',
             'market-admin',
+            'demo-market-admin',
             'market-owner',
             'market-owner-director',
             'market-manager',
@@ -262,6 +266,7 @@ PROMPT;
         return [
             'super-admin',
             'market-admin',
+            'demo-market-admin',
             'market-owner',
             'market-owner-director',
             'market-manager',

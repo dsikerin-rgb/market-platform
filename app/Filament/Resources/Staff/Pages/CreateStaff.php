@@ -94,7 +94,8 @@ class CreateStaff extends BaseCreateRecord
             : Role::query()->whereIn('id', $roleIds)->pluck('name')->all();
 
         $mustSelfManage = in_array('super-admin', $roleNames, true)
-            || in_array('market-admin', $roleNames, true);
+            || in_array('market-admin', $roleNames, true)
+            || in_array('demo-market-admin', $roleNames, true);
 
         $raw = is_array($data['notification_preferences'] ?? null)
             ? $data['notification_preferences']

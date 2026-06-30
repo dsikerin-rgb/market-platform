@@ -201,7 +201,7 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
 
     public function isMarketAdmin(): bool
     {
-        return $this->hasRole('market-admin');
+        return $this->hasAnyRole(['market-admin', 'demo-market-admin']);
     }
 
     public function isBuyer(): bool

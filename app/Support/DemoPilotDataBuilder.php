@@ -105,7 +105,7 @@ class DemoPilotDataBuilder
     {
         return [
             $this->user('director', 'Анна Волкова', 'market-owner-director', $emailDomain, $source, 'Директор рынка', 'Управление'),
-            $this->user('admin', 'Ирина Смирнова', 'market-admin', $emailDomain, $source, 'Администратор', 'Администрация'),
+            $this->user('admin', 'Ирина Смирнова', 'demo-market-admin', $emailDomain, $source, 'Администратор демо-рынка', 'Администрация'),
             $this->user('operator', 'Павел Орлов', 'market-operator', $emailDomain, $source, 'Оператор', 'Работа с арендаторами'),
             array_merge($this->user('tenant-user', 'Мария Кузнецова', 'merchant', $emailDomain, $source, 'Представитель арендатора', 'ООО "Продукты у дома"'), [
                 'tenant_key' => 'tenant-grocery',

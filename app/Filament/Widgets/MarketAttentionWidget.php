@@ -110,7 +110,7 @@ class MarketAttentionWidget extends Widget
         }
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
-        $isMarketAdmin = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $isMarketAdmin = method_exists($user, 'isMarketAdmin') && $user->isMarketAdmin();
         $isMarketManager = method_exists($user, 'hasRole') && $user->hasRole('market-manager');
         $isMarketOperator = method_exists($user, 'hasRole') && $user->hasRole('market-operator');
 
