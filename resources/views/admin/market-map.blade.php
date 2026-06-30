@@ -3488,8 +3488,10 @@
         const MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS = 36;
         const MAP_BACKGROUND_INTERSECTION_EXTENSION_PX = 8;
         const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
-        const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 30;
+        const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 40;
         const MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX = 7;
+        const MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX = 3;
+        const MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX = 5;
         const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 12;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
@@ -7567,24 +7569,44 @@
 
             const maxArm = Math.max(8, Math.floor(radius * 0.72));
             const minArm = Math.max(4, Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX));
+            const centerInkRadius = Math.max(1, Number(options.backgroundCanvasCornerCenterInkPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX));
+            const nearArmLength = Math.max(2, Number(options.backgroundCanvasCornerNearArmPx || MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX));
+
+            const hasInkNear = (cx, cy, radiusPx) => {
+              const radiusSq = radiusPx * radiusPx;
+
+              for (let y = Math.floor(cy - radiusPx); y <= Math.ceil(cy + radiusPx); y++) {
+                for (let x = Math.floor(cx - radiusPx); x <= Math.ceil(cx + radiusPx); x++) {
+                  if (distanceSq(cx, cy, x, y) > radiusSq) continue;
+                  if (isInkAt(x, y)) return true;
+                }
+              }
+
+              return false;
+            };
 
             const hasArm = (cx, cy, dx, dy) => {
               let hits = 0;
-              for (let step = 2; step <= maxArm; step++) {
+              let nearHits = 0;
+
+              for (let step = 1; step <= maxArm; step++) {
                 const x = Math.round(cx + (dx * step));
                 const y = Math.round(cy + (dy * step));
                 let found = false;
 
-                for (let offset = -1; offset <= 1 && !found; offset++) {
+                for (let offset = -centerInkRadius; offset <= centerInkRadius && !found; offset++) {
                   const px = dx === 0 ? x + offset : x;
                   const py = dy === 0 ? y + offset : y;
                   found = isInkAt(px, py);
                 }
 
-                if (found) hits += 1;
+                if (found) {
+                  hits += 1;
+                  if (step <= nearArmLength) nearHits += 1;
+                }
               }
 
-              return hits >= minArm;
+              return nearHits > 0 && hits >= minArm;
             };
 
             let best = null;
@@ -7600,6 +7622,7 @@
                 const py = top + cy + 0.5;
                 const d2 = distanceSq(sx, sy, px, py);
                 if (d2 > threshold * threshold) continue;
+                if (!hasInkNear(cx, cy, centerInkRadius)) continue;
 
                 const hasHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
                 const hasVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
@@ -7623,9 +7646,15 @@
             if (!Number.isFinite(pxPdf) || !Number.isFinite(pyPdf)) return null;
 
             const vectorCorner = findNearbyBackgroundVectorCornerSnapPoint(pxPdf, pyPdf, options);
-            if (!vectorCorner) return null;
+            if (vectorCorner) {
+              return vectorCorner;
+            }
 
-            return vectorCorner;
+            return {
+              x: pxPdf,
+              y: pyPdf,
+              source: 'background-canvas-corner',
+            };
           }
 
           function findBackgroundCanvasSnapPoint(xPdf, yPdf, options = {}) {
