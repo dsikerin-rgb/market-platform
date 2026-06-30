@@ -7457,17 +7457,21 @@
             switch (sourceType) {
               case 'shape-vertex':
                 return 0.35;
+              case 'shape-edge':
+                return 0.5;
               case 'background-vertex':
                 return 0.48;
               case 'background-edge':
                 return 0.56;
               case 'background-canvas':
                 return 0.62;
-              case 'shape-edge':
-                return 0.74;
               default:
                 return 1;
             }
+          }
+
+          function isShapeSnapSource(sourceType) {
+            return sourceType === 'shape-vertex' || sourceType === 'shape-edge';
           }
 
           function selectBestMapSnapPoint(xPdf, yPdf, candidates) {
@@ -7480,8 +7484,7 @@
             const sy = Number(sourcePoint[1]);
             if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
 
-            let best = null;
-            let bestScore = Infinity;
+            const viable = [];
 
             for (const candidate of candidates) {
               if (!candidate) continue;
@@ -7493,8 +7496,22 @@
               const py = Number(viewportPoint[1]);
               if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
 
-              const d2 = distanceSq(sx, sy, px, py);
-              const score = d2 * mapSnapSourceWeight(candidate.snapSourceType);
+              viable.push({
+                candidate,
+                d2: distanceSq(sx, sy, px, py),
+              });
+            }
+
+            if (viable.length === 0) return null;
+
+            const shapeCandidates = viable.filter((item) => isShapeSnapSource(item.candidate.snapSourceType));
+            const pool = shapeCandidates.length > 0 ? shapeCandidates : viable;
+            let best = null;
+            let bestScore = Infinity;
+
+            for (const item of pool) {
+              const candidate = item.candidate;
+              const score = item.d2 * mapSnapSourceWeight(candidate.snapSourceType);
               if (score < bestScore) {
                 bestScore = score;
                 best = candidate;
