@@ -3493,6 +3493,7 @@
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
         const MAP_BACKGROUND_SNAP_MAX_POINTS = 16000;
+        const MAP_VERTEX_AXIS_LOCK_SCREEN_PX = 4;
 
         const viewerRoot = document.getElementById('viewerRoot');
 
@@ -7915,8 +7916,25 @@
                 if (!Number.isFinite(sid) || sid <= 0) return;
                 if (!Number.isFinite(idx) || idx < 0) return;
 
+                const startViewportPoint = currentViewport.convertToViewportPoint(Number(x), Number(y));
+                if (!Array.isArray(startViewportPoint)) return;
+
+                const startCanvas = {
+                  x: Number(startViewportPoint[0]),
+                  y: Number(startViewportPoint[1]),
+                };
+                const pointerStartCanvas = getCanvasPointFromClient(e.clientX, e.clientY);
+                if (!Number.isFinite(startCanvas.x) || !Number.isFinite(startCanvas.y)) return;
+
                 activeVertexIndex = idx;
-                draggingVertex = { shapeId: sid, index: idx };
+                draggingVertex = {
+                  shapeId: sid,
+                  index: idx,
+                  startPdf: { x: Number(x), y: Number(y) },
+                  startCanvas,
+                  pointerStartCanvas,
+                  axis: null,
+                };
                 draggingVertexMoved = false;
 
                 el.classList.add('active');
@@ -9205,6 +9223,62 @@
             };
           }
 
+          function resolveVertexDragAxis(dragState, canvasPoint, shiftKey) {
+            if (!dragState) return null;
+
+            if (!shiftKey) {
+              dragState.axis = null;
+              return null;
+            }
+
+            if (dragState.axis === 'x' || dragState.axis === 'y') {
+              return dragState.axis;
+            }
+
+            const start = dragState.pointerStartCanvas || dragState.startCanvas;
+            if (!start) return null;
+
+            const dx = Number(canvasPoint.x) - Number(start.x);
+            const dy = Number(canvasPoint.y) - Number(start.y);
+            if (!Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < MAP_VERTEX_AXIS_LOCK_SCREEN_PX) {
+              return null;
+            }
+
+            dragState.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+            return dragState.axis;
+          }
+
+          function applyVertexAxisLockToCanvasPoint(canvasPoint, dragState, shiftKey) {
+            const axis = resolveVertexDragAxis(dragState, canvasPoint, shiftKey);
+            if (!axis || !dragState?.startCanvas) {
+              return shiftKey && dragState?.startCanvas ? dragState.startCanvas : canvasPoint;
+            }
+
+            return axis === 'x'
+              ? { x: Number(canvasPoint.x), y: Number(dragState.startCanvas.y) }
+              : { x: Number(dragState.startCanvas.x), y: Number(canvasPoint.y) };
+          }
+
+          function applyVertexAxisLockToPdfPoint(point, dragState) {
+            const axis = dragState?.axis;
+            const startPdf = dragState?.startPdf;
+            if ((axis !== 'x' && axis !== 'y') || !startPdf) return point;
+
+            const x = Number(point?.x ?? point?.[0]);
+            const y = Number(point?.y ?? point?.[1]);
+            const startX = Number(startPdf.x);
+            const startY = Number(startPdf.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(startX) || !Number.isFinite(startY)) {
+              return point;
+            }
+
+            return axis === 'x'
+              ? { ...point, x, y: startY }
+              : { ...point, x: startX, y };
+          }
+
           function onDown(e) {
             if (draggingVertex) return;
 
@@ -9313,7 +9387,11 @@
               if (poly.length < 3) return;
               if (idx < 0 || idx >= poly.length) return;
 
-              const pCanvas = getCanvasPointFromClient(e.clientX, e.clientY);
+              const pCanvas = applyVertexAxisLockToCanvasPoint(
+                getCanvasPointFromClient(e.clientX, e.clientY),
+                draggingVertex,
+                e.shiftKey,
+              );
               const pPdf = currentViewport.convertToPdfPoint(pCanvas.x, pCanvas.y);
 
               const nx = Number(pPdf[0]);
@@ -9322,7 +9400,17 @@
               if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
 
               const snappedPoint = applyMapSnapPoint(nx, ny, { excludeShapeId: sid });
-              poly[idx] = { x: Number(snappedPoint.x), y: Number(snappedPoint.y) };
+              const lockedPoint = applyVertexAxisLockToPdfPoint(snappedPoint, draggingVertex);
+              if (draggingVertex.axis && snapPreviewPoint) {
+                const lockedPreviewPoint = applyVertexAxisLockToPdfPoint(snapPreviewPoint, draggingVertex);
+                snapPreviewPoint = {
+                  ...snapPreviewPoint,
+                  x: Number(lockedPreviewPoint.x),
+                  y: Number(lockedPreviewPoint.y),
+                };
+              }
+
+              poly[idx] = { x: Number(lockedPoint.x), y: Number(lockedPoint.y) };
 
               shape.polygon = poly;
               redrawShapes();
