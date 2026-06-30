@@ -3483,6 +3483,8 @@
         const MAP_EDGE_SNAP_SCREEN_PX = 8;
         const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 9;
         const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 7;
+        const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 10;
+        const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
         const MAP_BACKGROUND_SNAP_MAX_POINTS = 16000;
 
@@ -7306,6 +7308,84 @@
             return best;
           }
 
+          function findBackgroundCanvasSnapPoint(xPdf, yPdf, options = {}) {
+            if (!currentViewport || !canvas || !ctx) return null;
+
+            const sourcePoint = currentViewport.convertToViewportPoint(Number(xPdf), Number(yPdf));
+            if (!Array.isArray(sourcePoint)) return null;
+
+            const sx = Number(sourcePoint[0]);
+            const sy = Number(sourcePoint[1]);
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+
+            const threshold = Math.max(1, Number(options.backgroundCanvasThresholdPx || MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX));
+            const radius = Math.ceil(threshold);
+            const centerX = Math.round(sx);
+            const centerY = Math.round(sy);
+            const left = Math.max(0, centerX - radius);
+            const top = Math.max(0, centerY - radius);
+            const right = Math.min(Number(canvas.width || 0), centerX + radius + 1);
+            const bottom = Math.min(Number(canvas.height || 0), centerY + radius + 1);
+            const width = right - left;
+            const height = bottom - top;
+
+            if (width <= 0 || height <= 0) return null;
+
+            let imageData = null;
+            try {
+              imageData = ctx.getImageData(left, top, width, height);
+            } catch (error) {
+              return null;
+            }
+
+            const data = imageData?.data;
+            if (!data || data.length < 4) return null;
+
+            let best = null;
+            let bestScore = threshold * threshold;
+
+            for (let y = 0; y < height; y++) {
+              for (let x = 0; x < width; x++) {
+                const offset = ((y * width) + x) * 4;
+                const alpha = Number(data[offset + 3] || 0);
+                if (alpha < 64) continue;
+
+                const r = Number(data[offset] || 0);
+                const g = Number(data[offset + 1] || 0);
+                const b = Number(data[offset + 2] || 0);
+                const luma = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+                if (luma > MAP_BACKGROUND_CANVAS_INK_LUMA_MAX) continue;
+
+                const px = left + x + 0.5;
+                const py = top + y + 0.5;
+                const d2 = distanceSq(sx, sy, px, py);
+                if (d2 > threshold * threshold) continue;
+
+                const darkness = Math.max(0, 255 - luma);
+                const score = d2 - (darkness * 0.015);
+                if (score <= bestScore) {
+                  bestScore = score;
+                  best = { x: px, y: py };
+                }
+              }
+            }
+
+            if (!best) return null;
+
+            const pdfPoint = currentViewport.convertToPdfPoint(best.x, best.y);
+            if (!Array.isArray(pdfPoint)) return null;
+
+            const pxPdf = Number(pdfPoint[0]);
+            const pyPdf = Number(pdfPoint[1]);
+            if (!Number.isFinite(pxPdf) || !Number.isFinite(pyPdf)) return null;
+
+            return {
+              x: pxPdf,
+              y: pyPdf,
+              source: 'background-canvas',
+            };
+          }
+
           function findEdgeSnapPoint(xPdf, yPdf, options = {}) {
             if (!currentViewport || !Array.isArray(shapes) || shapes.length === 0) return null;
 
@@ -7378,7 +7458,8 @@
             const snapPoint = findVertexSnapPoint(fallback.x, fallback.y, options)
               || findEdgeSnapPoint(fallback.x, fallback.y, options)
               || findBackgroundVertexSnapPoint(fallback.x, fallback.y, options)
-              || findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options);
+              || findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options)
+              || findBackgroundCanvasSnapPoint(fallback.x, fallback.y, options);
 
             if (!snapPoint) {
               snapPreviewPoint = null;
@@ -8644,6 +8725,7 @@
 
           let drawingRect = false;
           let drawStart = null;
+          let drawStartPdf = null;
 
           function showDrawBox(x1, y1, x2, y2) {
             if (!drawBox) return;
@@ -8664,13 +8746,40 @@
             drawBox.style.display = 'none';
           }
 
+          function snappedCanvasPointFromClient(clientX, clientY, options = {}) {
+            const canvasPoint = getCanvasPointFromClient(clientX, clientY);
+            if (!currentViewport) {
+              return { canvas: canvasPoint, pdf: null, snapped: false };
+            }
+
+            const pdfPoint = currentViewport.convertToPdfPoint(canvasPoint.x, canvasPoint.y);
+            if (!Array.isArray(pdfPoint)) {
+              return { canvas: canvasPoint, pdf: null, snapped: false };
+            }
+
+            const snappedPoint = applyMapSnapPoint(Number(pdfPoint[0]), Number(pdfPoint[1]), options);
+            const viewportPoint = currentViewport.convertToViewportPoint(Number(snappedPoint.x), Number(snappedPoint.y));
+            const snappedCanvas = Array.isArray(viewportPoint)
+              ? { x: Number(viewportPoint[0]), y: Number(viewportPoint[1]) }
+              : canvasPoint;
+
+            return {
+              canvas: snappedCanvas,
+              pdf: { x: Number(snappedPoint.x), y: Number(snappedPoint.y) },
+              snapped: Boolean(snappedPoint.snapped),
+            };
+          }
+
           function onDown(e) {
             if (draggingVertex) return;
 
             if (CAN_EDIT && editMode && tool === 'rect' && e.shiftKey) {
               drawingRect = true;
-              drawStart = getCanvasPointFromClient(e.clientX, e.clientY);
+              const start = snappedCanvasPointFromClient(e.clientX, e.clientY);
+              drawStart = start.canvas;
+              drawStartPdf = start.pdf;
               showDrawBox(drawStart.x, drawStart.y, drawStart.x, drawStart.y);
+              redrawShapes();
               e.preventDefault();
               return;
             }
@@ -8697,16 +8806,24 @@
 
               const end = getCanvasPointFromClient(e.clientX, e.clientY);
               const s = drawStart;
+              const sPdf = drawStartPdf;
               drawStart = null;
+              drawStartPdf = null;
 
               hideDrawBox();
 
               if (!page || !currentViewport || !s) return;
 
-              const left = Math.min(s.x, end.x);
-              const top = Math.min(s.y, end.y);
-              const right = Math.max(s.x, end.x);
-              const bottom = Math.max(s.y, end.y);
+              const endSnapped = snappedCanvasPointFromClient(e.clientX, e.clientY);
+              const endPdf = endSnapped.pdf;
+              snapPreviewPoint = null;
+
+              const startCanvas = s;
+              const endCanvas = endSnapped.canvas || end;
+              const left = Math.min(startCanvas.x, endCanvas.x);
+              const top = Math.min(startCanvas.y, endCanvas.y);
+              const right = Math.max(startCanvas.x, endCanvas.x);
+              const bottom = Math.max(startCanvas.y, endCanvas.y);
 
               const w = right - left;
               const h = bottom - top;
@@ -8716,16 +8833,22 @@
                 return;
               }
 
-              const p1 = currentViewport.convertToPdfPoint(left, top);
-              const p2 = currentViewport.convertToPdfPoint(right, top);
-              const p3 = currentViewport.convertToPdfPoint(right, bottom);
-              const p4 = currentViewport.convertToPdfPoint(left, bottom);
+              const startPdf = sPdf || currentViewport.convertToPdfPoint(startCanvas.x, startCanvas.y);
+              const finishPdf = endPdf || currentViewport.convertToPdfPoint(endCanvas.x, endCanvas.y);
+              const leftPdf = Math.min(Number(startPdf[0] ?? startPdf.x), Number(finishPdf[0] ?? finishPdf.x));
+              const rightPdf = Math.max(Number(startPdf[0] ?? startPdf.x), Number(finishPdf[0] ?? finishPdf.x));
+              const topPdf = Math.min(Number(startPdf[1] ?? startPdf.y), Number(finishPdf[1] ?? finishPdf.y));
+              const bottomPdf = Math.max(Number(startPdf[1] ?? startPdf.y), Number(finishPdf[1] ?? finishPdf.y));
+
+              if (!Number.isFinite(leftPdf) || !Number.isFinite(rightPdf) || !Number.isFinite(topPdf) || !Number.isFinite(bottomPdf)) {
+                return;
+              }
 
               const poly = [
-                { x: Number(p1[0]), y: Number(p1[1]) },
-                { x: Number(p2[0]), y: Number(p2[1]) },
-                { x: Number(p3[0]), y: Number(p3[1]) },
-                { x: Number(p4[0]), y: Number(p4[1]) },
+                { x: leftPdf, y: topPdf },
+                { x: rightPdf, y: topPdf },
+                { x: rightPdf, y: bottomPdf },
+                { x: leftPdf, y: bottomPdf },
               ];
 
               createShape(poly).catch((err) => {
@@ -8776,8 +8899,9 @@
             if (drawingRect) {
               const s = drawStart;
               if (!s) return;
-              const p = getCanvasPointFromClient(e.clientX, e.clientY);
-              showDrawBox(s.x, s.y, p.x, p.y);
+              const p = snappedCanvasPointFromClient(e.clientX, e.clientY);
+              showDrawBox(s.x, s.y, p.canvas.x, p.canvas.y);
+              redrawShapes();
               return;
             }
 
