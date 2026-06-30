@@ -3492,6 +3492,8 @@
         const MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX = 7;
         const MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX = 3;
         const MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX = 5;
+        const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MIN_SCALE = 1.5;
+        const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX = 16;
         const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 12;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
@@ -7648,6 +7650,25 @@
             const vectorCorner = findNearbyBackgroundVectorCornerSnapPoint(pxPdf, pyPdf, options);
             if (vectorCorner) {
               return vectorCorner;
+            }
+
+            const fallbackMinScale = Math.max(
+              0,
+              Number(options.backgroundCanvasCornerFallbackMinScale || MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MIN_SCALE),
+            );
+            const fallbackMaxOffset = Math.max(
+              1,
+              Number(options.backgroundCanvasCornerFallbackMaxOffsetPx || MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX),
+            );
+            const currentScaleValue = Number(scale || currentViewport?.scale || 0);
+            const fallbackOffsetSq = distanceSq(sx, sy, best.x, best.y);
+
+            if (!Number.isFinite(currentScaleValue) || currentScaleValue < fallbackMinScale) {
+              return null;
+            }
+
+            if (fallbackOffsetSq > fallbackMaxOffset * fallbackMaxOffset) {
+              return null;
             }
 
             return {
