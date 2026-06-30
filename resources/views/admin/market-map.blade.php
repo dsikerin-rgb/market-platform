@@ -3481,9 +3481,9 @@
         const MAP_MAX_SCALE = 15.4;
         const MAP_VERTEX_SNAP_SCREEN_PX = 10;
         const MAP_EDGE_SNAP_SCREEN_PX = 8;
-        const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 9;
-        const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 7;
-        const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 10;
+        const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 15;
+        const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 16;
+        const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
         const MAP_BACKGROUND_SNAP_MAX_POINTS = 16000;
@@ -7453,13 +7453,75 @@
             return best;
           }
 
+          function mapSnapSourceWeight(sourceType) {
+            switch (sourceType) {
+              case 'shape-vertex':
+                return 0.35;
+              case 'background-vertex':
+                return 0.48;
+              case 'background-edge':
+                return 0.56;
+              case 'background-canvas':
+                return 0.62;
+              case 'shape-edge':
+                return 0.74;
+              default:
+                return 1;
+            }
+          }
+
+          function selectBestMapSnapPoint(xPdf, yPdf, candidates) {
+            if (!currentViewport || !Array.isArray(candidates) || candidates.length === 0) return null;
+
+            const sourcePoint = currentViewport.convertToViewportPoint(Number(xPdf), Number(yPdf));
+            if (!Array.isArray(sourcePoint)) return null;
+
+            const sx = Number(sourcePoint[0]);
+            const sy = Number(sourcePoint[1]);
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+
+            let best = null;
+            let bestScore = Infinity;
+
+            for (const candidate of candidates) {
+              if (!candidate) continue;
+
+              const viewportPoint = currentViewport.convertToViewportPoint(Number(candidate.x), Number(candidate.y));
+              if (!Array.isArray(viewportPoint)) continue;
+
+              const px = Number(viewportPoint[0]);
+              const py = Number(viewportPoint[1]);
+              if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+
+              const d2 = distanceSq(sx, sy, px, py);
+              const score = d2 * mapSnapSourceWeight(candidate.snapSourceType);
+              if (score < bestScore) {
+                bestScore = score;
+                best = candidate;
+              }
+            }
+
+            return best;
+          }
+
+          function withSnapSource(candidate, sourceType) {
+            if (!candidate) return null;
+
+            return {
+              ...candidate,
+              snapSourceType: sourceType,
+            };
+          }
+
           function applyMapSnapPoint(xPdf, yPdf, options = {}) {
             const fallback = { x: Number(xPdf), y: Number(yPdf), snapped: false };
-            const snapPoint = findVertexSnapPoint(fallback.x, fallback.y, options)
-              || findEdgeSnapPoint(fallback.x, fallback.y, options)
-              || findBackgroundVertexSnapPoint(fallback.x, fallback.y, options)
-              || findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options)
-              || findBackgroundCanvasSnapPoint(fallback.x, fallback.y, options);
+            const snapPoint = selectBestMapSnapPoint(fallback.x, fallback.y, [
+              withSnapSource(findVertexSnapPoint(fallback.x, fallback.y, options), 'shape-vertex'),
+              withSnapSource(findBackgroundVertexSnapPoint(fallback.x, fallback.y, options), 'background-vertex'),
+              withSnapSource(findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options), 'background-edge'),
+              withSnapSource(findBackgroundCanvasSnapPoint(fallback.x, fallback.y, options), 'background-canvas'),
+              withSnapSource(findEdgeSnapPoint(fallback.x, fallback.y, options), 'shape-edge'),
+            ]);
 
             if (!snapPoint) {
               snapPreviewPoint = null;
