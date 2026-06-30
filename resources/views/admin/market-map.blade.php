@@ -7152,7 +7152,16 @@
             const viewportSize = stageViewportSize();
             const availableW = Math.max(200, viewportSize.width - paddingX);
             const availableH = Math.max(200, viewportSize.height - paddingY);
-            const nextScale = Math.min(availableW / viewport.width, availableH / viewport.height);
+            const fitByWidth = availableW / viewport.width;
+            const fitByHeight = availableH / viewport.height;
+            const exactFitScale = Math.min(fitByWidth, fitByHeight);
+            const heightOverflowLimit = Number(options.heightOverflowLimit ?? 1.28);
+            const widthComfortLimit = Number(options.widthComfortLimit ?? 0.94);
+            const comfortableScale = Math.min(
+              fitByWidth * widthComfortLimit,
+              Math.max(exactFitScale, fitByHeight * heightOverflowLimit),
+            );
+            const nextScale = options.exact === true ? exactFitScale : comfortableScale;
 
             if (!Number.isFinite(nextScale) || nextScale <= 0) return;
 
