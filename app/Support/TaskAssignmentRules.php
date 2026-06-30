@@ -97,7 +97,7 @@ class TaskAssignmentRules
         }
 
         $query->whereDoesntHave('roles', function (Builder $roleQuery): void {
-            $roleQuery->whereIn('name', ['super-admin', 'market-admin']);
+            $roleQuery->whereIn('name', ['super-admin', 'market-admin', 'demo-market-admin']);
         });
 
         $actorLevel = Schema::hasColumn('users', 'organization_level')
@@ -200,7 +200,7 @@ class TaskAssignmentRules
 
     private function isPrivilegedAssigner(User $user): bool
     {
-        if ($user->isSuperAdmin() || $user->hasRole('market-admin')) {
+        if ($user->isSuperAdmin() || $user->isMarketAdmin()) {
             return true;
         }
 
@@ -211,7 +211,7 @@ class TaskAssignmentRules
 
     private function isAdminTarget(User $target): bool
     {
-        return $target->isSuperAdmin() || $target->hasRole('market-admin');
+        return $target->isSuperAdmin() || $target->isMarketAdmin();
     }
 
     private function sameMarket(User $actor, User $target): bool

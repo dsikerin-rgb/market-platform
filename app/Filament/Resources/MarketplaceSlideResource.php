@@ -302,7 +302,7 @@ class MarketplaceSlideResource extends BaseResource
             return false;
         }
 
-        if (method_exists($user, 'hasRole') && $user->hasRole('market-admin')) {
+        if (method_exists($user, 'isMarketAdmin') && $user->isMarketAdmin()) {
             return true;
         }
 
@@ -325,7 +325,7 @@ class MarketplaceSlideResource extends BaseResource
             return false;
         }
 
-        if (method_exists($user, 'hasRole') && $user->hasRole('market-admin')) {
+        if (method_exists($user, 'isMarketAdmin') && $user->isMarketAdmin()) {
             return true;
         }
 
@@ -350,7 +350,7 @@ class MarketplaceSlideResource extends BaseResource
             return false;
         }
 
-        $hasRoleAccess = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $hasRoleAccess = method_exists($user, 'isMarketAdmin') && $user->isMarketAdmin();
         $hasPermissionAccess = method_exists($user, 'can') && (
             $user->can('marketplace.slides.viewAny')
             || $user->can('marketplace.slides.view')

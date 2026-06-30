@@ -68,7 +68,7 @@ class TaskResource extends BaseResource
         $selectedMarketId = static::selectedMarketIdFromSession();
 
         $isSuperAdmin = (bool) $user && $user->isSuperAdmin();
-        $isMarketAdmin = (bool) $user && $user->hasRole('market-admin');
+        $isMarketAdmin = (bool) $user && $user->isMarketAdmin();
         $isSuperOrMarketAdmin = $isSuperAdmin || $isMarketAdmin;
 
         $isCreator = static function (?Task $record) use ($user): bool {
@@ -1019,7 +1019,7 @@ $assigneeColumn = TextColumn::make('assignee.name')
                 ->tooltip('Удалить')
                 ->requiresConfirmation()
                 ->iconButton()
-                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin')));
+                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()));
         } elseif (class_exists(\Filament\Tables\Actions\DeleteAction::class)) {
             $actions[] = \Filament\Tables\Actions\DeleteAction::make()
                 ->label('')
@@ -1027,7 +1027,7 @@ $assigneeColumn = TextColumn::make('assignee.name')
                 ->tooltip('Удалить')
                 ->requiresConfirmation()
                 ->iconButton()
-                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->hasRole('market-admin')));
+                ->visible(fn (): bool => (bool) $user && ($user->isSuperAdmin() || $user->isMarketAdmin()));
         }
 
         if (! empty($actions)) {
@@ -1085,7 +1085,7 @@ $assigneeColumn = TextColumn::make('assignee.name')
             return $query->whereRaw('1 = 0');
         }
 
-        if ($user->hasRole('market-admin')) {
+        if ($user->isMarketAdmin()) {
             return $query->where('market_id', (int) $user->market_id);
         }
 
@@ -1129,7 +1129,7 @@ $assigneeColumn = TextColumn::make('assignee.name')
             return false;
         }
 
-        if ($user->hasRole('market-admin')) {
+        if ($user->isMarketAdmin()) {
             return true;
         }
 
@@ -1177,7 +1177,7 @@ $assigneeColumn = TextColumn::make('assignee.name')
             return false;
         }
 
-        if ($user->hasRole('market-admin')) {
+        if ($user->isMarketAdmin()) {
             return true;
         }
 
@@ -1217,7 +1217,7 @@ $assigneeColumn = TextColumn::make('assignee.name')
 
         return $user->market_id
             && (int) $record->market_id === (int) $user->market_id
-            && $user->hasRole('market-admin');
+            && $user->isMarketAdmin();
     }
 
     protected static function selectedMarketIdFromSession(): ?int

@@ -35,7 +35,7 @@ class TenantImpersonationService
             return true;
         }
 
-        if (! $impersonator->hasAnyRole(['market-admin', ...self::MARKETPLACE_HELP_ROLES])) {
+        if (! $impersonator->hasAnyRole(['market-admin', 'demo-market-admin', ...self::MARKETPLACE_HELP_ROLES])) {
             return false;
         }
 
@@ -44,7 +44,7 @@ class TenantImpersonationService
 
     public function isCrossMarketDenied(User $impersonator, Tenant $tenant): bool
     {
-        return $impersonator->hasAnyRole(['market-admin', ...self::MARKETPLACE_HELP_ROLES])
+        return $impersonator->hasAnyRole(['market-admin', 'demo-market-admin', ...self::MARKETPLACE_HELP_ROLES])
             && (int) ($impersonator->market_id ?? 0) !== (int) $tenant->market_id;
     }
 
@@ -197,7 +197,7 @@ class TenantImpersonationService
     private function accessModeFor(User $impersonator): string
     {
         if ($impersonator->hasAnyRole(self::MARKETPLACE_HELP_ROLES)
-            && ! $impersonator->hasAnyRole(['super-admin', 'market-admin', 'market-manager', 'market-owner', 'market-owner-director'])
+            && ! $impersonator->hasAnyRole(['super-admin', 'market-admin', 'demo-market-admin', 'market-manager', 'market-owner', 'market-owner-director'])
         ) {
             return CabinetAssistanceMode::MODE_MARKETPLACE_HELP;
         }

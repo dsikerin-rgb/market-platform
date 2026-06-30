@@ -85,69 +85,72 @@ class RolesAndPermissionsSeeder extends Seeder
             Permission::findOrCreate($name, $guard);
         }
 
+        // market-admin: только настройки рынка + сотрудники (никаких markets.*)
+        $marketAdminPermissions = [
+            'market-settings.view',
+            'market-settings.update',
+            'marketplace.settings.view',
+            'marketplace.settings.update',
+            'marketplace.slides.viewAny',
+            'marketplace.slides.view',
+            'marketplace.slides.create',
+            'marketplace.slides.update',
+            'marketplace.slides.delete',
+            'marketplace.storefronts.view',
+            'marketplace.storefronts.update_content',
+            'marketplace.products.viewAny',
+            'marketplace.products.view',
+            'marketplace.products.update_content',
+            'marketplace.products.update_media',
+            'marketplace.products.publish',
+            'marketplace.orders.view',
+            'marketplace.orders.update_status',
+            'marketplace.chats.view',
+            'marketplace.chats.reply',
+            'tenants.marketplace-contacts.view',
+
+            'market-holidays.viewAny',
+            'market-holidays.view',
+            'market-holidays.create',
+            'market-holidays.update',
+            'market-holidays.delete',
+
+            'staff.viewAny',
+            'staff.view',
+            'staff.create',
+            'staff.update',
+            'staff.delete',
+
+            'contracts.update',
+            'finance.1c.view',
+            'finance.accruals.view',
+
+            'market-locations.viewAny',
+            'market-locations.view',
+            'market-locations.create',
+            'market-locations.update',
+            'market-locations.delete',
+
+            'market-location-types.viewAny',
+            'market-location-types.view',
+            'market-location-types.create',
+            'market-location-types.update',
+            'market-location-types.delete',
+
+            'reports.viewAny',
+            'reports.view',
+            'reports.create',
+            'reports.update',
+            'reports.delete',
+        ];
+
         // 2) Матрица ролей -> permissions (явно, без “магии”)
         $roles = [
             // super-admin: всё
             'super-admin' => $permissions,
 
-            // market-admin: только настройки рынка + сотрудники (никаких markets.*)
-            'market-admin' => [
-                'market-settings.view',
-                'market-settings.update',
-                'marketplace.settings.view',
-                'marketplace.settings.update',
-                'marketplace.slides.viewAny',
-                'marketplace.slides.view',
-                'marketplace.slides.create',
-                'marketplace.slides.update',
-                'marketplace.slides.delete',
-                'marketplace.storefronts.view',
-                'marketplace.storefronts.update_content',
-                'marketplace.products.viewAny',
-                'marketplace.products.view',
-                'marketplace.products.update_content',
-                'marketplace.products.update_media',
-                'marketplace.products.publish',
-                'marketplace.orders.view',
-                'marketplace.orders.update_status',
-                'marketplace.chats.view',
-                'marketplace.chats.reply',
-                'tenants.marketplace-contacts.view',
-
-                'market-holidays.viewAny',
-                'market-holidays.view',
-                'market-holidays.create',
-                'market-holidays.update',
-                'market-holidays.delete',
-
-                'staff.viewAny',
-                'staff.view',
-                'staff.create',
-                'staff.update',
-                'staff.delete',
-
-                'contracts.update',
-                'finance.1c.view',
-                'finance.accruals.view',
-
-                'market-locations.viewAny',
-                'market-locations.view',
-                'market-locations.create',
-                'market-locations.update',
-                'market-locations.delete',
-
-                'market-location-types.viewAny',
-                'market-location-types.view',
-                'market-location-types.create',
-                'market-location-types.update',
-                'market-location-types.delete',
-
-                'reports.viewAny',
-                'reports.view',
-                'reports.create',
-                'reports.update',
-                'reports.delete',
-            ],
+            'market-admin' => $marketAdminPermissions,
+            'demo-market-admin' => $marketAdminPermissions,
 
             // Остальные роли получают только профильные права, а широкий доступ остается у директоров.
             'market-owner-director' => [

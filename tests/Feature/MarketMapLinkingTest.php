@@ -52,6 +52,20 @@ class MarketMapLinkingTest extends TestCase
         return $user;
     }
 
+    private function actingAsDemoMarketAdmin(Market $market): User
+    {
+        Role::findOrCreate('demo-market-admin', 'web');
+
+        $user = User::factory()->create([
+            'market_id' => $market->id,
+        ]);
+        $user->assignRole('demo-market-admin');
+
+        $this->loginForPossibleGuards($user);
+
+        return $user;
+    }
+
     private function loginForPossibleGuards(User $user): void
     {
         // Всегда логинимся в web
@@ -770,6 +784,41 @@ class MarketMapLinkingTest extends TestCase
         $this->assertDatabaseMissing('market_space_map_shapes', [
             'market_id' => $market->id,
             'market_space_id' => $parent->id,
+        ]);
+    }
+
+    public function test_demo_market_admin_can_create_market_map_shape(): void
+    {
+        $market = $this->createMarketWithMap();
+        $this->actingAsDemoMarketAdmin($market);
+        $this->selectMarketInSession($market);
+
+        $space = MarketSpace::create([
+            'market_id' => $market->id,
+            'number' => 'A-10',
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson(route('filament.admin.market-map.shapes.store'), [
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
+            'polygon' => [
+                ['x' => 1, 'y' => 1],
+                ['x' => 2, 'y' => 1],
+                ['x' => 2, 'y' => 2],
+            ],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('ok', true);
+        $response->assertJsonPath('mode', 'created');
+
+        $this->assertDatabaseHas('market_space_map_shapes', [
+            'market_id' => $market->id,
+            'market_space_id' => $space->id,
+            'page' => 1,
+            'version' => 1,
         ]);
     }
 

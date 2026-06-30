@@ -888,8 +888,8 @@ PROMPT;
         }
 
         return (int) ($actor->market_id ?? 0) === $marketId
-            && method_exists($actor, 'hasRole')
-            && $actor->hasRole('market-admin');
+            && method_exists($actor, 'isMarketAdmin')
+            && $actor->isMarketAdmin();
     }
 
     private function resolveStaffUser(User $actor, int $marketId, mixed $id, mixed $query): ?User

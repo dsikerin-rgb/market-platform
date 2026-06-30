@@ -39,6 +39,7 @@ class CabinetAuthController extends Controller
         if ($user && method_exists($user, 'hasAnyRole') && $user->hasAnyRole([
             'super-admin',
             'market-admin',
+            'demo-market-admin',
             'market-manager',
             'market-operator',
         ])) {

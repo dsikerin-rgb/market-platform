@@ -296,7 +296,7 @@ class MarketplaceSettings extends Page
             return false;
         }
 
-        $hasRoleAccess = method_exists($user, 'hasRole') && $user->hasRole('market-admin');
+        $hasRoleAccess = method_exists($user, 'isMarketAdmin') && $user->isMarketAdmin();
         $hasPermissionAccess = method_exists($user, 'can') && (
             $user->can('marketplace.settings.view')
             || $user->can('marketplace.settings.update')

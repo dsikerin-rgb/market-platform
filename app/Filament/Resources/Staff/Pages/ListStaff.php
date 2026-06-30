@@ -72,7 +72,7 @@ class ListStaff extends ListRecords
             'admins' => $this->makeTab(
                 $tabClass,
                 'Администраторы',
-                fn (Builder $query) => $query->whereHas('roles', fn (Builder $roleQuery) => $roleQuery->where('name', 'market-admin'))
+                fn (Builder $query) => $query->whereHas('roles', fn (Builder $roleQuery) => $roleQuery->whereIn('name', ['market-admin', 'demo-market-admin']))
             ),
             'managers' => $this->makeTab(
                 $tabClass,

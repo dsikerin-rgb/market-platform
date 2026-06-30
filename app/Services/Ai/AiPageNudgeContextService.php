@@ -99,7 +99,9 @@ class AiPageNudgeContextService
             return null;
         }
 
-        $isManager = $this->isSuperAdmin($user) || $this->hasRole($user, 'market-admin');
+        $isManager = $this->isSuperAdmin($user)
+            || $this->hasRole($user, 'market-admin')
+            || $this->hasRole($user, 'demo-market-admin');
         $query = Task::query()->forMarket($marketId)->overdue();
 
         if (! $isManager) {

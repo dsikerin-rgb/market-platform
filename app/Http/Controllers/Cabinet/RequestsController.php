@@ -267,7 +267,7 @@ class RequestsController extends Controller
             ->where('market_id', $marketId)
             ->whereNull('tenant_id')
             ->where('id', '!=', $senderId)
-            ->whereHas('roles', fn ($query) => $query->where('name', 'market-admin'))
+            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['market-admin', 'demo-market-admin']))
             ->orderBy('id')
             ->value('id') ?? 0) ?: null;
     }

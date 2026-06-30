@@ -255,7 +255,7 @@ class DemoPilotProvisionerWriteTest extends TestCase
             $table->timestamps();
         });
 
-        foreach (['market-owner-director', 'market-admin', 'market-operator', 'merchant'] as $roleName) {
+        foreach (['market-owner-director', 'market-admin', 'demo-market-admin', 'market-operator', 'merchant'] as $roleName) {
             DB::table('roles')->insert([
                 'name' => $roleName,
                 'guard_name' => 'web',
@@ -313,7 +313,8 @@ class DemoPilotProvisionerWriteTest extends TestCase
         $tenantUser = User::query()->where('email', 'tenant-user@demo.marketuchet.local')->firstOrFail();
         $tenant = Tenant::query()->where('external_id', 'demo-tenant-grocery')->firstOrFail();
 
-        self::assertSame('market-admin', $this->singleRoleNameForUser($admin));
+        self::assertSame('demo-market-admin', $this->singleRoleNameForUser($admin));
+        self::assertTrue($admin->isMarketAdmin());
         self::assertSame('merchant', $this->singleRoleNameForUser($tenantUser));
         self::assertSame((int) $tenant->getKey(), (int) $tenantUser->tenant_id);
 
@@ -516,9 +517,9 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('partial', $report['status']);
         self::assertSame('updated', $this->sectionStatus($report, 'users'));
         self::assertSame('Ирина Смирнова', $user->name);
-        self::assertSame('Администратор', $user->job_title);
+        self::assertSame('Администратор демо-рынка', $user->job_title);
         self::assertSame('Администрация', $user->department);
-        self::assertTrue($user->hasRole('market-admin'));
+        self::assertTrue($user->hasRole('demo-market-admin'));
         self::assertSame('demo_pilot', data_get($user->notification_preferences, 'demo_pilot.synthetic_source'));
         self::assertSame(4, User::query()->where('market_id', $market->getKey())->count());
     }

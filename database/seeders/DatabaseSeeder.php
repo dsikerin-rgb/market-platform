@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
             'market-owner',
             'market-owner-director',
             'market-admin',
+            'demo-market-admin',
             'market-manager',
             'market-operator',
             'merchant',

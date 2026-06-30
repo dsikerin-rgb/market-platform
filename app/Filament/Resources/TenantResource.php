@@ -4215,7 +4215,7 @@ class TenantResource extends BaseResource
             return true;
         }
 
-        return (method_exists($user, 'hasRole') && $user->hasRole('market-admin'))
+        return (method_exists($user, 'isMarketAdmin') && $user->isMarketAdmin())
             && (int) ($user->market_id ?? 0) === (int) $record->market_id;
     }
 

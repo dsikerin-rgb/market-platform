@@ -33,7 +33,7 @@ class TaskPolicy
     /**
      * Просмотр конкретной задачи:
      * - super-admin: всё
-     * - market-admin: все задачи рынка
+     * - market-admin/demo-market-admin: все задачи рынка
      * - прочие: только вовлечённые (постановщик / исполнитель / участник)
      *
      * История будет доступна только в рамках открытой задачи => достаточно ограничить view().
@@ -52,7 +52,7 @@ class TaskPolicy
             return false;
         }
 
-        if ($user->hasRole('market-admin')) {
+        if ($user->isMarketAdmin()) {
             return true;
         }
 
@@ -88,7 +88,7 @@ class TaskPolicy
             return false;
         }
 
-        if ($user->hasRole('market-admin')) {
+        if ($user->isMarketAdmin()) {
             return true;
         }
 
@@ -99,7 +99,7 @@ class TaskPolicy
     /**
      * "Управленческое ядро" задачи: название/описание/приоритет/дедлайн/исполнитель.
      * MVP:
-     * - market-admin: всегда
+     * - market-admin/demo-market-admin: всегда
      * - постановщик: только пока задача NEW
      */
     public function updateCore(User $user, Task $task): bool
@@ -116,7 +116,7 @@ class TaskPolicy
             return false;
         }
 
-        if ($user->hasRole('market-admin')) {
+        if ($user->isMarketAdmin()) {
             return true;
         }
 
@@ -125,7 +125,7 @@ class TaskPolicy
 
     /**
      * Статус:
-     * - market-admin: всегда
+     * - market-admin/demo-market-admin: всегда
      * - исполнитель/соисполнитель: да
      * - постановщик: только пока NEW (например, отменить пока не приняли)
      */
@@ -143,7 +143,7 @@ class TaskPolicy
             return false;
         }
 
-        if ($user->hasRole('market-admin')) {
+        if ($user->isMarketAdmin()) {
             return true;
         }
 
@@ -176,7 +176,7 @@ class TaskPolicy
 
     /**
      * Соисполнители (делегирование):
-     * - market-admin: всегда
+     * - market-admin/demo-market-admin: всегда
      * - постановщик: только пока NEW
      */
     public function manageCoexecutors(User $user, Task $task): bool
@@ -193,7 +193,7 @@ class TaskPolicy
             return false;
         }
 
-        if ($user->hasRole('market-admin')) {
+        if ($user->isMarketAdmin()) {
             return true;
         }
 
@@ -202,7 +202,7 @@ class TaskPolicy
 
     /**
      * Наблюдатели (информирование):
-     * - market-admin: всегда
+     * - market-admin/demo-market-admin: всегда
      * - постановщик / исполнитель / соисполнитель: да
      */
     public function manageObservers(User $user, Task $task): bool
@@ -219,7 +219,7 @@ class TaskPolicy
             return false;
         }
 
-        if ($user->hasRole('market-admin')) {
+        if ($user->isMarketAdmin()) {
             return true;
         }
 
@@ -238,7 +238,7 @@ class TaskPolicy
             return true;
         }
 
-        return $this->sameMarket($user, $task) && $user->hasRole('market-admin');
+        return $this->sameMarket($user, $task) && $user->isMarketAdmin();
     }
 
     private function sameMarket(User $user, Task $task): bool

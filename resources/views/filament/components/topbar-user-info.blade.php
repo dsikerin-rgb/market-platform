@@ -25,6 +25,7 @@
         $rolePriority = [
             'super-admin',
             'market-admin',
+            'demo-market-admin',
             'market-finance',
             'market-maintenance',
             'market-security',

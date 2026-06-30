@@ -15,7 +15,7 @@ class EditRole extends BaseEditRecord
     /**
      * Системные роли нельзя удалять/переименовывать.
      */
-    private const SYSTEM_ROLES = ['super-admin', 'market-admin', 'merchant'];
+    private const SYSTEM_ROLES = ['super-admin', 'market-admin', 'demo-market-admin', 'merchant'];
 
     public function getBreadcrumbs(): array
     {

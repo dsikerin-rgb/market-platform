@@ -740,7 +740,7 @@ class EditStaff extends BaseEditRecord
             return true;
         }
 
-        return ! $this->record->hasRole('market-admin');
+        return ! $this->record->isMarketAdmin();
     }
 
     private function notificationPreferencesFormState(): array
@@ -774,7 +774,8 @@ class EditStaff extends BaseEditRecord
             : Role::query()->whereIn('id', $roleIds)->pluck('name')->all();
 
         $mustSelfManage = in_array('super-admin', $roleNames, true)
-            || in_array('market-admin', $roleNames, true);
+            || in_array('market-admin', $roleNames, true)
+            || in_array('demo-market-admin', $roleNames, true);
 
         $existing = (array) ($this->record->notification_preferences ?? []);
         $raw = is_array($data['notification_preferences'] ?? null)
