@@ -3494,6 +3494,7 @@
         const MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX = 7;
         const MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX = 3;
         const MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX = 5;
+        const MAP_BACKGROUND_CANVAS_CORNER_CENTER_GAP_PX = 8;
         const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MIN_SCALE = 1.5;
         const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX = 24;
         const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 12;
@@ -7627,6 +7628,10 @@
             const minArm = Math.max(2, Math.round(Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX) * canvasScale));
             const centerInkRadius = Math.max(1, Math.round(Number(options.backgroundCanvasCornerCenterInkPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX) * canvasScale));
             const nearArmLength = Math.max(1, Math.round(Number(options.backgroundCanvasCornerNearArmPx || MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX) * canvasScale));
+            const centerGapLength = Math.max(
+              nearArmLength,
+              Math.round(Number(options.backgroundCanvasCornerCenterGapPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_GAP_PX) * canvasScale),
+            );
 
             const hasInkNear = (cx, cy, radiusPx) => {
               const radiusSq = radiusPx * radiusPx;
@@ -7641,9 +7646,10 @@
               return false;
             };
 
-            const hasArm = (cx, cy, dx, dy) => {
+            const hasArm = (cx, cy, dx, dy, allowCenterGap = false) => {
               let hits = 0;
               let nearHits = 0;
+              let firstHitStep = null;
 
               for (let step = 1; step <= maxArm; step++) {
                 const x = Math.round(cx + (dx * step));
@@ -7658,8 +7664,15 @@
 
                 if (found) {
                   hits += 1;
+                  if (firstHitStep === null) firstHitStep = step;
                   if (step <= nearArmLength) nearHits += 1;
                 }
+              }
+
+              if (allowCenterGap) {
+                return firstHitStep !== null
+                  && firstHitStep <= centerGapLength
+                  && hits >= Math.max(1, minArm - 1);
               }
 
               return nearHits > 0 && hits >= minArm;
@@ -7681,13 +7694,16 @@
                 const py = Number(logicalPoint.y);
                 const d2 = distanceSq(sx, sy, px, py);
                 if (d2 > threshold * threshold) continue;
-                if (!hasInkNear(cx, cy, centerInkRadius)) continue;
 
-                const hasHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
-                const hasVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
-                if (!hasHorizontal || !hasVertical) continue;
+                const hasCenterInk = hasInkNear(cx, cy, centerInkRadius);
+                const hasStrictHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
+                const hasStrictVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
+                const hasRelaxedHorizontal = hasStrictHorizontal || hasArm(cx, cy, -1, 0, true) || hasArm(cx, cy, 1, 0, true);
+                const hasRelaxedVertical = hasStrictVertical || hasArm(cx, cy, 0, -1, true) || hasArm(cx, cy, 0, 1, true);
+                if (!hasRelaxedHorizontal || !hasRelaxedVertical) continue;
 
-                const score = d2 - ((Number(row.score || 0) + Number(col.score || 0)) * 0.015);
+                const relaxedPenalty = hasCenterInk && hasStrictHorizontal && hasStrictVertical ? 0 : 9;
+                const score = d2 + relaxedPenalty - ((Number(row.score || 0) + Number(col.score || 0)) * 0.015);
                 if (score <= bestScore) {
                   bestScore = score;
                   best = { x: px, y: py };
