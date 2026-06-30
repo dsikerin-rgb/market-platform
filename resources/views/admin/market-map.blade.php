@@ -3490,6 +3490,7 @@
         const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
         const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 30;
         const MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX = 7;
+        const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 12;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
         const MAP_BACKGROUND_SNAP_MAX_POINTS = 16000;
@@ -7440,6 +7441,28 @@
             return best;
           }
 
+          function findNearbyBackgroundVectorCornerSnapPoint(xPdf, yPdf, options = {}) {
+            const threshold = Math.max(
+              1,
+              Number(options.backgroundCanvasCornerVectorConfirmThresholdPx || MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX),
+            );
+
+            const intersection = findBackgroundIntersectionSnapPoint(xPdf, yPdf, {
+              ...options,
+              backgroundIntersectionThresholdPx: threshold,
+              backgroundIntersectionNearbyThresholdPx: Math.max(threshold * 2, 24),
+            });
+
+            if (intersection) {
+              return intersection;
+            }
+
+            return findBackgroundVertexSnapPoint(xPdf, yPdf, {
+              ...options,
+              backgroundVertexThresholdPx: threshold,
+            });
+          }
+
           function backgroundCanvasInkValue(data, offset) {
             const alpha = Number(data?.[offset + 3] || 0);
             if (alpha < 64) return 0;
@@ -7599,11 +7622,10 @@
             const pyPdf = Number(pdfPoint[1]);
             if (!Number.isFinite(pxPdf) || !Number.isFinite(pyPdf)) return null;
 
-            return {
-              x: pxPdf,
-              y: pyPdf,
-              source: 'background-canvas-corner',
-            };
+            const vectorCorner = findNearbyBackgroundVectorCornerSnapPoint(pxPdf, pyPdf, options);
+            if (!vectorCorner) return null;
+
+            return vectorCorner;
           }
 
           function findBackgroundCanvasSnapPoint(xPdf, yPdf, options = {}) {
@@ -9406,6 +9428,12 @@
               : { ...point, x: startX, y };
           }
 
+          function resetVertexAxisLock() {
+            if (draggingVertex) {
+              draggingVertex.axis = null;
+            }
+          }
+
           function onDown(e) {
             if (draggingVertex) return;
 
@@ -10775,6 +10803,17 @@
           window.addEventListener('mouseup', onUp);
           window.addEventListener('mouseup', onGlobalUp);
           window.addEventListener('mousemove', onMove);
+          window.addEventListener('keyup', (event) => {
+            if (event.key === 'Shift') {
+              resetVertexAxisLock();
+            }
+          });
+          window.addEventListener('blur', resetVertexAxisLock);
+          document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+              resetVertexAxisLock();
+            }
+          });
           window.addEventListener('beforeunload', (event) => {
             if (!hasActiveShapePolygonSaves()) return;
 
