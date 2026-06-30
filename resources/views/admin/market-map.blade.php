@@ -5894,6 +5894,7 @@
           let polyDrawing = false;
           let polyDraft = [];
           let snapPreviewPoint = null;
+          let polygonSaveStates = new Map();
           let backgroundSnapSegments = [];
           let backgroundSnapPoints = [];
           let bootstrappingMap = true;
@@ -8285,12 +8286,164 @@
             return json.item || null;
           }
 
+          function clonePolygonForSave(polygon) {
+            if (!Array.isArray(polygon)) return [];
+
+            const cloned = [];
+            for (const point of polygon) {
+              const x = Number((point && (point.x ?? point[0])) ?? NaN);
+              const y = Number((point && (point.y ?? point[1])) ?? NaN);
+              if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+              cloned.push({ x, y });
+            }
+
+            return cloned;
+          }
+
+          function polygonSaveSignature(polygon) {
+            return JSON.stringify(clonePolygonForSave(polygon));
+          }
+
+          function getPolygonSaveState(shapeId) {
+            const id = Number(shapeId);
+            if (!Number.isFinite(id) || id <= 0) return null;
+
+            let state = polygonSaveStates.get(id);
+            if (!state) {
+              state = {
+                pendingPolygon: null,
+                pendingSignature: null,
+                saving: false,
+                retryTimer: null,
+                errorNotified: false,
+                successToast: null,
+              };
+              polygonSaveStates.set(id, state);
+            }
+
+            return state;
+          }
+
+          function queueShapePolygonSave(shapeId, polygon, options = {}) {
+            const id = Number(shapeId);
+            if (!Number.isFinite(id) || id <= 0) return false;
+
+            const cloned = clonePolygonForSave(polygon);
+            if (cloned.length < 3) return false;
+
+            const state = getPolygonSaveState(id);
+            if (!state) return false;
+
+            const signature = polygonSaveSignature(cloned);
+            state.pendingPolygon = cloned;
+            state.pendingSignature = signature;
+            state.successToast = options.successToast ? String(options.successToast) : null;
+
+            if (state.retryTimer) {
+              window.clearTimeout(state.retryTimer);
+              state.retryTimer = null;
+            }
+
+            flushShapePolygonSave(id).catch((error) => {
+              console.error(error);
+            });
+
+            return true;
+          }
+
+          function scheduleShapePolygonSaveRetry(shapeId, state) {
+            if (state.retryTimer) return;
+
+            state.retryTimer = window.setTimeout(() => {
+              state.retryTimer = null;
+              flushShapePolygonSave(shapeId).catch((error) => {
+                console.error(error);
+              });
+            }, 1500);
+          }
+
+          async function flushShapePolygonSave(shapeId) {
+            const id = Number(shapeId);
+            const state = getPolygonSaveState(id);
+            if (!state || state.saving) return;
+
+            if (state.retryTimer) {
+              window.clearTimeout(state.retryTimer);
+              state.retryTimer = null;
+            }
+
+            while (state.pendingPolygon) {
+              const polygon = state.pendingPolygon;
+              const signature = state.pendingSignature || polygonSaveSignature(polygon);
+
+              state.pendingPolygon = null;
+              state.pendingSignature = null;
+              state.saving = true;
+
+              try {
+                await patchShape(id, { polygon });
+                state.errorNotified = false;
+              } catch (error) {
+                console.error(error);
+
+                const shape = findShapeById(id);
+                const currentPolygon = clonePolygonForSave(Array.isArray(shape?.polygon) ? shape.polygon : polygon);
+                state.pendingPolygon = currentPolygon.length >= 3 ? currentPolygon : polygon;
+                state.pendingSignature = polygonSaveSignature(state.pendingPolygon);
+                state.saving = false;
+
+                if (!state.errorNotified) {
+                  toast('Не удалось сохранить полигон. Повторю автоматически: ' + String(error?.message || error));
+                  state.errorNotified = true;
+                }
+
+                scheduleShapePolygonSaveRetry(id, state);
+                return;
+              }
+
+              state.saving = false;
+            }
+
+            const successToast = state.successToast;
+            state.successToast = null;
+
+            if (successToast) {
+              toast(successToast);
+            }
+
+            if (!state.pendingPolygon && !state.saving && !state.retryTimer) {
+              polygonSaveStates.delete(id);
+            }
+          }
+
+          function hasActiveShapePolygonSaves() {
+            for (const state of polygonSaveStates.values()) {
+              if (state?.pendingPolygon || state?.saving || state?.retryTimer) return true;
+            }
+
+            return false;
+          }
+
+          function discardShapePolygonSave(shapeId) {
+            const id = Number(shapeId);
+            if (!Number.isFinite(id) || id <= 0) return;
+
+            const state = polygonSaveStates.get(id);
+            if (state?.retryTimer) {
+              window.clearTimeout(state.retryTimer);
+              state.retryTimer = null;
+            }
+
+            polygonSaveStates.delete(id);
+          }
+
           async function deleteShape(shapeId) {
             const id = Number(shapeId);
             if (!Number.isFinite(id) || id <= 0) return;
 
             const ok = confirm('Удалить этот полигон?');
             if (!ok) return;
+            discardShapePolygonSave(id);
 
             const url = String(SHAPES_BASE + '/' + String(Math.trunc(id)));
             const res = await apiFetch(url, { method: 'DELETE' });
@@ -8337,21 +8490,8 @@
             redrawShapes();
             renderHandles();
 
-            try {
-              await patchShape(shape.id, { polygon: poly });
-              await loadShapes();
-              snapPreviewPoint = null;
-              redrawShapes();
-              renderHandles();
-              toast('Точка удалена');
-            } catch (e) {
-              console.error(e);
-              toast('Ошибка удаления точки: ' + String(e?.message || e));
-              await loadShapes();
-              snapPreviewPoint = null;
-              redrawShapes();
-              renderHandles();
-            }
+            snapPreviewPoint = null;
+            queueShapePolygonSave(shape.id, poly, { successToast: 'Точка удалена' });
 
             return true;
           }
@@ -8414,21 +8554,8 @@
             redrawShapes();
             renderHandles();
 
-            try {
-              await patchShape(shape.id, { polygon: poly });
-              await loadShapes();
-              snapPreviewPoint = null;
-              redrawShapes();
-              renderHandles();
-              toast('Точка добавлена');
-            } catch (e) {
-              console.error(e);
-              toast('Ошибка добавления точки: ' + String(e?.message || e));
-              await loadShapes();
-              snapPreviewPoint = null;
-              redrawShapes();
-              renderHandles();
-            }
+            snapPreviewPoint = null;
+            queueShapePolygonSave(shape.id, poly, { successToast: 'Точка добавлена' });
           }
 
           async function finishPolygon() {
@@ -9480,21 +9607,10 @@
               return;
             }
 
-            try {
-              await patchShape(shape.id, { polygon: poly });
-              await loadShapes();
-              snapPreviewPoint = null;
-              redrawShapes();
-              renderHandles();
-              toast('Полигон обновлён');
-            } catch (e2) {
-              console.error(e2);
-              toast('Ошибка обновления: ' + String(e2?.message || e2));
-              await loadShapes();
-              snapPreviewPoint = null;
-              redrawShapes();
-              renderHandles();
-            }
+            snapPreviewPoint = null;
+            redrawShapes();
+            renderHandles();
+            queueShapePolygonSave(shape.id, poly);
           }
 
           async function onClick(e) {
@@ -10659,6 +10775,12 @@
           window.addEventListener('mouseup', onUp);
           window.addEventListener('mouseup', onGlobalUp);
           window.addEventListener('mousemove', onMove);
+          window.addEventListener('beforeunload', (event) => {
+            if (!hasActiveShapePolygonSaves()) return;
+
+            event.preventDefault();
+            event.returnValue = '';
+          });
 
           handlesLayer?.addEventListener('mousedown', (e) => e.stopPropagation());
 
