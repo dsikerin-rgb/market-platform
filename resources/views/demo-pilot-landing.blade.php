@@ -1,9 +1,3 @@
-@php
-    $contactEmail = (string) config('mail.from.address', 'demo@example.com');
-    $mailtoSubject = rawurlencode('Заявка на демо Market Platform');
-    $mailtoBody = rawurlencode("Здравствуйте!\nХочу получить демо-доступ к Market Platform и обсудить пилот.");
-    $demoMailto = 'mailto:' . $contactEmail . '?subject=' . $mailtoSubject . '&body=' . $mailtoBody;
-@endphp
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -369,6 +363,106 @@
             color: #ffffff;
         }
 
+        .request-form {
+            display: grid;
+            gap: 12px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .form-field {
+            display: grid;
+            gap: 6px;
+        }
+
+        .form-field.full {
+            grid-column: 1 / -1;
+        }
+
+        .form-label {
+            color: #513915;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .form-field input,
+        .form-field select,
+        .form-field textarea {
+            width: 100%;
+            min-height: 42px;
+            border: 1px solid #e7cda8;
+            border-radius: 8px;
+            background: #ffffff;
+            color: var(--ink);
+            font: inherit;
+            padding: 9px 11px;
+        }
+
+        .form-field textarea {
+            min-height: 96px;
+            resize: vertical;
+        }
+
+        .form-field input:focus,
+        .form-field select:focus,
+        .form-field textarea:focus {
+            border-color: var(--warm);
+            outline: 2px solid rgba(199, 121, 31, 0.16);
+            outline-offset: 1px;
+        }
+
+        .consent-row {
+            display: grid;
+            grid-template-columns: 18px 1fr;
+            gap: 10px;
+            align-items: start;
+            color: #6c4d22;
+            font-size: 13px;
+        }
+
+        .consent-row input {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+        }
+
+        .form-status,
+        .form-errors {
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 14px;
+        }
+
+        .form-status {
+            border: 1px solid #9dd6c8;
+            background: #edf9f5;
+            color: #075c4b;
+        }
+
+        .form-errors {
+            border: 1px solid #f0b7a5;
+            background: #fff2ed;
+            color: #87331a;
+        }
+
+        .form-errors ul {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        .honeypot {
+            position: absolute;
+            left: -10000px;
+            top: auto;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+
         @media (max-width: 860px) {
             .nav {
                 align-items: flex-start;
@@ -387,7 +481,8 @@
             .feature-grid,
             .plans,
             .steps,
-            .final-layout {
+            .final-layout,
+            .form-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -580,7 +675,91 @@
                 </div>
                 <div class="contact-panel">
                     <p>Первый безопасный шаг: показать демо на синтетических данных, затем согласовать пилотный контур.</p>
-                    <a class="button" href="{{ $demoMailto }}">Отправить заявку</a>
+
+                    @if (session('demo_request_status') === 'sent' || request()->boolean('request_sent'))
+                        <div class="form-status" role="status">
+                            Заявка отправлена. Мы свяжемся с вами и согласуем формат показа.
+                        </div>
+                    @endif
+
+                    @if ($errors->any())
+                        <div class="form-errors" role="alert">
+                            <ul>
+                                @foreach ($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    <form class="request-form" method="post" action="{{ route('demo.request') }}">
+                        @csrf
+
+                        <div class="honeypot" aria-hidden="true" hidden>
+                            <label>
+                                Сайт компании
+                                <input type="text" name="company_website" tabindex="-1" autocomplete="off">
+                            </label>
+                        </div>
+
+                        <div class="form-grid">
+                            <label class="form-field">
+                                <span class="form-label">Имя</span>
+                                <input type="text" name="name" value="{{ old('name') }}" autocomplete="name" required>
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Организация или рынок</span>
+                                <input type="text" name="organization" value="{{ old('organization') }}" autocomplete="organization" required>
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Email</span>
+                                <input type="email" name="email" value="{{ old('email') }}" autocomplete="email" required>
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Телефон</span>
+                                <input type="tel" name="phone" value="{{ old('phone') }}" autocomplete="tel">
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Город</span>
+                                <input type="text" name="city" value="{{ old('city') }}" autocomplete="address-level2">
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Формат</span>
+                                <select name="request_type" required>
+                                    <option value="demo" @selected(old('request_type', 'demo') === 'demo')>Демо-показ</option>
+                                    <option value="pilot" @selected(old('request_type') === 'pilot')>Ограниченный пилот</option>
+                                    <option value="free" @selected(old('request_type') === 'free')>Бесплатная версия</option>
+                                </select>
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Тип объекта</span>
+                                <input type="text" name="market_format" value="{{ old('market_format') }}" placeholder="рынок, ТЦ, ярмарка">
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Количество мест</span>
+                                <input type="number" name="spaces_count" value="{{ old('spaces_count') }}" min="1" max="100000" inputmode="numeric">
+                            </label>
+
+                            <label class="form-field full">
+                                <span class="form-label">Комментарий</span>
+                                <textarea name="message" maxlength="2000">{{ old('message') }}</textarea>
+                            </label>
+                        </div>
+
+                        <label class="consent-row">
+                            <input type="checkbox" name="consent" value="1" @checked(old('consent')) required>
+                            <span>Согласен на обработку данных для связи по заявке.</span>
+                        </label>
+
+                        <button class="button" type="submit">Отправить заявку</button>
+                    </form>
                 </div>
             </div>
         </section>

@@ -21,6 +21,7 @@ use App\Http\Controllers\Cabinet\RequestsController;
 use App\Http\Controllers\Cabinet\ShowcaseController;
 use App\Http\Controllers\Cabinet\SpacesController;
 use App\Http\Controllers\Cabinet\TelegramConnectController;
+use App\Http\Controllers\DemoRequestController;
 use App\Http\Controllers\Marketplace\AnnouncementController as MarketplaceAnnouncementController;
 use App\Http\Controllers\Marketplace\BuyerAuthController as MarketplaceBuyerAuthController;
 use App\Http\Controllers\Marketplace\BuyerCabinetController as MarketplaceBuyerCabinetController;
@@ -78,15 +79,10 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Illuminate\Validation\ValidationException;
 
 Route::view('/', 'welcome')->name('home');
-Route::view('/demo', 'demo-pilot-landing')
-    ->withoutMiddleware([
-        EncryptCookies::class,
-        AddQueuedCookiesToResponse::class,
-        StartSession::class,
-        ShareErrorsFromSession::class,
-        VerifyCsrfToken::class,
-    ])
-    ->name('demo.landing');
+Route::view('/demo', 'demo-pilot-landing')->name('demo.landing');
+Route::post('/demo/request', [DemoRequestController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('demo.request');
 
 Route::get('/media/{path}', function (string $path) {
     return MarketplaceMediaStorage::serve($path);
