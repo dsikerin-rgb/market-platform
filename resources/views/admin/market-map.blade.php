@@ -3495,6 +3495,9 @@
         const MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX = 3;
         const MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX = 5;
         const MAP_BACKGROUND_CANVAS_CORNER_CENTER_GAP_PX = 8;
+        const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_ANGLE_STEP_DEG = 5;
+        const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_RHO_STEP_PX = 2;
+        const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MAX_LINES = 14;
         const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MIN_SCALE = 1.5;
         const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX = 24;
         const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 12;
@@ -7622,7 +7625,7 @@
 
             const rowBands = collectBackgroundCanvasInkBands(rows, Math.max(6, width * 0.22));
             const colBands = collectBackgroundCanvasInkBands(cols, Math.max(6, height * 0.22));
-            if (rowBands.length === 0 || colBands.length === 0) return null;
+            const hasAxisCornerBands = rowBands.length > 0 && colBands.length > 0;
 
             const maxArm = Math.max(8, Math.floor(radius * 0.72));
             const minArm = Math.max(2, Math.round(Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX) * canvasScale));
@@ -7678,35 +7681,205 @@
               return nearHits > 0 && hits >= minArm;
             };
 
-            let best = null;
-            let bestScore = threshold * threshold;
+            const sampleInkAtLine = (x, y, normalX, normalY) => {
+              for (let offset = -centerInkRadius; offset <= centerInkRadius; offset++) {
+                const px = Math.round(x + (normalX * offset));
+                const py = Math.round(y + (normalY * offset));
+                if (isInkAt(px, py)) return true;
+              }
 
-            for (const row of rowBands) {
-              for (const col of colBands) {
-                const cx = Number(col.center);
-                const cy = Number(row.center);
-                if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+              return false;
+            };
 
-                const pxCanvas = left + cx + 0.5;
-                const pyCanvas = top + cy + 0.5;
-                const logicalPoint = backgroundCanvasToLogicalPoint(pxCanvas, pyCanvas);
-                const px = Number(logicalPoint.x);
-                const py = Number(logicalPoint.y);
-                const d2 = distanceSq(sx, sy, px, py);
-                if (d2 > threshold * threshold) continue;
+            const hasDirectionalLineArm = (cx, cy, dx, dy) => {
+              const normalX = -dy;
+              const normalY = dx;
+              let hits = 0;
+              let firstHitStep = null;
 
-                const hasCenterInk = hasInkNear(cx, cy, centerInkRadius);
-                const hasStrictHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
-                const hasStrictVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
-                const hasRelaxedHorizontal = hasStrictHorizontal || hasArm(cx, cy, -1, 0, true) || hasArm(cx, cy, 1, 0, true);
-                const hasRelaxedVertical = hasStrictVertical || hasArm(cx, cy, 0, -1, true) || hasArm(cx, cy, 0, 1, true);
-                if (!hasRelaxedHorizontal || !hasRelaxedVertical) continue;
+              for (let step = 1; step <= maxArm; step++) {
+                const x = cx + (dx * step);
+                const y = cy + (dy * step);
 
-                const relaxedPenalty = hasCenterInk && hasStrictHorizontal && hasStrictVertical ? 0 : 9;
-                const score = d2 + relaxedPenalty - ((Number(row.score || 0) + Number(col.score || 0)) * 0.015);
-                if (score <= bestScore) {
-                  bestScore = score;
-                  best = { x: px, y: py };
+                if (sampleInkAtLine(x, y, normalX, normalY)) {
+                  hits += 1;
+                  if (firstHitStep === null) firstHitStep = step;
+                }
+              }
+
+              return firstHitStep !== null
+                && firstHitStep <= centerGapLength
+                && hits >= Math.max(1, minArm - 1);
+            };
+
+            const hasCanvasLineArm = (cx, cy, dx, dy) => {
+              return hasDirectionalLineArm(cx, cy, dx, dy)
+                || hasDirectionalLineArm(cx, cy, -dx, -dy);
+            };
+
+            const angleDiffDeg = (leftDeg, rightDeg) => {
+              let diff = Math.abs(Number(leftDeg) - Number(rightDeg)) % 180;
+              if (diff > 90) diff = 180 - diff;
+              return diff;
+            };
+
+            const findAngledCanvasCorner = () => {
+              const inkPoints = [];
+
+              for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                  const ink = backgroundCanvasInkValue(data, ((y * width) + x) * 4);
+                  if (ink <= 0) continue;
+
+                  inkPoints.push({
+                    x: x + 0.5,
+                    y: y + 0.5,
+                    weight: Math.min(4, 1 + (ink / 96)),
+                  });
+                }
+              }
+
+              if (inkPoints.length < Math.max(6, minArm * 2)) return null;
+
+              const angleStep = Math.max(
+                1,
+                Number(options.backgroundCanvasCornerHoughAngleStepDeg || MAP_BACKGROUND_CANVAS_CORNER_HOUGH_ANGLE_STEP_DEG),
+              );
+              const rhoStep = Math.max(
+                1,
+                Number(options.backgroundCanvasCornerHoughRhoStepPx || MAP_BACKGROUND_CANVAS_CORNER_HOUGH_RHO_STEP_PX),
+              );
+              const maxLines = Math.max(
+                4,
+                Math.trunc(Number(options.backgroundCanvasCornerHoughMaxLines || MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MAX_LINES)),
+              );
+              const votes = new Map();
+
+              for (let angleDeg = 0; angleDeg < 180; angleDeg += angleStep) {
+                const theta = angleDeg * Math.PI / 180;
+                const cos = Math.cos(theta);
+                const sin = Math.sin(theta);
+
+                for (const point of inkPoints) {
+                  const rho = (point.x * cos) + (point.y * sin);
+                  const rhoBin = Math.round(rho / rhoStep);
+                  const key = String(angleDeg) + ':' + String(rhoBin);
+                  const existing = votes.get(key);
+
+                  if (existing) {
+                    existing.score += point.weight;
+                    existing.count += 1;
+                    continue;
+                  }
+
+                  votes.set(key, {
+                    angleDeg,
+                    cos,
+                    sin,
+                    rho: rhoBin * rhoStep,
+                    score: point.weight,
+                    count: 1,
+                  });
+                }
+              }
+
+              const minVote = Math.max(5, Math.min(width, height) * 0.16);
+              const rawLines = Array.from(votes.values())
+                .filter((line) => Number(line.score) >= minVote)
+                .sort((a, b) => Number(b.score) - Number(a.score));
+              const lines = [];
+
+              for (const line of rawLines) {
+                const duplicate = lines.some((accepted) => {
+                  return angleDiffDeg(accepted.angleDeg, line.angleDeg) <= angleStep * 1.5
+                    && Math.abs(Number(accepted.rho) - Number(line.rho)) <= rhoStep * 2;
+                });
+
+                if (duplicate) continue;
+
+                lines.push(line);
+                if (lines.length >= maxLines) break;
+              }
+
+              if (lines.length < 2) return null;
+
+              let bestCorner = null;
+              let bestCornerScore = threshold * threshold;
+
+              for (let i = 0; i < lines.length; i++) {
+                for (let j = i + 1; j < lines.length; j++) {
+                  const first = lines[i];
+                  const second = lines[j];
+                  const angleDiff = angleDiffDeg(first.angleDeg, second.angleDeg);
+                  if (angleDiff < 18) continue;
+
+                  const denom = (first.cos * second.sin) - (first.sin * second.cos);
+                  if (Math.abs(denom) < 1e-4) continue;
+
+                  const ix = ((first.rho * second.sin) - (second.rho * first.sin)) / denom;
+                  const iy = ((first.cos * second.rho) - (second.cos * first.rho)) / denom;
+                  if (!Number.isFinite(ix) || !Number.isFinite(iy)) continue;
+                  if (ix < -2 || iy < -2 || ix > width + 2 || iy > height + 2) continue;
+
+                  const firstDir = { x: -first.sin, y: first.cos };
+                  const secondDir = { x: -second.sin, y: second.cos };
+                  if (!hasCanvasLineArm(ix, iy, firstDir.x, firstDir.y)) continue;
+                  if (!hasCanvasLineArm(ix, iy, secondDir.x, secondDir.y)) continue;
+
+                  const logicalPoint = backgroundCanvasToLogicalPoint(left + ix + 0.5, top + iy + 0.5);
+                  const px = Number(logicalPoint.x);
+                  const py = Number(logicalPoint.y);
+                  if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+
+                  const d2 = distanceSq(sx, sy, px, py);
+                  if (d2 > threshold * threshold) continue;
+
+                  const score = d2
+                    - ((Number(first.score || 0) + Number(second.score || 0)) * 0.018)
+                    - (Math.min(90, angleDiff) * 0.05);
+
+                  if (score <= bestCornerScore) {
+                    bestCornerScore = score;
+                    bestCorner = { x: px, y: py, score };
+                  }
+                }
+              }
+
+              return bestCorner;
+            };
+
+            const angledCorner = findAngledCanvasCorner();
+            let best = angledCorner ? { x: Number(angledCorner.x), y: Number(angledCorner.y) } : null;
+            let bestScore = angledCorner ? Number(angledCorner.score) : threshold * threshold;
+
+            if (hasAxisCornerBands) {
+              for (const row of rowBands) {
+                for (const col of colBands) {
+                  const cx = Number(col.center);
+                  const cy = Number(row.center);
+                  if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+
+                  const pxCanvas = left + cx + 0.5;
+                  const pyCanvas = top + cy + 0.5;
+                  const logicalPoint = backgroundCanvasToLogicalPoint(pxCanvas, pyCanvas);
+                  const px = Number(logicalPoint.x);
+                  const py = Number(logicalPoint.y);
+                  const d2 = distanceSq(sx, sy, px, py);
+                  if (d2 > threshold * threshold) continue;
+
+                  const hasCenterInk = hasInkNear(cx, cy, centerInkRadius);
+                  const hasStrictHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
+                  const hasStrictVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
+                  const hasRelaxedHorizontal = hasStrictHorizontal || hasArm(cx, cy, -1, 0, true) || hasArm(cx, cy, 1, 0, true);
+                  const hasRelaxedVertical = hasStrictVertical || hasArm(cx, cy, 0, -1, true) || hasArm(cx, cy, 0, 1, true);
+                  if (!hasRelaxedHorizontal || !hasRelaxedVertical) continue;
+
+                  const relaxedPenalty = hasCenterInk && hasStrictHorizontal && hasStrictVertical ? 0 : 9;
+                  const score = d2 + relaxedPenalty - ((Number(row.score || 0) + Number(col.score || 0)) * 0.015);
+                  if (score <= bestScore) {
+                    bestScore = score;
+                    best = { x: px, y: py };
+                  }
                 }
               }
             }
