@@ -17,6 +17,7 @@ use App\Support\DemoPilotDataBuilder;
 use App\Support\DemoPilotProvisioner;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
@@ -325,6 +326,36 @@ class DemoPilotProvisionerWriteTest extends TestCase
         self::assertSame('demo_pilot', data_get($shape->meta, 'demo_pilot.synthetic_source'));
         self::assertSame(225.0, (float) $shape->bbox_x1);
         self::assertSame(375.0, (float) $shape->bbox_x2);
+    }
+
+    public function test_execute_applies_configured_access_password_to_synthetic_demo_users(): void
+    {
+        config()->set('demo_pilot.access_password', 'DemoAccess-2026!');
+
+        $report = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        $admin = User::query()->where('email', 'admin@demo.marketuchet.local')->firstOrFail();
+        $tenantUser = User::query()->where('email', 'tenant-user@demo.marketuchet.local')->firstOrFail();
+
+        self::assertSame('partial', $report['status']);
+        self::assertSame('created', $this->sectionStatus($report, 'users'));
+        self::assertTrue(Hash::check('DemoAccess-2026!', (string) $admin->password));
+        self::assertTrue(Hash::check('DemoAccess-2026!', (string) $tenantUser->password));
+        self::assertSame('configured_shared_password', data_get($admin->notification_preferences, 'demo_pilot.password_strategy'));
+
+        config()->set('demo_pilot.access_password', 'DemoAccess-2027!');
+
+        $secondReport = app(DemoPilotProvisioner::class)->execute(
+            app(DemoPilotDataBuilder::class)->build(),
+        );
+
+        $admin->refresh();
+
+        self::assertSame('partial', $secondReport['status']);
+        self::assertSame('updated', $this->sectionStatus($secondReport, 'users'));
+        self::assertTrue(Hash::check('DemoAccess-2027!', (string) $admin->password));
     }
 
     public function test_execute_updates_existing_demo_market(): void

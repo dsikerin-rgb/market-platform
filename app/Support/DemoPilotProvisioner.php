@@ -210,6 +210,11 @@ class DemoPilotProvisioner
         $issues = $this->referenceIssues($dataSet);
         $sections = [];
         $integrationGuard = app(DemoPilotExternalIntegrationGuard::class)->check($dataSet);
+        $accessPasswordIssue = app(DemoPilotSettings::class)->accessPasswordIssue();
+
+        if ($accessPasswordIssue !== null) {
+            $issues[] = $accessPasswordIssue;
+        }
 
         if ($integrationGuard['status'] !== 'ready') {
             $issues = array_merge($issues, $integrationGuard['issues']);
@@ -712,6 +717,7 @@ class DemoPilotProvisioner
 
         return DB::transaction(function () use ($dataSet, $records, $marketId): array {
             $tenantIdsByKey = $this->tenantIdsByKey($dataSet, $marketId);
+            $accessPassword = app(DemoPilotSettings::class)->accessPassword();
             $seenEmails = [];
             $planned = [];
             $created = 0;
@@ -768,11 +774,15 @@ class DemoPilotProvisioner
 
                 if ($user === null) {
                     $user = User::withoutEvents(static fn (): User => User::query()->create(array_merge($attributes, [
-                        'password' => Hash::make(Str::random(40)),
+                        'password' => Hash::make($accessPassword ?? Str::random(40)),
                     ])));
                     $created++;
                 } else {
                     $user->fill($attributes);
+
+                    if ($accessPassword !== null && ! Hash::check($accessPassword, (string) $user->password)) {
+                        $user->password = Hash::make($accessPassword);
+                    }
 
                     if ($user->isDirty()) {
                         User::withoutEvents(static function () use ($user): void {
@@ -832,6 +842,9 @@ class DemoPilotProvisioner
                 'demo_pilot' => [
                     'synthetic_source' => $source,
                     'role' => $roleName,
+                    'password_strategy' => app(DemoPilotSettings::class)->accessPassword() !== null
+                        ? 'configured_shared_password'
+                        : 'generated_on_provision',
                 ],
             ],
         ]);

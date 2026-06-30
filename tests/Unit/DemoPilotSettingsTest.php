@@ -74,6 +74,9 @@ class DemoPilotSettingsTest extends TestCase
         self::assertSame('demo-market', $settings->marketSlug());
         self::assertSame('demo.marketuchet.local', $settings->emailDomain());
         self::assertSame('demo_pilot', $settings->syntheticSource());
+        self::assertNull($settings->accessPassword());
+        self::assertNull($settings->accessPasswordIssue());
+        self::assertSame(['321_123@bk.ru'], $settings->ownerEmails());
 
         config()->set('demo_pilot.market_slug', '  ');
         config()->set('demo_pilot.email_domain', '');
@@ -82,5 +85,29 @@ class DemoPilotSettingsTest extends TestCase
         self::assertSame('demo-market', $settings->marketSlug());
         self::assertSame('demo.marketuchet.local', $settings->emailDomain());
         self::assertSame('demo_pilot', $settings->syntheticSource());
+    }
+
+    public function test_access_password_is_optional_but_must_be_long_enough_when_configured(): void
+    {
+        $settings = app(DemoPilotSettings::class);
+
+        config()->set('demo_pilot.access_password', '  DemoAccess-2026!  ');
+
+        self::assertSame('DemoAccess-2026!', $settings->accessPassword());
+        self::assertNull($settings->accessPasswordIssue());
+
+        config()->set('demo_pilot.access_password', 'short');
+
+        self::assertSame('short', $settings->accessPassword());
+        self::assertSame('demo access password must be at least 12 characters when configured.', $settings->accessPasswordIssue());
+    }
+
+    public function test_owner_emails_are_normalized_and_invalid_values_are_ignored(): void
+    {
+        $settings = app(DemoPilotSettings::class);
+
+        config()->set('demo_pilot.owner_emails', '  321_123@bk.ru, OWNER@example.test invalid 321_123@bk.ru ');
+
+        self::assertSame(['321_123@bk.ru', 'owner@example.test'], $settings->ownerEmails());
     }
 }

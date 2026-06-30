@@ -41,9 +41,12 @@ class DemoProvisionCommand extends Command
         $this->line('Email domain: ' . $dataSet['metadata']['email_domain']);
         $this->line('Synthetic source: ' . $settings->syntheticSource());
         $this->line('External integrations: ' . ($settings->externalIntegrationsEnabled() ? 'enabled' : 'disabled'));
+        $this->line('Demo access password: ' . ($settings->accessPassword() === null ? 'random per user; reset required' : 'configured via DEMO_PILOT_ACCESS_PASSWORD'));
+        $this->line('Demo access owner emails: ' . ($settings->ownerEmails() === [] ? 'not configured' : implode(', ', $settings->ownerEmails())));
 
         $this->table(['Section', 'Records'], $this->countRows($builder->counts($dataSet)));
         $this->table(['Step', 'Planned action'], $this->planRows($dataSet));
+        $this->table(['Role', 'Name', 'Email', 'Password'], $this->accessRows($dataSet, $settings));
 
         $preflight = $provisioner->preflight($dataSet);
 
@@ -110,6 +113,45 @@ class DemoProvisionCommand extends Command
             ['marketplace', 'Attach demo marketplace categories, products, announcements, and safe local assets.'],
             ['integrations', 'Keep live 1C, mail, Telegram, and other external integrations disabled.'],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $dataSet
+     * @return list<array{0:string, 1:string, 2:string, 3:string}>
+     */
+    private function accessRows(array $dataSet, DemoPilotSettings $settings): array
+    {
+        $records = is_array($dataSet['users'] ?? null) ? $dataSet['users'] : [];
+        $passwordStatus = $settings->accessPassword() === null
+            ? 'random; reset required'
+            : 'configured shared password';
+        $rows = [];
+
+        foreach ($records as $record) {
+            if (! is_array($record)) {
+                continue;
+            }
+
+            $rows[] = [
+                $this->roleLabel((string) ($record['role'] ?? '')),
+                trim((string) ($record['name'] ?? '')),
+                mb_strtolower(trim((string) ($record['email'] ?? '')), 'UTF-8'),
+                $passwordStatus,
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function roleLabel(string $role): string
+    {
+        return match (trim($role)) {
+            'market-owner-director', 'director' => 'director',
+            'market-admin', 'admin' => 'admin',
+            'market-operator', 'operator' => 'operator',
+            'merchant', 'tenant' => 'tenant',
+            default => trim($role),
+        };
     }
 
     /**

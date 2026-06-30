@@ -36,6 +36,8 @@ return [
     'market_slug' => env('DEMO_PILOT_MARKET_SLUG', 'demo-market'),
     'email_domain' => env('DEMO_PILOT_EMAIL_DOMAIN', 'demo.marketuchet.local'),
     'synthetic_source' => 'demo_pilot',
+    'access_password' => env('DEMO_PILOT_ACCESS_PASSWORD'),
+    'owner_emails' => env('DEMO_PILOT_OWNER_EMAILS', '321_123@bk.ru'),
 
     /*
     |--------------------------------------------------------------------------
