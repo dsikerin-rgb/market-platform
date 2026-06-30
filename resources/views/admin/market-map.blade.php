@@ -3490,16 +3490,17 @@
         const MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS = 36;
         const MAP_BACKGROUND_INTERSECTION_EXTENSION_PX = 8;
         const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
-        const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 40;
+        const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 56;
         const MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX = 7;
         const MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX = 3;
         const MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX = 5;
-        const MAP_BACKGROUND_CANVAS_CORNER_CENTER_GAP_PX = 8;
-        const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_ANGLE_STEP_DEG = 5;
+        const MAP_BACKGROUND_CANVAS_CORNER_CENTER_GAP_PX = 10;
+        const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_ANGLE_STEP_DEG = 4;
         const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_RHO_STEP_PX = 2;
-        const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MAX_LINES = 14;
+        const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MAX_LINES = 18;
+        const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MIN_VOTE_RATIO = 0.11;
         const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MIN_SCALE = 1.5;
-        const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX = 24;
+        const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX = 38;
         const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 12;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
@@ -7753,6 +7754,10 @@
                 4,
                 Math.trunc(Number(options.backgroundCanvasCornerHoughMaxLines || MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MAX_LINES)),
               );
+              const minVoteRatio = Math.max(
+                0.02,
+                Number(options.backgroundCanvasCornerHoughMinVoteRatio || MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MIN_VOTE_RATIO),
+              );
               const votes = new Map();
 
               for (let angleDeg = 0; angleDeg < 180; angleDeg += angleStep) {
@@ -7783,7 +7788,7 @@
                 }
               }
 
-              const minVote = Math.max(5, Math.min(width, height) * 0.16);
+              const minVote = Math.max(5, Math.min(width, height) * minVoteRatio);
               const rawLines = Array.from(votes.values())
                 .filter((line) => Number(line.score) >= minVote)
                 .sort((a, b) => Number(b.score) - Number(a.score));
