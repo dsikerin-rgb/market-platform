@@ -3505,8 +3505,8 @@
         const MAP_MAX_SCALE = 15.4;
         const MAP_PDF_RENDER_MAX_CANVAS_SIDE_PX = 8192;
         const MAP_PDF_RENDER_MAX_CANVAS_AREA_PX = 48000000;
-        const MAP_VERTEX_SNAP_SCREEN_PX = 10;
-        const MAP_EDGE_SNAP_SCREEN_PX = 8;
+        const MAP_VERTEX_SNAP_SCREEN_PX = 20;
+        const MAP_EDGE_SNAP_SCREEN_PX = 10;
         const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 15;
         const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 16;
         const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 28;
@@ -8129,7 +8129,7 @@
           function mapSnapSourceWeight(sourceType) {
             switch (sourceType) {
               case 'shape-vertex':
-                return 0.35;
+                return 0.18;
               case 'shape-edge':
                 return 0.5;
               case 'background-vertex':
@@ -8149,6 +8149,25 @@
 
           function isShapeSnapSource(sourceType) {
             return sourceType === 'shape-vertex' || sourceType === 'shape-edge';
+          }
+
+          function mapSnapSourcePriority(sourceType) {
+            switch (sourceType) {
+              case 'shape-vertex':
+                return 0;
+              case 'background-vertex':
+              case 'background-intersection':
+              case 'background-canvas-corner':
+                return 1;
+              case 'shape-edge':
+                return 2;
+              case 'background-edge':
+                return 3;
+              case 'background-canvas':
+                return 4;
+              default:
+                return 5;
+            }
           }
 
           function isPointSnapSource(sourceType) {
@@ -8231,12 +8250,10 @@
               return null;
             }
 
-            const pointCandidates = viable.filter((item) => isPointSnapSource(item.candidate.snapSourceType));
-            const shapeCandidates = viable.filter((item) => isShapeSnapSource(item.candidate.snapSourceType));
-            const backgroundPointCandidates = viable.filter((item) => isBackgroundPointSnapSource(item.candidate.snapSourceType));
-            const pool = pointCandidates.length > 0
-              ? pointCandidates
-              : (shapeCandidates.length > 0 ? shapeCandidates : (backgroundPointCandidates.length > 0 ? backgroundPointCandidates : viable));
+            const bestPriority = viable.reduce((priority, item) => {
+              return Math.min(priority, mapSnapSourcePriority(item.candidate.snapSourceType));
+            }, Infinity);
+            const pool = viable.filter((item) => mapSnapSourcePriority(item.candidate.snapSourceType) === bestPriority);
             let best = null;
             let bestItem = null;
             let bestScore = Infinity;
