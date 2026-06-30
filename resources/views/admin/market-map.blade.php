@@ -1270,12 +1270,12 @@
       align-items: center;
       justify-content: center;
       width: max-content;
-      min-height: 36px;
-      padding: 3px;
-      border-radius: 12px;
-      background: var(--map-control-bg);
-      border: 1px solid var(--map-control-border);
-      box-shadow: var(--map-control-shadow);
+      min-height: 28px;
+      padding: 2px;
+      border-radius: 10px;
+      background: rgba(248, 252, 255, 0.56);
+      border: 1px solid rgba(191, 219, 254, 0.58);
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.08);
     }
     .legend.toolbar-group.toolbar-group--accent[hidden] {
       display: none !important;
@@ -1283,17 +1283,17 @@
     .legend-items {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px;
     }
     .legend-item {
       display: flex;
       align-items: center;
-      gap: 6px;
-      min-height: 26px;
-      padding: 2px 11px;
-      border-radius: 8px;
+      gap: 5px;
+      min-height: 22px;
+      padding: 1px 8px;
+      border-radius: 7px;
       border: 1px solid transparent;
-      background: rgba(255,255,255,.58);
+      background: rgba(255,255,255,.42);
       color: #1e3a8a;
       -webkit-text-fill-color: #1e3a8a;
       font-size: 11px;
@@ -1303,13 +1303,13 @@
       transition: background .18s ease, border-color .18s ease, color .18s ease;
     }
     .legend-item:hover {
-      background: rgba(255,255,255,.88);
+      background: rgba(255,255,255,.72);
       border-color: rgba(147, 197, 253, 0.34);
     }
     .legend-item.legend-item--note { display: none; }
     .legend-color {
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
       border-radius: 4px;
       border: 1px solid rgba(120,120,120,.3);
       flex-shrink: 0;
@@ -1385,23 +1385,23 @@
         bottom: 10px;
       }
       .legend.toolbar-group.toolbar-group--accent {
-        min-height: 30px;
-        padding: 2px;
-        border-radius: 10px;
+        min-height: 26px;
+        padding: 1px;
+        border-radius: 9px;
       }
       .legend-items {
-        gap: 5px;
+        gap: 4px;
       }
       .legend-item {
         gap: 4px;
-        min-height: 22px;
-        padding: 1px 8px;
-        border-radius: 7px;
+        min-height: 20px;
+        padding: 1px 6px;
+        border-radius: 6px;
         font-size: 9px;
       }
       .legend-color {
-        width: 12px;
-        height: 12px;
+        width: 11px;
+        height: 11px;
       }
       .legend-label {
         font-size: 9px;
