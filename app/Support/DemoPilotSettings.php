@@ -10,6 +10,7 @@ class DemoPilotSettings
 {
     public const OPERATION_PROVISION = 'provision';
     public const OPERATION_RESET = 'reset';
+    private const MIN_ACCESS_PASSWORD_LENGTH = 12;
 
     public function enabled(): bool
     {
@@ -44,6 +45,51 @@ class DemoPilotSettings
     public function syntheticSource(): string
     {
         return trim((string) config('demo_pilot.synthetic_source', 'demo_pilot')) ?: 'demo_pilot';
+    }
+
+    public function accessPassword(): ?string
+    {
+        $password = trim((string) config('demo_pilot.access_password', ''));
+
+        return $password !== '' ? $password : null;
+    }
+
+    public function accessPasswordIssue(): ?string
+    {
+        $password = $this->accessPassword();
+
+        if ($password === null || mb_strlen($password) >= self::MIN_ACCESS_PASSWORD_LENGTH) {
+            return null;
+        }
+
+        return 'demo access password must be at least ' . self::MIN_ACCESS_PASSWORD_LENGTH . ' characters when configured.';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function ownerEmails(): array
+    {
+        $raw = config('demo_pilot.owner_emails', []);
+        $values = is_array($raw) ? $raw : preg_split('/[,\s]+/', (string) $raw);
+
+        if ($values === false) {
+            return [];
+        }
+
+        $emails = [];
+
+        foreach ($values as $value) {
+            $email = mb_strtolower(trim((string) $value), 'UTF-8');
+
+            if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+
+            $emails[] = $email;
+        }
+
+        return array_values(array_unique($emails));
     }
 
     public function canWriteData(string $operation): bool
