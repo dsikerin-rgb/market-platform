@@ -3478,9 +3478,13 @@
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         const CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
         const MAP_MIN_SCALE = 0.2;
-        const MAP_MAX_SCALE = 11.8;
+        const MAP_MAX_SCALE = 15.4;
         const MAP_VERTEX_SNAP_SCREEN_PX = 10;
         const MAP_EDGE_SNAP_SCREEN_PX = 8;
+        const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 9;
+        const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 7;
+        const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
+        const MAP_BACKGROUND_SNAP_MAX_POINTS = 16000;
 
         const viewerRoot = document.getElementById('viewerRoot');
 
@@ -5881,6 +5885,8 @@
           let polyDrawing = false;
           let polyDraft = [];
           let snapPreviewPoint = null;
+          let backgroundSnapSegments = [];
+          let backgroundSnapPoints = [];
           let bootstrappingMap = true;
           let autoFitToViewport = true;
           let resizeFitTimer = null;
@@ -6972,6 +6978,334 @@
             };
           }
 
+          function multiplyPdfTransforms(left, right) {
+            return [
+              left[0] * right[0] + left[2] * right[1],
+              left[1] * right[0] + left[3] * right[1],
+              left[0] * right[2] + left[2] * right[3],
+              left[1] * right[2] + left[3] * right[3],
+              left[0] * right[4] + left[2] * right[5] + left[4],
+              left[1] * right[4] + left[3] * right[5] + left[5],
+            ];
+          }
+
+          function transformPdfPoint(matrix, x, y) {
+            const px = Number(x);
+            const py = Number(y);
+            if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
+
+            return {
+              x: matrix[0] * px + matrix[2] * py + matrix[4],
+              y: matrix[1] * px + matrix[3] * py + matrix[5],
+            };
+          }
+
+          function addBackgroundSnapSegment(segments, a, b) {
+            if (!a || !b) return;
+            if (!Number.isFinite(a.x) || !Number.isFinite(a.y) || !Number.isFinite(b.x) || !Number.isFinite(b.y)) return;
+            if (distanceSq(a.x, a.y, b.x, b.y) <= 1e-6) return;
+            if (segments.length >= MAP_BACKGROUND_SNAP_MAX_SEGMENTS) return;
+
+            segments.push({ ax: a.x, ay: a.y, bx: b.x, by: b.y });
+          }
+
+          function cubicPoint(p0, p1, p2, p3, t) {
+            const mt = 1 - t;
+            const mt2 = mt * mt;
+            const t2 = t * t;
+
+            return {
+              x: (mt2 * mt * p0.x) + (3 * mt2 * t * p1.x) + (3 * mt * t2 * p2.x) + (t2 * t * p3.x),
+              y: (mt2 * mt * p0.y) + (3 * mt2 * t * p1.y) + (3 * mt * t2 * p2.y) + (t2 * t * p3.y),
+            };
+          }
+
+          function addBackgroundCubicSegments(segments, p0, p1, p2, p3) {
+            if (!p0 || !p1 || !p2 || !p3) return p3 || p0;
+
+            let previous = p0;
+            for (let i = 1; i <= 10; i++) {
+              const point = cubicPoint(p0, p1, p2, p3, i / 10);
+              addBackgroundSnapSegment(segments, previous, point);
+              previous = point;
+            }
+
+            return p3;
+          }
+
+          function isPdfOperator(pdfOps, fn, name) {
+            return Number.isFinite(Number(pdfOps?.[name])) && Number(fn) === Number(pdfOps[name]);
+          }
+
+          function isPdfArrayLike(value) {
+            return Array.isArray(value) || ArrayBuffer.isView(value);
+          }
+
+          function isPdfPaintOperator(pdfOps, fn) {
+            return isPdfOperator(pdfOps, fn, 'stroke')
+              || isPdfOperator(pdfOps, fn, 'closeStroke')
+              || isPdfOperator(pdfOps, fn, 'fillStroke')
+              || isPdfOperator(pdfOps, fn, 'eoFillStroke');
+          }
+
+          function parseBackgroundConstructPath(pdfOps, rawArgs, matrix) {
+            const pathOps = rawArgs && isPdfArrayLike(rawArgs[0]) ? rawArgs[0] : null;
+            const pathArgs = rawArgs && rawArgs[1] ? rawArgs[1] : null;
+            const segments = [];
+
+            if (!pathOps || !pathArgs || typeof pathArgs.length !== 'number') return segments;
+
+            let argIndex = 0;
+            let cursor = null;
+            let subpathStart = null;
+
+            const readPoint = () => {
+              if (argIndex + 1 >= pathArgs.length) return null;
+              const point = transformPdfPoint(matrix, pathArgs[argIndex], pathArgs[argIndex + 1]);
+              argIndex += 2;
+              return point;
+            };
+
+            for (const op of pathOps) {
+              if (isPdfOperator(pdfOps, op, 'moveTo')) {
+                cursor = readPoint();
+                subpathStart = cursor;
+                continue;
+              }
+
+              if (isPdfOperator(pdfOps, op, 'lineTo')) {
+                const point = readPoint();
+                addBackgroundSnapSegment(segments, cursor, point);
+                cursor = point;
+                continue;
+              }
+
+              if (isPdfOperator(pdfOps, op, 'curveTo')) {
+                const c1 = readPoint();
+                const c2 = readPoint();
+                const end = readPoint();
+                cursor = addBackgroundCubicSegments(segments, cursor, c1, c2, end);
+                continue;
+              }
+
+              if (isPdfOperator(pdfOps, op, 'curveTo2')) {
+                const c1 = cursor;
+                const c2 = readPoint();
+                const end = readPoint();
+                cursor = addBackgroundCubicSegments(segments, cursor, c1, c2, end);
+                continue;
+              }
+
+              if (isPdfOperator(pdfOps, op, 'curveTo3')) {
+                const c1 = readPoint();
+                const end = readPoint();
+                const c2 = end;
+                cursor = addBackgroundCubicSegments(segments, cursor, c1, c2, end);
+                continue;
+              }
+
+              if (isPdfOperator(pdfOps, op, 'rectangle')) {
+                if (argIndex + 3 >= pathArgs.length) break;
+
+                const x = Number(pathArgs[argIndex]);
+                const y = Number(pathArgs[argIndex + 1]);
+                const w = Number(pathArgs[argIndex + 2]);
+                const h = Number(pathArgs[argIndex + 3]);
+                argIndex += 4;
+
+                const p1 = transformPdfPoint(matrix, x, y);
+                const p2 = transformPdfPoint(matrix, x + w, y);
+                const p3 = transformPdfPoint(matrix, x + w, y + h);
+                const p4 = transformPdfPoint(matrix, x, y + h);
+                addBackgroundSnapSegment(segments, p1, p2);
+                addBackgroundSnapSegment(segments, p2, p3);
+                addBackgroundSnapSegment(segments, p3, p4);
+                addBackgroundSnapSegment(segments, p4, p1);
+                cursor = p1;
+                subpathStart = p1;
+                continue;
+              }
+
+              if (isPdfOperator(pdfOps, op, 'closePath')) {
+                addBackgroundSnapSegment(segments, cursor, subpathStart);
+                cursor = subpathStart;
+              }
+            }
+
+            return segments;
+          }
+
+          function buildBackgroundSnapPoints(segments) {
+            const points = [];
+            const seen = new Set();
+
+            const addPoint = (x, y) => {
+              if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+              if (points.length >= MAP_BACKGROUND_SNAP_MAX_POINTS) return;
+              const key = String(Math.round(x * 10) / 10) + ':' + String(Math.round(y * 10) / 10);
+              if (seen.has(key)) return;
+              seen.add(key);
+              points.push({ x, y });
+            };
+
+            for (const segment of segments) {
+              addPoint(Number(segment.ax), Number(segment.ay));
+              addPoint(Number(segment.bx), Number(segment.by));
+            }
+
+            return points;
+          }
+
+          async function prepareBackgroundSnapFromPdfPage(pdfPage) {
+            const pdfOps = pdfjsLib?.OPS || null;
+            if (!pdfOps || !pdfPage || typeof pdfPage.getOperatorList !== 'function') return;
+
+            try {
+              const operatorList = await pdfPage.getOperatorList();
+              const fnArray = Array.isArray(operatorList?.fnArray) ? operatorList.fnArray : [];
+              const argsArray = Array.isArray(operatorList?.argsArray) ? operatorList.argsArray : [];
+              const transformStack = [];
+              let matrix = [1, 0, 0, 1, 0, 0];
+              let pendingSegments = [];
+              const segments = [];
+
+              for (let i = 0; i < fnArray.length; i++) {
+                const fn = fnArray[i];
+                const args = argsArray[i];
+
+                if (isPdfOperator(pdfOps, fn, 'save')) {
+                  transformStack.push(matrix.slice());
+                  continue;
+                }
+
+                if (isPdfOperator(pdfOps, fn, 'restore')) {
+                  matrix = transformStack.pop() || [1, 0, 0, 1, 0, 0];
+                  pendingSegments = [];
+                  continue;
+                }
+
+                if (isPdfOperator(pdfOps, fn, 'transform') && isPdfArrayLike(args) && args.length >= 6) {
+                  const next = Array.from(args).slice(0, 6).map(Number);
+                  if (next.every(Number.isFinite)) {
+                    matrix = multiplyPdfTransforms(matrix, next);
+                  }
+                  continue;
+                }
+
+                if (isPdfOperator(pdfOps, fn, 'constructPath')) {
+                  pendingSegments = pendingSegments.concat(parseBackgroundConstructPath(pdfOps, args, matrix));
+                  continue;
+                }
+
+                if (isPdfPaintOperator(pdfOps, fn)) {
+                  for (const segment of pendingSegments) {
+                    if (segments.length >= MAP_BACKGROUND_SNAP_MAX_SEGMENTS) break;
+                    segments.push(segment);
+                  }
+                  pendingSegments = [];
+                  continue;
+                }
+
+                if (isPdfOperator(pdfOps, fn, 'endPath')) {
+                  pendingSegments = [];
+                }
+              }
+
+              backgroundSnapSegments = segments;
+              backgroundSnapPoints = buildBackgroundSnapPoints(segments);
+            } catch (error) {
+              console.warn('PDF background snap extraction failed', error);
+              backgroundSnapSegments = [];
+              backgroundSnapPoints = [];
+            }
+          }
+
+          function findBackgroundVertexSnapPoint(xPdf, yPdf, options = {}) {
+            if (!currentViewport || !Array.isArray(backgroundSnapPoints) || backgroundSnapPoints.length === 0) return null;
+
+            const sourcePoint = currentViewport.convertToViewportPoint(Number(xPdf), Number(yPdf));
+            if (!Array.isArray(sourcePoint)) return null;
+
+            const sx = Number(sourcePoint[0]);
+            const sy = Number(sourcePoint[1]);
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+
+            const threshold = Number(options.backgroundVertexThresholdPx || MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX);
+            let best = null;
+            let bestD2 = Math.max(1, threshold) * Math.max(1, threshold);
+
+            for (const point of backgroundSnapPoints) {
+              const viewportPoint = currentViewport.convertToViewportPoint(Number(point.x), Number(point.y));
+              if (!Array.isArray(viewportPoint)) continue;
+
+              const vx = Number(viewportPoint[0]);
+              const vy = Number(viewportPoint[1]);
+              if (!Number.isFinite(vx) || !Number.isFinite(vy)) continue;
+
+              const d2 = distanceSq(sx, sy, vx, vy);
+              if (d2 <= bestD2) {
+                bestD2 = d2;
+                best = { x: Number(point.x), y: Number(point.y), source: 'background' };
+              }
+            }
+
+            return best;
+          }
+
+          function findBackgroundEdgeSnapPoint(xPdf, yPdf, options = {}) {
+            if (!currentViewport || !Array.isArray(backgroundSnapSegments) || backgroundSnapSegments.length === 0) return null;
+
+            const sourcePoint = currentViewport.convertToViewportPoint(Number(xPdf), Number(yPdf));
+            if (!Array.isArray(sourcePoint)) return null;
+
+            const sx = Number(sourcePoint[0]);
+            const sy = Number(sourcePoint[1]);
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+
+            const threshold = Number(options.backgroundEdgeThresholdPx || MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX);
+            let best = null;
+            let bestD2 = Math.max(1, threshold) * Math.max(1, threshold);
+
+            for (const segment of backgroundSnapSegments) {
+              const av = currentViewport.convertToViewportPoint(Number(segment.ax), Number(segment.ay));
+              const bv = currentViewport.convertToViewportPoint(Number(segment.bx), Number(segment.by));
+              if (!Array.isArray(av) || !Array.isArray(bv)) continue;
+
+              const ax = Number(av[0]);
+              const ay = Number(av[1]);
+              const bx = Number(bv[0]);
+              const by = Number(bv[1]);
+              if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(bx) || !Number.isFinite(by)) continue;
+              if (distanceSq(ax, ay, bx, by) < 16) continue;
+
+              const closest = closestPointOnViewportSegment(sx, sy, ax, ay, bx, by);
+              const d2 = distanceSq(sx, sy, closest.x, closest.y);
+              if (d2 > bestD2) continue;
+
+              const pdfPoint = currentViewport.convertToPdfPoint(closest.x, closest.y);
+              if (!Array.isArray(pdfPoint)) continue;
+
+              const pxPdf = Number(pdfPoint[0]);
+              const pyPdf = Number(pdfPoint[1]);
+              if (!Number.isFinite(pxPdf) || !Number.isFinite(pyPdf)) continue;
+
+              bestD2 = d2;
+              best = {
+                x: pxPdf,
+                y: pyPdf,
+                source: 'background',
+                edge: {
+                  ax: Number(segment.ax),
+                  ay: Number(segment.ay),
+                  bx: Number(segment.bx),
+                  by: Number(segment.by),
+                },
+              };
+            }
+
+            return best;
+          }
+
           function findEdgeSnapPoint(xPdf, yPdf, options = {}) {
             if (!currentViewport || !Array.isArray(shapes) || shapes.length === 0) return null;
 
@@ -7041,14 +7375,22 @@
 
           function applyMapSnapPoint(xPdf, yPdf, options = {}) {
             const fallback = { x: Number(xPdf), y: Number(yPdf), snapped: false };
-            const snapPoint = findVertexSnapPoint(fallback.x, fallback.y, options) || findEdgeSnapPoint(fallback.x, fallback.y, options);
+            const snapPoint = findVertexSnapPoint(fallback.x, fallback.y, options)
+              || findEdgeSnapPoint(fallback.x, fallback.y, options)
+              || findBackgroundVertexSnapPoint(fallback.x, fallback.y, options)
+              || findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options);
 
             if (!snapPoint) {
               snapPreviewPoint = null;
               return fallback;
             }
 
-            snapPreviewPoint = { x: snapPoint.x, y: snapPoint.y, edge: snapPoint.edge || null };
+            snapPreviewPoint = {
+              x: snapPoint.x,
+              y: snapPoint.y,
+              edge: snapPoint.edge || null,
+              source: snapPoint.source || 'shape',
+            };
 
             return {
               x: Number(snapPoint.x),
@@ -7057,6 +7399,7 @@
               shapeId: snapPoint.shapeId,
               index: snapPoint.index,
               edgeIndex: snapPoint.edgeIndex,
+              source: snapPoint.source || 'shape',
             };
           }
 
@@ -7798,11 +8141,14 @@
               }
             }
 
+            const backgroundSnapPromise = prepareBackgroundSnapFromPdfPage(page);
+
             await fitToViewport({ waitForLayout: true });
             bootstrappingMap = false;
             completeMapLoadProgress();
 
             const postBootstrapTasks = [];
+            postBootstrapTasks.push(backgroundSnapPromise);
 
             if (FOCUS_SPACE_ID || FOCUS_SHAPE) {
               postBootstrapTasks.push((async () => {
