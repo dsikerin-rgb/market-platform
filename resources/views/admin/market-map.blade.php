@@ -7457,17 +7457,21 @@
             switch (sourceType) {
               case 'shape-vertex':
                 return 0.35;
+              case 'shape-edge':
+                return 0.5;
               case 'background-vertex':
                 return 0.48;
               case 'background-edge':
                 return 0.56;
               case 'background-canvas':
                 return 0.62;
-              case 'shape-edge':
-                return 0.74;
               default:
                 return 1;
             }
+          }
+
+          function isShapeSnapSource(sourceType) {
+            return sourceType === 'shape-vertex' || sourceType === 'shape-edge';
           }
 
           function selectBestMapSnapPoint(xPdf, yPdf, candidates) {
@@ -7480,8 +7484,7 @@
             const sy = Number(sourcePoint[1]);
             if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
 
-            let best = null;
-            let bestScore = Infinity;
+            const viable = [];
 
             for (const candidate of candidates) {
               if (!candidate) continue;
@@ -7493,8 +7496,22 @@
               const py = Number(viewportPoint[1]);
               if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
 
-              const d2 = distanceSq(sx, sy, px, py);
-              const score = d2 * mapSnapSourceWeight(candidate.snapSourceType);
+              viable.push({
+                candidate,
+                d2: distanceSq(sx, sy, px, py),
+              });
+            }
+
+            if (viable.length === 0) return null;
+
+            const shapeCandidates = viable.filter((item) => isShapeSnapSource(item.candidate.snapSourceType));
+            const pool = shapeCandidates.length > 0 ? shapeCandidates : viable;
+            let best = null;
+            let bestScore = Infinity;
+
+            for (const item of pool) {
+              const candidate = item.candidate;
+              const score = item.d2 * mapSnapSourceWeight(candidate.snapSourceType);
               if (score < bestScore) {
                 bestScore = score;
                 best = candidate;
@@ -9079,11 +9096,16 @@
               return;
             }
 
-            showPopoverAt(
-              e.clientX, e.clientY,
-              '<div class="t">Поиск…</div><div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>',
-              false
-            );
+            const suppressPopoverInEditMode = CAN_EDIT && editMode;
+            if (suppressPopoverInEditMode) {
+              hidePopover();
+            } else {
+              showPopoverAt(
+                e.clientX, e.clientY,
+                '<div class="t">Поиск…</div><div class="row muted">x=' + xPdf.toFixed(1) + ', y=' + yPdf.toFixed(1) + '</div>',
+                false
+              );
+            }
 
             try {
               const url = new URL(HIT_URL, window.location.origin);
@@ -9097,6 +9119,11 @@
 
               if (!json || json.ok !== true) {
                 const msg = escapeHtml(json?.message || 'Ошибка hit-test');
+                if (suppressPopoverInEditMode) {
+                  toast(msg);
+                  return;
+                }
+
                 showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">' + msg + '</div>', false);
                 return;
               }
@@ -9107,6 +9134,11 @@
                 if (CAN_EDIT && editMode && tool === 'select') {
                   setSelectedShape(null);
                   clearHandles();
+                }
+
+                if (suppressPopoverInEditMode) {
+                  hidePopover();
+                  return;
                 }
 
                 const msg = escapeHtml(json?.message || 'Ничего не найдено');
@@ -9173,6 +9205,11 @@
                   }
                   return;
                 }
+              }
+
+              if (suppressPopoverInEditMode) {
+                hidePopover();
+                return;
               }
 
               let title = 'Торговое место';
@@ -9710,6 +9747,12 @@
             } catch (err) {
               console.error(err);
               const errorMessage = err?.message ? String(err.message) : 'Не удалось выполнить запрос hit-test.';
+              if (suppressPopoverInEditMode) {
+                hidePopover();
+                toast(errorMessage);
+                return;
+              }
+
               showPopoverAt(e.clientX, e.clientY, '<div class="t">Ошибка</div><div class="row">' + escapeHtml(errorMessage) + '</div>', false);
             }
           }
