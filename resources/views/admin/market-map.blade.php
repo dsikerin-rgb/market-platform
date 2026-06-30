@@ -3087,7 +3087,7 @@
                   <div class="toolbar-group toolbar-group--accent">
                     <button id="zoomOut" type="button" title="Уменьшить масштаб карты" aria-label="Уменьшить масштаб карты">−</button>
                     <button id="zoomIn" type="button" title="Увеличить масштаб карты" aria-label="Увеличить масштаб карты">+</button>
-                    <button id="fitWidth" type="button" title="Подогнать карту по ширине окна" aria-label="Подогнать карту по ширине окна">По ширине</button>
+                    <button id="fitWidth" type="button" title="Подогнать карту по размеру окна" aria-label="Подогнать карту по размеру окна">По размеру</button>
                   </div>
                   <span class="pill" id="scaleLabel" style="display:none;" title="Текущий масштаб карты">Масштаб: 100%</span>
                 </div>
@@ -5877,8 +5877,8 @@
           let polyDrawing = false;
           let polyDraft = [];
           let bootstrappingMap = true;
-          let autoFitWidth = true;
-          let resizeFitWidthTimer = null;
+          let autoFitToViewport = true;
+          let resizeFitTimer = null;
 
           const SHAPES_BASE = String(SHAPES_URL || '').replace(/\/$/, '');
 
@@ -6929,7 +6929,7 @@
           async function centerOnBbox(bbox, opts = {}) {
             if (!bbox || !page || !currentViewport || !stage) return;
 
-            autoFitWidth = false;
+            autoFitToViewport = false;
 
             const padding = Number(opts.padding ?? 40);
             const zoomFactor = Number(opts.zoomFactor ?? 1.15);
@@ -7113,17 +7113,32 @@
             }
           }
 
-          function stageViewportWidth() {
+          function stageViewportSize() {
             const clientWidth = Number(stage?.clientWidth || 0);
-            if (Number.isFinite(clientWidth) && clientWidth > 0) {
-              return clientWidth;
-            }
+            const clientHeight = Number(stage?.clientHeight || 0);
+            const stageRect = stage?.getBoundingClientRect?.();
+            const legendRect = document.querySelector('.legend-stack:not([hidden])')?.getBoundingClientRect?.();
+            const legendHeight = Number(legendRect?.height || 0);
+            const legendReserve = legendHeight > 0 ? legendHeight + 32 : 0;
+            const visibleHeight = Number(window.innerHeight || 0) - Math.max(0, Number(stageRect?.top || 0)) - 16;
 
-            const rectWidth = Number(stage?.getBoundingClientRect?.().width || 0);
-            return Number.isFinite(rectWidth) ? rectWidth : 0;
+            const width = Number.isFinite(clientWidth) && clientWidth > 0
+              ? clientWidth
+              : Number(stageRect?.width || 0);
+            const stageHeight = Number.isFinite(clientHeight) && clientHeight > 0
+              ? clientHeight
+              : Number(stageRect?.height || 0);
+            const height = Number.isFinite(visibleHeight) && visibleHeight > 0
+              ? visibleHeight
+              : stageHeight;
+
+            return {
+              width: Number.isFinite(width) ? width : 0,
+              height: Math.max(0, (Number.isFinite(height) ? height : 0) - legendReserve),
+            };
           }
 
-          async function fitWidth(options = {}) {
+          async function fitToViewport(options = {}) {
             if (!page) return;
 
             if (options.waitForLayout !== false) {
@@ -7132,9 +7147,12 @@
             }
 
             const viewport = page.getViewport({ scale: 1.0 });
-            const padding = 24;
-            const available = Math.max(200, stageViewportWidth() - padding);
-            const nextScale = available / viewport.width;
+            const paddingX = 56;
+            const paddingY = 56;
+            const viewportSize = stageViewportSize();
+            const availableW = Math.max(200, viewportSize.width - paddingX);
+            const availableH = Math.max(200, viewportSize.height - paddingY);
+            const nextScale = Math.min(availableW / viewport.width, availableH / viewport.height);
 
             if (!Number.isFinite(nextScale) || nextScale <= 0) return;
 
@@ -7148,17 +7166,17 @@
             }
           }
 
-          function scheduleAutoFitWidth() {
-            if (!autoFitWidth || !page || FOCUS_SPACE_ID || FOCUS_SHAPE) {
+          function scheduleAutoFitToViewport() {
+            if (!autoFitToViewport || !page || FOCUS_SPACE_ID || FOCUS_SHAPE) {
               return;
             }
 
-            if (resizeFitWidthTimer !== null) {
-              window.clearTimeout(resizeFitWidthTimer);
+            if (resizeFitTimer !== null) {
+              window.clearTimeout(resizeFitTimer);
             }
 
-            resizeFitWidthTimer = window.setTimeout(() => {
-              fitWidth({ waitForLayout: true }).catch((error) => {
+            resizeFitTimer = window.setTimeout(() => {
+              fitToViewport({ waitForLayout: true }).catch((error) => {
                 console.error(error);
               });
             }, 80);
@@ -7582,7 +7600,7 @@
               }
             }
 
-            await fitWidth({ waitForLayout: true });
+            await fitToViewport({ waitForLayout: true });
             bootstrappingMap = false;
             completeMapLoadProgress();
 
@@ -7609,15 +7627,15 @@
           }
 
           if (window.ResizeObserver) {
-            const stageResizeObserver = new ResizeObserver(() => scheduleAutoFitWidth());
+            const stageResizeObserver = new ResizeObserver(() => scheduleAutoFitToViewport());
             stageResizeObserver.observe(stage);
           }
-          window.addEventListener('resize', scheduleAutoFitWidth, { passive: true });
+          window.addEventListener('resize', scheduleAutoFitToViewport, { passive: true });
 
-          zoomInBtn?.addEventListener('click', async () => { autoFitWidth = false; scale = Math.min(7, scale * 1.2); await render(); });
-          zoomOutBtn?.addEventListener('click', async () => { autoFitWidth = false; scale = Math.max(0.2, scale / 1.2); await render(); });
-          zoomResetBtn?.addEventListener('click', async () => { autoFitWidth = false; scale = 1.0; await render(); });
-          fitWidthBtn?.addEventListener('click', async () => { autoFitWidth = true; await fitWidth({ waitForLayout: true }); });
+          zoomInBtn?.addEventListener('click', async () => { autoFitToViewport = false; scale = Math.min(7, scale * 1.2); await render(); });
+          zoomOutBtn?.addEventListener('click', async () => { autoFitToViewport = false; scale = Math.max(0.2, scale / 1.2); await render(); });
+          zoomResetBtn?.addEventListener('click', async () => { autoFitToViewport = false; scale = 1.0; await render(); });
+          fitWidthBtn?.addEventListener('click', async () => { autoFitToViewport = true; await fitToViewport({ waitForLayout: true }); });
           layerDebtBtn?.addEventListener('click', () => setLayerMode('debt'));
           layerRentBtn?.addEventListener('click', () => setLayerMode('rent'));
           scenarioMapBtn?.addEventListener('click', () => setScenario('map'));
