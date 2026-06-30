@@ -5877,6 +5877,8 @@
           let polyDrawing = false;
           let polyDraft = [];
           let bootstrappingMap = true;
+          let autoFitWidth = true;
+          let resizeFitWidthTimer = null;
 
           const SHAPES_BASE = String(SHAPES_URL || '').replace(/\/$/, '');
 
@@ -6927,6 +6929,8 @@
           async function centerOnBbox(bbox, opts = {}) {
             if (!bbox || !page || !currentViewport || !stage) return;
 
+            autoFitWidth = false;
+
             const padding = Number(opts.padding ?? 40);
             const zoomFactor = Number(opts.zoomFactor ?? 1.15);
 
@@ -7109,13 +7113,55 @@
             }
           }
 
-          async function fitWidth() {
+          function stageViewportWidth() {
+            const clientWidth = Number(stage?.clientWidth || 0);
+            if (Number.isFinite(clientWidth) && clientWidth > 0) {
+              return clientWidth;
+            }
+
+            const rectWidth = Number(stage?.getBoundingClientRect?.().width || 0);
+            return Number.isFinite(rectWidth) ? rectWidth : 0;
+          }
+
+          async function fitWidth(options = {}) {
             if (!page) return;
+
+            if (options.waitForLayout !== false) {
+              await nextUiFrame();
+              await nextUiFrame();
+            }
+
             const viewport = page.getViewport({ scale: 1.0 });
             const padding = 24;
-            const available = Math.max(200, stage.clientWidth - padding);
-            scale = available / viewport.width;
+            const available = Math.max(200, stageViewportWidth() - padding);
+            const nextScale = available / viewport.width;
+
+            if (!Number.isFinite(nextScale) || nextScale <= 0) return;
+
+            scale = Math.max(0.2, Math.min(7, nextScale));
             await render();
+
+            if (options.resetScroll !== false) {
+              stage.scrollLeft = 0;
+              stage.scrollTop = 0;
+              syncStageOverlayOffsets();
+            }
+          }
+
+          function scheduleAutoFitWidth() {
+            if (!autoFitWidth || !page || FOCUS_SPACE_ID || FOCUS_SHAPE) {
+              return;
+            }
+
+            if (resizeFitWidthTimer !== null) {
+              window.clearTimeout(resizeFitWidthTimer);
+            }
+
+            resizeFitWidthTimer = window.setTimeout(() => {
+              fitWidth({ waitForLayout: true }).catch((error) => {
+                console.error(error);
+              });
+            }, 80);
           }
 
           async function createShape(pdfPolygon) {
@@ -7536,7 +7582,7 @@
               }
             }
 
-            await fitWidth();
+            await fitWidth({ waitForLayout: true });
             bootstrappingMap = false;
             completeMapLoadProgress();
 
@@ -7562,10 +7608,16 @@
             toast('Клик по месту откроет карточку.');
           }
 
-          zoomInBtn?.addEventListener('click', async () => { scale = Math.min(7, scale * 1.2); await render(); });
-          zoomOutBtn?.addEventListener('click', async () => { scale = Math.max(0.2, scale / 1.2); await render(); });
-          zoomResetBtn?.addEventListener('click', async () => { scale = 1.0; await render(); });
-          fitWidthBtn?.addEventListener('click', async () => { await fitWidth(); });
+          if (window.ResizeObserver) {
+            const stageResizeObserver = new ResizeObserver(() => scheduleAutoFitWidth());
+            stageResizeObserver.observe(stage);
+          }
+          window.addEventListener('resize', scheduleAutoFitWidth, { passive: true });
+
+          zoomInBtn?.addEventListener('click', async () => { autoFitWidth = false; scale = Math.min(7, scale * 1.2); await render(); });
+          zoomOutBtn?.addEventListener('click', async () => { autoFitWidth = false; scale = Math.max(0.2, scale / 1.2); await render(); });
+          zoomResetBtn?.addEventListener('click', async () => { autoFitWidth = false; scale = 1.0; await render(); });
+          fitWidthBtn?.addEventListener('click', async () => { autoFitWidth = true; await fitWidth({ waitForLayout: true }); });
           layerDebtBtn?.addEventListener('click', () => setLayerMode('debt'));
           layerRentBtn?.addEventListener('click', () => setLayerMode('rent'));
           scenarioMapBtn?.addEventListener('click', () => setScenario('map'));
