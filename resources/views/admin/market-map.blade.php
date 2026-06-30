@@ -2394,6 +2394,29 @@
     }
     .toast.show { opacity: 1; transform: translateY(0); }
 
+    .snap-debug-panel {
+      position: fixed;
+      left: 14px;
+      bottom: 74px;
+      z-index: 10002;
+      max-width: min(520px, calc(100vw - 28px));
+      max-height: min(360px, calc(100vh - 140px));
+      overflow: auto;
+      border: 1px solid rgba(37, 99, 235, .45);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, .90);
+      color: #e0f2fe;
+      box-shadow: 0 18px 45px rgba(15, 23, 42, .28);
+      padding: 10px 12px;
+      font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      pointer-events: none;
+      white-space: pre-wrap;
+    }
+
+    .snap-debug-panel[hidden] {
+      display: none;
+    }
+
     .empty {
       padding: 14px;
       border-radius: 14px;
@@ -3249,6 +3272,7 @@
         <button id="popoverClose" class="xbtn" type="button" aria-label="Закрыть">×</button>
         <div id="popoverBody"></div>
       </div>
+      <div id="snapDebugPanel" class="snap-debug-panel" hidden aria-hidden="true"></div>
 
       <div id="identityFixModal" class="identity-fix-modal" hidden aria-hidden="true">
         <div class="identity-fix-modal__backdrop" data-action="close"></div>
@@ -5865,6 +5889,16 @@
           const shapesSvg = document.getElementById('shapesSvg');
           const drawBox = document.getElementById('drawBox');
           const handlesLayer = document.getElementById('handlesLayer');
+          const snapDebugPanel = document.getElementById('snapDebugPanel');
+          const snapDebugEnabled = (() => {
+            try {
+              const params = new URLSearchParams(window.location.search || '');
+              return params.get('snap_debug') === '1'
+                || window.localStorage?.getItem('marketMapSnapDebug') === '1';
+            } catch (error) {
+              return false;
+            }
+          })();
 
           if (!stage || !canvas || !overlay) {
             fallbackToIframe('missing DOM nodes');
@@ -5910,6 +5944,7 @@
           let polyDrawing = false;
           let polyDraft = [];
           let snapPreviewPoint = null;
+          let lastSnapDiagnostics = null;
           let polygonSaveStates = new Map();
           let backgroundSnapSegments = [];
           let backgroundSnapPoints = [];
@@ -6977,6 +7012,27 @@
                 parts.push(
                   '<circle cx="' + cx + '" cy="' + cy + '" r="7" fill="#2563eb" fill-opacity="0.18" stroke="#2563eb" stroke-width="2.5"></circle>' +
                   '<circle cx="' + cx + '" cy="' + cy + '" r="2.5" fill="#2563eb" fill-opacity="0.95"></circle>'
+                );
+              }
+            }
+
+            if (snapDebugEnabled && editMode && lastSnapDiagnostics?.input) {
+              const inputX = Number(lastSnapDiagnostics.input.sx);
+              const inputY = Number(lastSnapDiagnostics.input.sy);
+              if (Number.isFinite(inputX) && Number.isFinite(inputY)) {
+                parts.push(
+                  '<line x1="' + (inputX - 10).toFixed(2) + '" y1="' + inputY.toFixed(2) + '" x2="' + (inputX + 10).toFixed(2) + '" y2="' + inputY.toFixed(2) + '" stroke="#f97316" stroke-width="1.8" stroke-opacity="0.9"></line>' +
+                  '<line x1="' + inputX.toFixed(2) + '" y1="' + (inputY - 10).toFixed(2) + '" x2="' + inputX.toFixed(2) + '" y2="' + (inputY + 10).toFixed(2) + '" stroke="#f97316" stroke-width="1.8" stroke-opacity="0.9"></line>'
+                );
+              }
+
+              const selected = lastSnapDiagnostics.selected || null;
+              const selectedX = Number(selected?.px);
+              const selectedY = Number(selected?.py);
+              if (Number.isFinite(inputX) && Number.isFinite(inputY) && Number.isFinite(selectedX) && Number.isFinite(selectedY)) {
+                parts.push(
+                  '<line x1="' + inputX.toFixed(2) + '" y1="' + inputY.toFixed(2) + '" x2="' + selectedX.toFixed(2) + '" y2="' + selectedY.toFixed(2) + '" stroke="#db2777" stroke-width="2" stroke-opacity="0.7" stroke-dasharray="4 3"></line>' +
+                  '<circle cx="' + selectedX.toFixed(2) + '" cy="' + selectedY.toFixed(2) + '" r="6" fill="none" stroke="#db2777" stroke-width="2.5" stroke-opacity="0.95"></circle>'
                 );
               }
             }
@@ -8119,24 +8175,61 @@
             if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
 
             const viable = [];
+            const diagnostics = {
+              input: { xPdf: Number(xPdf), yPdf: Number(yPdf), sx, sy },
+              candidates: [],
+              selected: null,
+            };
 
             for (const candidate of candidates) {
               if (!candidate) continue;
+              if (candidate.snapMissing) {
+                diagnostics.candidates.push({
+                  sourceType: candidate.snapSourceType || 'unknown',
+                  missing: true,
+                });
+                continue;
+              }
 
               const viewportPoint = currentViewport.convertToViewportPoint(Number(candidate.x), Number(candidate.y));
-              if (!Array.isArray(viewportPoint)) continue;
+              if (!Array.isArray(viewportPoint)) {
+                diagnostics.candidates.push({
+                  sourceType: candidate.snapSourceType || 'unknown',
+                  missing: true,
+                });
+                continue;
+              }
 
               const px = Number(viewportPoint[0]);
               const py = Number(viewportPoint[1]);
-              if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+              if (!Number.isFinite(px) || !Number.isFinite(py)) {
+                diagnostics.candidates.push({
+                  sourceType: candidate.snapSourceType || 'unknown',
+                  missing: true,
+                });
+                continue;
+              }
+
+              const d2 = distanceSq(sx, sy, px, py);
 
               viable.push({
                 candidate,
-                d2: distanceSq(sx, sy, px, py),
+                d2,
+                px,
+                py,
+              });
+              diagnostics.candidates.push({
+                sourceType: candidate.snapSourceType || 'unknown',
+                d2,
+                px,
+                py,
               });
             }
 
-            if (viable.length === 0) return null;
+            if (viable.length === 0) {
+              setSnapDiagnostics(diagnostics);
+              return null;
+            }
 
             const pointCandidates = viable.filter((item) => isPointSnapSource(item.candidate.snapSourceType));
             const shapeCandidates = viable.filter((item) => isShapeSnapSource(item.candidate.snapSourceType));
@@ -8145,6 +8238,7 @@
               ? pointCandidates
               : (shapeCandidates.length > 0 ? shapeCandidates : (backgroundPointCandidates.length > 0 ? backgroundPointCandidates : viable));
             let best = null;
+            let bestItem = null;
             let bestScore = Infinity;
 
             for (const item of pool) {
@@ -8153,14 +8247,30 @@
               if (score < bestScore) {
                 bestScore = score;
                 best = candidate;
+                bestItem = item;
               }
             }
+
+            if (bestItem) {
+              diagnostics.selected = {
+                sourceType: bestItem.candidate.snapSourceType || 'unknown',
+                d2: bestItem.d2,
+                px: bestItem.px,
+                py: bestItem.py,
+              };
+            }
+            setSnapDiagnostics(diagnostics);
 
             return best;
           }
 
           function withSnapSource(candidate, sourceType) {
-            if (!candidate) return null;
+            if (!candidate) {
+              return {
+                snapSourceType: sourceType,
+                snapMissing: true,
+              };
+            }
 
             return {
               ...candidate,
@@ -8851,6 +8961,72 @@
             return distanceSq(px, py, cx, cy);
           }
 
+          function formatSnapDebugNumber(value, digits = 1) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return 'n/a';
+            return numeric.toFixed(digits);
+          }
+
+          function setSnapDiagnostics(diagnostics) {
+            lastSnapDiagnostics = diagnostics || null;
+            renderSnapDebugPanel();
+          }
+
+          function renderSnapDebugPanel() {
+            if (!snapDebugPanel) return;
+
+            if (!snapDebugEnabled || !editMode) {
+              snapDebugPanel.hidden = true;
+              snapDebugPanel.setAttribute('aria-hidden', 'true');
+              return;
+            }
+
+            const diagnostics = lastSnapDiagnostics;
+            if (!diagnostics) {
+              snapDebugPanel.textContent = 'snap debug: no data yet';
+              snapDebugPanel.hidden = false;
+              snapDebugPanel.setAttribute('aria-hidden', 'false');
+              return;
+            }
+
+            const selected = diagnostics.selected || null;
+            const lines = [];
+            lines.push('snap debug');
+            lines.push('scale=' + formatSnapDebugNumber(scale, 3)
+              + ' renderScale=' + formatSnapDebugNumber(backgroundCanvasScaleX, 3)
+              + '/' + formatSnapDebugNumber(backgroundCanvasScaleY, 3));
+            lines.push('display=' + formatSnapDebugNumber(currentViewportWidth, 0)
+              + 'x' + formatSnapDebugNumber(currentViewportHeight, 0)
+              + ' canvas=' + formatSnapDebugNumber(canvas?.width, 0)
+              + 'x' + formatSnapDebugNumber(canvas?.height, 0));
+            lines.push('bg segments=' + String(backgroundSnapSegments.length)
+              + ' points=' + String(backgroundSnapPoints.length));
+            lines.push('cursor viewport x=' + formatSnapDebugNumber(diagnostics.input?.sx)
+              + ' y=' + formatSnapDebugNumber(diagnostics.input?.sy));
+            lines.push('selected=' + (selected ? selected.sourceType : 'none')
+              + ' d=' + (selected ? formatSnapDebugNumber(Math.sqrt(Number(selected.d2 || 0))) + 'px' : 'n/a')
+              + ' dx=' + (selected ? formatSnapDebugNumber(Number(selected.px) - Number(diagnostics.input?.sx)) : 'n/a')
+              + ' dy=' + (selected ? formatSnapDebugNumber(Number(selected.py) - Number(diagnostics.input?.sy)) : 'n/a'));
+            lines.push('candidates:');
+
+            const candidates = Array.isArray(diagnostics.candidates) ? diagnostics.candidates : [];
+            for (const candidate of candidates.slice(0, 12)) {
+              if (candidate.missing) {
+                lines.push('- ' + candidate.sourceType + ': none');
+                continue;
+              }
+
+              lines.push('- ' + candidate.sourceType
+                + ': d=' + formatSnapDebugNumber(Math.sqrt(Number(candidate.d2 || 0))) + 'px'
+                + ' x=' + formatSnapDebugNumber(candidate.px)
+                + ' y=' + formatSnapDebugNumber(candidate.py));
+            }
+
+            snapDebugPanel.textContent = lines.join('\n');
+            snapDebugPanel.hidden = false;
+            snapDebugPanel.setAttribute('aria-hidden', 'false');
+          }
+
           async function insertVertexAtClick(xPdf, yPdf) {
             if (!selectedShapeId) return;
             const shape = findShapeById(selectedShapeId);
@@ -9198,6 +9374,7 @@
 
               updateScenarioUi();
               syncMapEditRail();
+              renderSnapDebugPanel();
 
               if (editMode) {
                 setTool('select');
