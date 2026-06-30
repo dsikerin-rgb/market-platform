@@ -3477,6 +3477,8 @@
 
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         const CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
+        const MAP_MIN_SCALE = 0.2;
+        const MAP_MAX_SCALE = 9.1;
 
         const viewerRoot = document.getElementById('viewerRoot');
 
@@ -6945,7 +6947,7 @@
               nextScale = 1.0;
             }
 
-            nextScale = Math.max(0.2, Math.min(7, nextScale));
+            nextScale = Math.max(MAP_MIN_SCALE, Math.min(MAP_MAX_SCALE, nextScale));
 
             scale = nextScale;
             await render();
@@ -7641,8 +7643,8 @@
           }
           window.addEventListener('resize', scheduleAutoFitToViewport, { passive: true });
 
-          zoomInBtn?.addEventListener('click', async () => { autoFitToViewport = false; scale = Math.min(7, scale * 1.2); await render(); });
-          zoomOutBtn?.addEventListener('click', async () => { autoFitToViewport = false; scale = Math.max(0.2, scale / 1.2); await render(); });
+          zoomInBtn?.addEventListener('click', async () => { autoFitToViewport = false; scale = Math.min(MAP_MAX_SCALE, scale * 1.2); await render(); });
+          zoomOutBtn?.addEventListener('click', async () => { autoFitToViewport = false; scale = Math.max(MAP_MIN_SCALE, scale / 1.2); await render(); });
           zoomResetBtn?.addEventListener('click', async () => { autoFitToViewport = false; scale = 1.0; await render(); });
           fitWidthBtn?.addEventListener('click', async () => { autoFitToViewport = true; await fitToViewport({ waitForLayout: true }); });
           layerDebtBtn?.addEventListener('click', () => setLayerMode('debt'));
