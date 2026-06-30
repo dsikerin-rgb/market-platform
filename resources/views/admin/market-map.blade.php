@@ -3478,7 +3478,8 @@
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         const CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
         const MAP_MIN_SCALE = 0.2;
-        const MAP_MAX_SCALE = 9.1;
+        const MAP_MAX_SCALE = 11.8;
+        const MAP_VERTEX_SNAP_SCREEN_PX = 10;
 
         const viewerRoot = document.getElementById('viewerRoot');
 
@@ -5878,6 +5879,7 @@
 
           let polyDrawing = false;
           let polyDraft = [];
+          let snapPreviewPoint = null;
           let bootstrappingMap = true;
           let autoFitToViewport = true;
           let resizeFitTimer = null;
@@ -6507,11 +6509,13 @@
 
               polyDrawing = true;
               polyDraft = [];
+              snapPreviewPoint = null;
               setHint('Полигон: клик — точка • Enter/клик по первой — сохранить • Backspace — назад • Esc — отмена');
               toast('Полигон: добавляй точки кликом');
             } else {
               polyDrawing = false;
               polyDraft = [];
+              snapPreviewPoint = null;
               if (tool === 'rect') {
                 setHint('Прямоугольник: Shift+drag — создать • клик — карточка');
               } else {
@@ -6868,6 +6872,18 @@
               }
             }
 
+            if (snapPreviewPoint && editMode && currentViewport) {
+              const v = currentViewport.convertToViewportPoint(Number(snapPreviewPoint.x), Number(snapPreviewPoint.y));
+              if (Array.isArray(v)) {
+                const cx = Number(v[0]).toFixed(2);
+                const cy = Number(v[1]).toFixed(2);
+                parts.push(
+                  '<circle cx="' + cx + '" cy="' + cy + '" r="7" fill="#2563eb" fill-opacity="0.18" stroke="#2563eb" stroke-width="2.5"></circle>' +
+                  '<circle cx="' + cx + '" cy="' + cy + '" r="2.5" fill="#2563eb" fill-opacity="0.95"></circle>'
+                );
+              }
+            }
+
             shapesSvg.innerHTML = parts.join('');
           }
 
@@ -6876,6 +6892,70 @@
           function getCanvasPointFromClient(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
             return { x: clientX - rect.left, y: clientY - rect.top };
+          }
+
+          function findVertexSnapPoint(xPdf, yPdf, options = {}) {
+            if (!currentViewport || !Array.isArray(shapes) || shapes.length === 0) return null;
+
+            const sourcePoint = currentViewport.convertToViewportPoint(Number(xPdf), Number(yPdf));
+            if (!Array.isArray(sourcePoint)) return null;
+
+            const sx = Number(sourcePoint[0]);
+            const sy = Number(sourcePoint[1]);
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+
+            const excludeShapeId = Number(options.excludeShapeId || 0);
+            const threshold = Number(options.thresholdPx || MAP_VERTEX_SNAP_SCREEN_PX);
+            let best = null;
+            let bestD2 = Math.max(1, threshold) * Math.max(1, threshold);
+
+            for (const shape of shapes) {
+              const shapeId = Number(shape?.id || 0);
+              if (excludeShapeId > 0 && shapeId === excludeShapeId) continue;
+
+              const poly = Array.isArray(shape?.polygon) ? shape.polygon : [];
+              for (let i = 0; i < poly.length; i++) {
+                const point = poly[i];
+                const px = Number((point && (point.x ?? point[0])) ?? NaN);
+                const py = Number((point && (point.y ?? point[1])) ?? NaN);
+                if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+
+                const viewportPoint = currentViewport.convertToViewportPoint(px, py);
+                if (!Array.isArray(viewportPoint)) continue;
+
+                const vx = Number(viewportPoint[0]);
+                const vy = Number(viewportPoint[1]);
+                if (!Number.isFinite(vx) || !Number.isFinite(vy)) continue;
+
+                const d2 = distanceSq(sx, sy, vx, vy);
+                if (d2 <= bestD2) {
+                  bestD2 = d2;
+                  best = { x: px, y: py, shapeId, index: i };
+                }
+              }
+            }
+
+            return best;
+          }
+
+          function applyVertexSnapPoint(xPdf, yPdf, options = {}) {
+            const fallback = { x: Number(xPdf), y: Number(yPdf), snapped: false };
+            const snapPoint = findVertexSnapPoint(fallback.x, fallback.y, options);
+
+            if (!snapPoint) {
+              snapPreviewPoint = null;
+              return fallback;
+            }
+
+            snapPreviewPoint = { x: snapPoint.x, y: snapPoint.y };
+
+            return {
+              x: Number(snapPoint.x),
+              y: Number(snapPoint.y),
+              snapped: true,
+              shapeId: snapPoint.shapeId,
+              index: snapPoint.index,
+            };
           }
 
           function renderHandles() {
@@ -7348,7 +7428,8 @@
 
             if (bestI < 0) return;
 
-            poly.splice(bestI + 1, 0, { x: Number(xPdf), y: Number(yPdf) });
+            const snappedPoint = applyVertexSnapPoint(xPdf, yPdf, { excludeShapeId: selectedShapeId });
+            poly.splice(bestI + 1, 0, { x: Number(snappedPoint.x), y: Number(snappedPoint.y) });
 
             shape.polygon = poly;
             redrawShapes();
@@ -7357,6 +7438,7 @@
             try {
               await patchShape(shape.id, { polygon: poly });
               await loadShapes();
+              snapPreviewPoint = null;
               redrawShapes();
               renderHandles();
               toast('Точка добавлена');
@@ -7364,6 +7446,7 @@
               console.error(e);
               toast('Ошибка добавления точки: ' + String(e?.message || e));
               await loadShapes();
+              snapPreviewPoint = null;
               redrawShapes();
               renderHandles();
             }
@@ -7381,6 +7464,7 @@
 
             polyDrawing = false;
             polyDraft = [];
+            snapPreviewPoint = null;
             redrawShapes();
             renderHandles();
 
@@ -7393,6 +7477,7 @@
           function cancelPolygon() {
             polyDrawing = false;
             polyDraft = [];
+            snapPreviewPoint = null;
             redrawShapes();
             renderHandles();
             toast('Полигон отменён');
@@ -8230,7 +8315,8 @@
 
               if (!Number.isFinite(nx) || !Number.isFinite(ny)) return;
 
-              poly[idx] = { x: nx, y: ny };
+              const snappedPoint = applyVertexSnapPoint(nx, ny, { excludeShapeId: sid });
+              poly[idx] = { x: Number(snappedPoint.x), y: Number(snappedPoint.y) };
 
               shape.polygon = poly;
               redrawShapes();
@@ -8244,6 +8330,16 @@
               if (!s) return;
               const p = getCanvasPointFromClient(e.clientX, e.clientY);
               showDrawBox(s.x, s.y, p.x, p.y);
+              return;
+            }
+
+            if (CAN_EDIT && editMode && tool === 'poly' && polyDrawing && currentViewport) {
+              const pCanvas = getCanvasPointFromClient(e.clientX, e.clientY);
+              const pPdf = currentViewport.convertToPdfPoint(pCanvas.x, pCanvas.y);
+              if (Array.isArray(pPdf)) {
+                applyVertexSnapPoint(Number(pPdf[0]), Number(pPdf[1]));
+                redrawShapes();
+              }
               return;
             }
 
@@ -8268,6 +8364,7 @@
 
             if (!draggingVertexMoved) {
               draggingVertexMoved = false;
+              snapPreviewPoint = null;
               renderHandles();
               return;
             }
@@ -8276,12 +8373,14 @@
 
             const shape = findShapeById(shapeId);
             if (!shape) {
+              snapPreviewPoint = null;
               renderHandles();
               return;
             }
 
             const poly = Array.isArray(shape.polygon) ? shape.polygon : [];
             if (poly.length < 3) {
+              snapPreviewPoint = null;
               renderHandles();
               return;
             }
@@ -8289,6 +8388,7 @@
             try {
               await patchShape(shape.id, { polygon: poly });
               await loadShapes();
+              snapPreviewPoint = null;
               redrawShapes();
               renderHandles();
               toast('Полигон обновлён');
@@ -8296,6 +8396,7 @@
               console.error(e2);
               toast('Ошибка обновления: ' + String(e2?.message || e2));
               await loadShapes();
+              snapPreviewPoint = null;
               redrawShapes();
               renderHandles();
             }
@@ -8330,7 +8431,8 @@
                 }
               }
 
-              polyDraft.push({ x: xPdf, y: yPdf });
+              const snappedPoint = applyVertexSnapPoint(xPdf, yPdf);
+              polyDraft.push({ x: Number(snappedPoint.x), y: Number(snappedPoint.y) });
               redrawShapes();
               toast('Точка: ' + String(polyDraft.length));
               return;
