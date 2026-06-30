@@ -3483,6 +3483,10 @@
         const MAP_EDGE_SNAP_SCREEN_PX = 8;
         const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 15;
         const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 16;
+        const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 20;
+        const MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX = 32;
+        const MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS = 36;
+        const MAP_BACKGROUND_INTERSECTION_EXTENSION_PX = 2.5;
         const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
@@ -6882,8 +6886,11 @@
             }
 
             if (snapPreviewPoint && editMode && currentViewport) {
-              const edge = snapPreviewPoint.edge || null;
-              if (edge) {
+              const previewEdges = Array.isArray(snapPreviewPoint.edges)
+                ? snapPreviewPoint.edges
+                : (snapPreviewPoint.edge ? [snapPreviewPoint.edge] : []);
+
+              for (const edge of previewEdges) {
                 const edgeA = currentViewport.convertToViewportPoint(Number(edge.ax), Number(edge.ay));
                 const edgeB = currentViewport.convertToViewportPoint(Number(edge.bx), Number(edge.by));
                 if (Array.isArray(edgeA) && Array.isArray(edgeB)) {
@@ -7308,6 +7315,127 @@
             return best;
           }
 
+          function segmentViewportIntersection(a, b, extensionPx = MAP_BACKGROUND_INTERSECTION_EXTENSION_PX) {
+            const ax = Number(a?.ax);
+            const ay = Number(a?.ay);
+            const bx = Number(a?.bx);
+            const by = Number(a?.by);
+            const cx = Number(b?.ax);
+            const cy = Number(b?.ay);
+            const dx = Number(b?.bx);
+            const dy = Number(b?.by);
+
+            if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(bx) || !Number.isFinite(by)) return null;
+            if (!Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(dx) || !Number.isFinite(dy)) return null;
+
+            const rx = bx - ax;
+            const ry = by - ay;
+            const sx = dx - cx;
+            const sy = dy - cy;
+            const denom = (rx * sy) - (ry * sx);
+
+            if (Math.abs(denom) < 1e-6) return null;
+
+            const qpx = cx - ax;
+            const qpy = cy - ay;
+            const t = ((qpx * sy) - (qpy * sx)) / denom;
+            const ix = ax + (t * rx);
+            const iy = ay + (t * ry);
+            if (!Number.isFinite(ix) || !Number.isFinite(iy)) return null;
+
+            const toleranceSq = Math.max(0, Number(extensionPx || 0)) ** 2;
+            const closestA = closestPointOnViewportSegment(ix, iy, ax, ay, bx, by);
+            const closestB = closestPointOnViewportSegment(ix, iy, cx, cy, dx, dy);
+
+            if (distanceSq(ix, iy, closestA.x, closestA.y) > toleranceSq) return null;
+            if (distanceSq(ix, iy, closestB.x, closestB.y) > toleranceSq) return null;
+
+            return { x: ix, y: iy };
+          }
+
+          function findBackgroundIntersectionSnapPoint(xPdf, yPdf, options = {}) {
+            if (!currentViewport || !Array.isArray(backgroundSnapSegments) || backgroundSnapSegments.length === 0) return null;
+
+            const sourcePoint = currentViewport.convertToViewportPoint(Number(xPdf), Number(yPdf));
+            if (!Array.isArray(sourcePoint)) return null;
+
+            const sx = Number(sourcePoint[0]);
+            const sy = Number(sourcePoint[1]);
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
+
+            const threshold = Math.max(1, Number(options.backgroundIntersectionThresholdPx || MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX));
+            const nearbyThreshold = Math.max(threshold, Number(options.backgroundIntersectionNearbyThresholdPx || MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX));
+            const nearbyLimit = Math.max(2, Math.trunc(Number(options.backgroundIntersectionMaxNearbySegments || MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS)));
+            const nearby = [];
+            const nearbyThresholdSq = nearbyThreshold * nearbyThreshold;
+            const pushNearby = (item) => {
+              nearby.push(item);
+              nearby.sort((a, b) => a.d2 - b.d2);
+              if (nearby.length > nearbyLimit) nearby.pop();
+            };
+
+            for (const segment of backgroundSnapSegments) {
+              const av = currentViewport.convertToViewportPoint(Number(segment.ax), Number(segment.ay));
+              const bv = currentViewport.convertToViewportPoint(Number(segment.bx), Number(segment.by));
+              if (!Array.isArray(av) || !Array.isArray(bv)) continue;
+
+              const ax = Number(av[0]);
+              const ay = Number(av[1]);
+              const bx = Number(bv[0]);
+              const by = Number(bv[1]);
+              if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(bx) || !Number.isFinite(by)) continue;
+              if (distanceSq(ax, ay, bx, by) < 16) continue;
+
+              const closest = closestPointOnViewportSegment(sx, sy, ax, ay, bx, by);
+              const d2 = distanceSq(sx, sy, closest.x, closest.y);
+              if (d2 > nearbyThresholdSq) continue;
+
+              pushNearby({
+                d2,
+                viewport: { ax, ay, bx, by },
+                pdf: {
+                  ax: Number(segment.ax),
+                  ay: Number(segment.ay),
+                  bx: Number(segment.bx),
+                  by: Number(segment.by),
+                },
+              });
+            }
+
+            if (nearby.length < 2) return null;
+
+            let best = null;
+            let bestD2 = threshold * threshold;
+
+            for (let i = 0; i < nearby.length; i++) {
+              for (let j = i + 1; j < nearby.length; j++) {
+                const intersection = segmentViewportIntersection(nearby[i].viewport, nearby[j].viewport);
+                if (!intersection) continue;
+
+                const d2 = distanceSq(sx, sy, intersection.x, intersection.y);
+                if (d2 > bestD2) continue;
+
+                const pdfPoint = currentViewport.convertToPdfPoint(intersection.x, intersection.y);
+                if (!Array.isArray(pdfPoint)) continue;
+
+                const pxPdf = Number(pdfPoint[0]);
+                const pyPdf = Number(pdfPoint[1]);
+                if (!Number.isFinite(pxPdf) || !Number.isFinite(pyPdf)) continue;
+
+                bestD2 = d2;
+                best = {
+                  x: pxPdf,
+                  y: pyPdf,
+                  source: 'background-intersection',
+                  edge: nearby[i].pdf,
+                  edges: [nearby[i].pdf, nearby[j].pdf],
+                };
+              }
+            }
+
+            return best;
+          }
+
           function findBackgroundCanvasSnapPoint(xPdf, yPdf, options = {}) {
             if (!currentViewport || !canvas || !ctx) return null;
 
@@ -7461,6 +7589,8 @@
                 return 0.5;
               case 'background-vertex':
                 return 0.48;
+              case 'background-intersection':
+                return 0.32;
               case 'background-edge':
                 return 0.56;
               case 'background-canvas':
@@ -7472,6 +7602,10 @@
 
           function isShapeSnapSource(sourceType) {
             return sourceType === 'shape-vertex' || sourceType === 'shape-edge';
+          }
+
+          function isBackgroundPointSnapSource(sourceType) {
+            return sourceType === 'background-vertex' || sourceType === 'background-intersection';
           }
 
           function selectBestMapSnapPoint(xPdf, yPdf, candidates) {
@@ -7505,7 +7639,10 @@
             if (viable.length === 0) return null;
 
             const shapeCandidates = viable.filter((item) => isShapeSnapSource(item.candidate.snapSourceType));
-            const pool = shapeCandidates.length > 0 ? shapeCandidates : viable;
+            const backgroundPointCandidates = viable.filter((item) => isBackgroundPointSnapSource(item.candidate.snapSourceType));
+            const pool = shapeCandidates.length > 0
+              ? shapeCandidates
+              : (backgroundPointCandidates.length > 0 ? backgroundPointCandidates : viable);
             let best = null;
             let bestScore = Infinity;
 
@@ -7535,6 +7672,7 @@
             const snapPoint = selectBestMapSnapPoint(fallback.x, fallback.y, [
               withSnapSource(findVertexSnapPoint(fallback.x, fallback.y, options), 'shape-vertex'),
               withSnapSource(findBackgroundVertexSnapPoint(fallback.x, fallback.y, options), 'background-vertex'),
+              withSnapSource(findBackgroundIntersectionSnapPoint(fallback.x, fallback.y, options), 'background-intersection'),
               withSnapSource(findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options), 'background-edge'),
               withSnapSource(findBackgroundCanvasSnapPoint(fallback.x, fallback.y, options), 'background-canvas'),
               withSnapSource(findEdgeSnapPoint(fallback.x, fallback.y, options), 'shape-edge'),
@@ -7549,6 +7687,7 @@
               x: snapPoint.x,
               y: snapPoint.y,
               edge: snapPoint.edge || null,
+              edges: Array.isArray(snapPoint.edges) ? snapPoint.edges : [],
               source: snapPoint.source || 'shape',
             };
 
