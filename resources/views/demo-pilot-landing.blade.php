@@ -612,14 +612,7 @@
                     Для первых клиентов можно начать с демо или ограниченной бесплатной версии.
                 </p>
                 <div class="hero-actions" aria-label="Основные действия">
-                    @if (config('demo_pilot.public_login_enabled'))
-                        <form class="inline-entry-form" method="post" action="{{ route('demo.sign-in') }}">
-                            @csrf
-                            <button class="button button-primary" type="submit">Открыть демо как директор</button>
-                        </form>
-                    @else
-                        <a class="button button-primary" href="#demo-request">Подключиться к демо</a>
-                    @endif
+                    <a class="button button-primary" href="#demo-request">Открыть демо</a>
                     <a class="button button-secondary" href="{{ route('login') }}">Войти в сервис</a>
                 </div>
                 <div class="hero-facts" aria-label="Что входит в демо">
@@ -786,17 +779,59 @@
                 <div class="contact-panel">
                     <p>Первый безопасный шаг: показать демо на синтетических данных, затем согласовать пилотный контур.</p>
 
-                    @if (config('demo_pilot.public_login_enabled'))
-                        <form class="demo-entry-form" method="post" action="{{ route('demo.sign-in') }}">
-                            @csrf
-                            <button class="button" type="submit">Открыть демо сейчас</button>
-                        </form>
-                        <p class="demo-entry-note">
-                            Откроется демо-рынок в роли директора. Пароль не публикуется, данные синтетические, внешние интеграции выключены.
-                        </p>
-                    @endif
+                    <form class="demo-entry-form request-form" method="post" action="{{ route('demo.quick-start') }}">
+                        @csrf
 
-                    @if (session('demo_request_status') === 'sent' || request()->boolean('request_sent'))
+                        <div class="honeypot" aria-hidden="true" hidden>
+                            <label>
+                                Сайт компании
+                                <input type="text" name="company_website" tabindex="-1" autocomplete="off">
+                            </label>
+                        </div>
+
+                        <div class="form-grid">
+                            <label class="form-field">
+                                <span class="form-label">Имя</span>
+                                <input type="text" name="name" value="{{ old('name') }}" autocomplete="name" required>
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Город или рынок</span>
+                                <input type="text" name="organization" value="{{ old('organization') }}" autocomplete="organization" required>
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Email</span>
+                                <input type="email" name="email" value="{{ old('email') }}" autocomplete="email">
+                            </label>
+
+                            <label class="form-field">
+                                <span class="form-label">Телефон</span>
+                                <input type="tel" name="phone" value="{{ old('phone') }}" autocomplete="tel">
+                            </label>
+                        </div>
+
+                        <label class="consent-row">
+                            <input type="checkbox" name="consent" value="1" @checked(old('consent')) required>
+                            <span>Согласен на обработку данных для связи по заявке.</span>
+                        </label>
+
+                        <button class="button" type="submit">
+                            {{ config('demo_pilot.public_login_enabled') ? 'Открыть демо' : 'Получить доступ к демо' }}
+                        </button>
+
+                        <p class="demo-entry-note">
+                            {{ config('demo_pilot.public_login_enabled')
+                                ? 'После отправки контакта откроется демо-рынок в роли директора. Данные синтетические, внешние интеграции выключены.'
+                                : 'Мы сохраним заявку и отправим доступ к демо после проверки контакта.' }}
+                        </p>
+                    </form>
+
+                    @if (session('demo_quick_start_status') === 'access_pending')
+                        <div class="form-status" role="status">
+                            Заявка сохранена. Мы отправим доступ к демо после проверки контакта.
+                        </div>
+                    @elseif (session('demo_request_status') === 'sent' || request()->boolean('request_sent'))
                         <div class="form-status" role="status">
                             Заявка отправлена. Мы свяжемся с вами и согласуем формат показа.
                         </div>
@@ -821,6 +856,10 @@
                             </ul>
                         </div>
                     @endif
+
+                    <p class="demo-entry-note">
+                        Для пилота или бесплатной версии заполните расширенную заявку ниже.
+                    </p>
 
                     <form class="request-form" method="post" action="{{ route('demo.request') }}">
                         @csrf
