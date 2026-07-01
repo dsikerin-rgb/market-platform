@@ -3533,6 +3533,9 @@
         const MAP_BACKGROUND_NODE_SNAP_LOCK_SCREEN_PX = 0;
         const MAP_BACKGROUND_NODE_SNAP_SWITCH_SCREEN_PX = 10;
         const MAP_VERTEX_AXIS_LOCK_SCREEN_PX = 4;
+        // Cap only the rendered PDF bitmap; map coordinates stay in the full logical viewport.
+        const MAP_PDF_RENDER_MAX_BITMAP_SIDE = 8192;
+        const MAP_PDF_RENDER_MAX_BITMAP_PIXELS = 16777216;
 
         const viewerRoot = document.getElementById('viewerRoot');
 
@@ -5926,6 +5929,9 @@
           let page = null;
           let scale = 1.0;
           let currentViewport = null;
+          let logicalViewportWidth = 0;
+          let logicalViewportHeight = 0;
+          let pdfBitmapScaleRatio = 1;
           let renderRunId = 0;
           let renderQueue = Promise.resolve();
           let activeRenderTask = null;
@@ -6617,12 +6623,20 @@
 
           loadShapesRef = loadShapes;
 
+          function getLogicalViewportSize() {
+            const width = Math.max(1, Math.floor(Number(logicalViewportWidth || currentViewport?.width || canvas?.clientWidth || 1)));
+            const height = Math.max(1, Math.floor(Number(logicalViewportHeight || currentViewport?.height || canvas?.clientHeight || 1)));
+
+            return { width, height };
+          }
+
           function redrawShapes() {
             if (!shapesSvg || !currentViewport) return;
 
-            shapesSvg.setAttribute('width', String(canvas.width));
-            shapesSvg.setAttribute('height', String(canvas.height));
-            shapesSvg.setAttribute('viewBox', '0 0 ' + canvas.width + ' ' + canvas.height);
+            const viewportSize = getLogicalViewportSize();
+            shapesSvg.setAttribute('width', String(viewportSize.width));
+            shapesSvg.setAttribute('height', String(viewportSize.height));
+            shapesSvg.setAttribute('viewBox', '0 0 ' + viewportSize.width + ' ' + viewportSize.height);
 
             const parts = [];
             parts.push(
@@ -7000,15 +7014,57 @@
 
           function getCanvasPointFromClient(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            const canvasWidth = Math.max(1, Number(canvas.width || rect?.width || 1));
-            const canvasHeight = Math.max(1, Number(canvas.height || rect?.height || 1));
-            const rectWidth = Math.max(1, Number(rect?.width || canvasWidth));
-            const rectHeight = Math.max(1, Number(rect?.height || canvasHeight));
+            const viewportSize = getLogicalViewportSize();
+            const rectWidth = Math.max(1, Number(rect?.width || viewportSize.width));
+            const rectHeight = Math.max(1, Number(rect?.height || viewportSize.height));
 
             return {
-              x: (Number(clientX) - Number(rect.left || 0)) * (canvasWidth / rectWidth),
-              y: (Number(clientY) - Number(rect.top || 0)) * (canvasHeight / rectHeight),
+              x: (Number(clientX) - Number(rect.left || 0)) * (viewportSize.width / rectWidth),
+              y: (Number(clientY) - Number(rect.top || 0)) * (viewportSize.height / rectHeight),
             };
+          }
+
+          function getPdfBitmapRenderScale(logicalViewport) {
+            const viewportWidth = Math.max(1, Number(logicalViewport?.width || 1));
+            const viewportHeight = Math.max(1, Number(logicalViewport?.height || 1));
+            const sideRatio = Math.min(
+              1,
+              MAP_PDF_RENDER_MAX_BITMAP_SIDE / viewportWidth,
+              MAP_PDF_RENDER_MAX_BITMAP_SIDE / viewportHeight,
+            );
+            const areaRatio = Math.min(
+              1,
+              Math.sqrt(MAP_PDF_RENDER_MAX_BITMAP_PIXELS / Math.max(1, viewportWidth * viewportHeight)),
+            );
+            const ratio = Math.max(0.05, Math.min(1, sideRatio, areaRatio));
+
+            return Math.max(MAP_MIN_SCALE, Number(scale || 1) * ratio);
+          }
+
+          function getPdfBitmapScaleRatio() {
+            return Math.max(0.0001, Number(pdfBitmapScaleRatio || 1));
+          }
+
+          function viewportPointToPdfBitmapPoint(x, y) {
+            const ratio = getPdfBitmapScaleRatio();
+
+            return {
+              x: Number(x) * ratio,
+              y: Number(y) * ratio,
+            };
+          }
+
+          function pdfBitmapPointToViewportPoint(x, y) {
+            const ratio = getPdfBitmapScaleRatio();
+
+            return {
+              x: Number(x) / ratio,
+              y: Number(y) / ratio,
+            };
+          }
+
+          function viewportRadiusToPdfBitmapRadius(radiusPx) {
+            return Math.max(1, Math.ceil(Number(radiusPx || 1) * getPdfBitmapScaleRatio()));
           }
 
           function findVertexSnapPoint(xPdf, yPdf, options = {}) {
@@ -7560,9 +7616,10 @@
           function hasBackgroundCanvasInkNearViewportPoint(x, y, radiusPx = MAP_BACKGROUND_VECTOR_CANVAS_CONFIRM_SCREEN_PX) {
             if (!canvas || !ctx) return true;
 
-            const radius = Math.max(1, Math.ceil(Number(radiusPx || 1)));
-            const centerX = Math.round(Number(x));
-            const centerY = Math.round(Number(y));
+            const radius = viewportRadiusToPdfBitmapRadius(radiusPx);
+            const bitmapPoint = viewportPointToPdfBitmapPoint(x, y);
+            const centerX = Math.round(Number(bitmapPoint.x));
+            const centerY = Math.round(Number(bitmapPoint.y));
             if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return false;
 
             const left = Math.max(0, centerX - radius);
@@ -7645,9 +7702,14 @@
             if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
 
             const threshold = Math.max(1, Number(options.backgroundCanvasCornerThresholdPx || MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX));
-            const radius = Math.ceil(threshold);
-            const centerX = Math.round(sx);
-            const centerY = Math.round(sy);
+            const thresholdBitmap = viewportRadiusToPdfBitmapRadius(threshold);
+            const radius = thresholdBitmap;
+            const bitmapSourcePoint = viewportPointToPdfBitmapPoint(sx, sy);
+            const sourceBitmapX = Number(bitmapSourcePoint.x);
+            const sourceBitmapY = Number(bitmapSourcePoint.y);
+            const centerX = Math.round(sourceBitmapX);
+            const centerY = Math.round(sourceBitmapY);
+            if (!Number.isFinite(sourceBitmapX) || !Number.isFinite(sourceBitmapY)) return null;
             const left = Math.max(0, centerX - radius);
             const top = Math.max(0, centerY - radius);
             const right = Math.min(Number(canvas.width || 0), centerX + radius + 1);
@@ -7687,9 +7749,9 @@
             const colBands = collectBackgroundCanvasInkBands(cols, Math.max(6, height * 0.22));
             const hasAxisCornerBands = rowBands.length > 0 && colBands.length > 0;
 
-            const maxArm = Math.max(8, Math.floor(radius * 0.72));
-            const minArm = Math.max(4, Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX));
-            const centerInkRadius = Math.max(1, Number(options.backgroundCanvasCornerCenterInkPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX));
+            const maxArm = Math.max(4, Math.floor(radius * 0.72));
+            const minArm = Math.max(2, viewportRadiusToPdfBitmapRadius(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX));
+            const centerInkRadius = Math.max(1, viewportRadiusToPdfBitmapRadius(options.backgroundCanvasCornerCenterInkPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX));
 
             const hasArm = (cx, cy, dx, dy) => {
               let hits = 0;
@@ -7837,7 +7899,7 @@
               if (lines.length < 2) return null;
 
               let bestCorner = null;
-              let bestCornerScore = threshold * threshold;
+              let bestCornerScore = thresholdBitmap * thresholdBitmap;
 
               for (let i = 0; i < lines.length; i++) {
                 for (let j = i + 1; j < lines.length; j++) {
@@ -7863,8 +7925,8 @@
                   const py = top + iy + 0.5;
                   if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
 
-                  const d2 = distanceSq(sx, sy, px, py);
-                  if (d2 > threshold * threshold) continue;
+                  const d2 = distanceSq(sourceBitmapX, sourceBitmapY, px, py);
+                  if (d2 > thresholdBitmap * thresholdBitmap) continue;
 
                   const score = d2
                     - ((Number(first.score || 0) + Number(second.score || 0)) * 0.018)
@@ -7881,7 +7943,7 @@
             };
 
             let best = null;
-            let bestScore = threshold * threshold;
+            let bestScore = thresholdBitmap * thresholdBitmap;
 
             if (hasAxisCornerBands) {
               for (const row of rowBands) {
@@ -7892,8 +7954,8 @@
 
                   const px = left + cx + 0.5;
                   const py = top + cy + 0.5;
-                  const d2 = distanceSq(sx, sy, px, py);
-                  if (d2 > threshold * threshold) continue;
+                  const d2 = distanceSq(sourceBitmapX, sourceBitmapY, px, py);
+                  if (d2 > thresholdBitmap * thresholdBitmap) continue;
 
                   const hasHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
                   const hasVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
@@ -7918,7 +7980,8 @@
 
             if (!best) return null;
 
-            const pdfPoint = currentViewport.convertToPdfPoint(best.x, best.y);
+            const viewportBest = pdfBitmapPointToViewportPoint(best.x, best.y);
+            const pdfPoint = currentViewport.convertToPdfPoint(viewportBest.x, viewportBest.y);
             if (!Array.isArray(pdfPoint)) return null;
 
             const pxPdf = Number(pdfPoint[0]);
@@ -7934,7 +7997,7 @@
               Number(options.backgroundCanvasCornerFallbackMaxOffsetPx || MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX),
             );
             const currentScaleValue = Number(scale || currentViewport?.scale || 0);
-            const fallbackOffsetSq = distanceSq(sx, sy, best.x, best.y);
+            const fallbackOffsetSq = distanceSq(sx, sy, viewportBest.x, viewportBest.y);
 
             if (!Number.isFinite(currentScaleValue) || currentScaleValue < fallbackMinScale) {
               return null;
@@ -7962,9 +8025,14 @@
             if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
 
             const threshold = Math.max(1, Number(options.backgroundCanvasThresholdPx || MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX));
-            const radius = Math.ceil(threshold);
-            const centerX = Math.round(sx);
-            const centerY = Math.round(sy);
+            const thresholdBitmap = viewportRadiusToPdfBitmapRadius(threshold);
+            const radius = thresholdBitmap;
+            const bitmapSourcePoint = viewportPointToPdfBitmapPoint(sx, sy);
+            const sourceBitmapX = Number(bitmapSourcePoint.x);
+            const sourceBitmapY = Number(bitmapSourcePoint.y);
+            const centerX = Math.round(sourceBitmapX);
+            const centerY = Math.round(sourceBitmapY);
+            if (!Number.isFinite(sourceBitmapX) || !Number.isFinite(sourceBitmapY)) return null;
             const left = Math.max(0, centerX - radius);
             const top = Math.max(0, centerY - radius);
             const right = Math.min(Number(canvas.width || 0), centerX + radius + 1);
@@ -7985,7 +8053,7 @@
             if (!data || data.length < 4) return null;
 
             let best = null;
-            let bestScore = threshold * threshold;
+            let bestScore = thresholdBitmap * thresholdBitmap;
 
             for (let y = 0; y < height; y++) {
               for (let x = 0; x < width; x++) {
@@ -7995,8 +8063,8 @@
 
                 const px = left + x + 0.5;
                 const py = top + y + 0.5;
-                const d2 = distanceSq(sx, sy, px, py);
-                if (d2 > threshold * threshold) continue;
+                const d2 = distanceSq(sourceBitmapX, sourceBitmapY, px, py);
+                if (d2 > thresholdBitmap * thresholdBitmap) continue;
 
                 const score = d2 - (ink * 0.015);
                 if (score <= bestScore) {
@@ -8008,7 +8076,8 @@
 
             if (!best) return null;
 
-            const pdfPoint = currentViewport.convertToPdfPoint(best.x, best.y);
+            const viewportBest = pdfBitmapPointToViewportPoint(best.x, best.y);
+            const pdfPoint = currentViewport.convertToPdfPoint(viewportBest.x, viewportBest.y);
             if (!Array.isArray(pdfPoint)) return null;
 
             const pxPdf = Number(pdfPoint[0]);
@@ -8594,21 +8663,31 @@
             const centerX = stage.scrollLeft + stage.clientWidth / 2;
             const centerY = stage.scrollTop + stage.clientHeight / 2;
 
-            const prevW = canvas.width || 1;
-            const prevH = canvas.height || 1;
-            const relX = centerX / prevW;
-            const relY = centerY / prevH;
+            const prevViewportSize = getLogicalViewportSize();
+            const relX = centerX / prevViewportSize.width;
+            const relY = centerY / prevViewportSize.height;
 
-            const viewport = page.getViewport({ scale });
-            currentViewport = viewport;
+            const logicalViewport = page.getViewport({ scale });
+            currentViewport = logicalViewport;
 
-            const viewportWidth = Math.floor(viewport.width);
-            const viewportHeight = Math.floor(viewport.height);
+            const viewportWidth = Math.max(1, Math.floor(logicalViewport.width));
+            const viewportHeight = Math.max(1, Math.floor(logicalViewport.height));
+            logicalViewportWidth = viewportWidth;
+            logicalViewportHeight = viewportHeight;
 
-            canvas.width = viewportWidth;
-            canvas.height = viewportHeight;
+            const renderScale = getPdfBitmapRenderScale(logicalViewport);
+            const renderViewport = page.getViewport({ scale: renderScale });
+            const bitmapWidth = Math.max(1, Math.floor(renderViewport.width));
+            const bitmapHeight = Math.max(1, Math.floor(renderViewport.height));
+
+            canvas.width = bitmapWidth;
+            canvas.height = bitmapHeight;
             canvas.style.width = viewportWidth + 'px';
             canvas.style.height = viewportHeight + 'px';
+            pdfBitmapScaleRatio = Math.max(
+              0.0001,
+              Math.min(bitmapWidth / viewportWidth, bitmapHeight / viewportHeight),
+            );
 
             if (canvasWrap) {
               canvasWrap.style.width = viewportWidth + 'px';
@@ -8620,7 +8699,7 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.restore();
 
-            const renderTask = page.render({ canvasContext: ctx, viewport });
+            const renderTask = page.render({ canvasContext: ctx, viewport: renderViewport });
             activeRenderTask = renderTask;
 
             try {
@@ -8639,8 +8718,8 @@
 
             if (runId !== renderRunId) return;
 
-            stage.scrollLeft = Math.max(0, relX * canvas.width - stage.clientWidth / 2);
-            stage.scrollTop  = Math.max(0, relY * canvas.height - stage.clientHeight / 2);
+            stage.scrollLeft = Math.max(0, relX * viewportWidth - stage.clientWidth / 2);
+            stage.scrollTop  = Math.max(0, relY * viewportHeight - stage.clientHeight / 2);
             syncStageOverlayOffsets();
 
             setScaleLabel();
