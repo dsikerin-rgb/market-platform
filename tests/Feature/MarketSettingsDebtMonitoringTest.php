@@ -11,6 +11,7 @@ use App\Services\Debt\DebtDecisionPolicy;
 use App\Support\UserNotificationPreferences;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -263,6 +264,38 @@ class MarketSettingsDebtMonitoringTest extends TestCase
         $this->assertSame([(string) $this->superAdmin->id], $settings['request_notification_recipient_user_ids'] ?? null);
         $this->assertSame([(string) $this->superAdmin->id], $settings['request_repair_notification_recipient_user_ids'] ?? null);
         $this->assertTrue($settings['debt_monitoring']['use_settlement_balances_for_map'] ?? false);
+    }
+
+    public function test_market_settings_save_replaces_map_pdf_from_upload_state(): void
+    {
+        $marketMapDirectory = 'market-maps/market_'.$this->market->id;
+        $oldMapPath = $marketMapDirectory.'/old-map.pdf';
+        $newMapPath = $marketMapDirectory.'/new-map.pdf';
+
+        Storage::fake('local');
+        Storage::disk('local')->put($oldMapPath, '%PDF-1.7 old');
+        Storage::disk('local')->put($newMapPath, '%PDF-1.7 new');
+
+        $this->market->settings = [
+            'map_pdf_path' => $oldMapPath,
+        ];
+        $this->market->save();
+
+        $this->actingAs($this->superAdmin, 'web');
+        session(['dashboard_market_id' => $this->market->id]);
+
+        Livewire::test(MarketSettings::class)
+            ->set('data.map_pdf_path', ['demo-upload-key' => $newMapPath])
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->market->refresh();
+
+        $settings = $this->market->settings ?? [];
+
+        $this->assertSame($newMapPath, $settings['map_pdf_path'] ?? null);
+        Storage::disk('local')->assertExists($newMapPath);
+        Storage::disk('local')->assertMissing($oldMapPath);
     }
 
     /**
