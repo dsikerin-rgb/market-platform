@@ -8,6 +8,7 @@ use App\Filament\Resources\DemoRequestResource\Pages;
 use App\Models\DemoRequest;
 use Filament\Facades\Filament;
 use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -238,6 +239,19 @@ class DemoRequestResource extends BaseResource
 
         $actions = [];
 
+        $quickStatusActions = static::quickStatusActions();
+        $actionGroupClass = static::actionGroupClass();
+
+        if ($quickStatusActions !== [] && $actionGroupClass !== null) {
+            $actions[] = $actionGroupClass::make($quickStatusActions)
+                ->label('Статус')
+                ->icon('heroicon-o-check-circle')
+                ->color('gray')
+                ->tooltip('Быстро сменить статус');
+        } else {
+            array_push($actions, ...$quickStatusActions);
+        }
+
         if (class_exists(\Filament\Actions\EditAction::class)) {
             $actions[] = \Filament\Actions\EditAction::make()
                 ->label('Открыть');
@@ -286,6 +300,121 @@ class DemoRequestResource extends BaseResource
     public static function canDelete($record): bool
     {
         return false;
+    }
+
+    public static function applyLeadStatus(DemoRequest $record, string $status): void
+    {
+        if (! array_key_exists($status, DemoRequest::statusOptions())) {
+            abort(404);
+        }
+
+        if (! static::canEdit($record)) {
+            abort(403);
+        }
+
+        $record->forceFill([
+            'status' => $status,
+            'processed_at' => $status === DemoRequest::STATUS_NEW
+                ? null
+                : ($record->processed_at ?: now()),
+        ])->save();
+
+        Notification::make()
+            ->title('Статус заявки обновлён')
+            ->body(DemoRequest::statusLabel($status))
+            ->success()
+            ->send();
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private static function quickStatusActions(): array
+    {
+        $actionClass = static::actionClass();
+
+        if ($actionClass === null) {
+            return [];
+        }
+
+        return array_values(array_filter([
+            static::makeQuickStatusAction(
+                $actionClass,
+                DemoRequest::STATUS_CONTACTED,
+                'Связались',
+                'heroicon-o-phone',
+                'info',
+            ),
+            static::makeQuickStatusAction(
+                $actionClass,
+                DemoRequest::STATUS_QUALIFIED,
+                'Квалифицирована',
+                'heroicon-o-check-badge',
+                'success',
+            ),
+            static::makeQuickStatusAction(
+                $actionClass,
+                DemoRequest::STATUS_REJECTED,
+                'Не подходит',
+                'heroicon-o-x-circle',
+                'danger',
+                true,
+            ),
+        ]));
+    }
+
+    private static function makeQuickStatusAction(
+        string $actionClass,
+        string $status,
+        string $label,
+        string $icon,
+        string $color,
+        bool $requiresConfirmation = false,
+    ): mixed {
+        $action = $actionClass::make('mark_' . $status)
+            ->label($label)
+            ->icon($icon)
+            ->color($color)
+            ->visible(fn (DemoRequest $record): bool => static::canEdit($record) && (string) $record->status !== $status)
+            ->action(function (DemoRequest $record) use ($status): void {
+                static::applyLeadStatus($record, $status);
+            });
+
+        if ($requiresConfirmation && method_exists($action, 'requiresConfirmation')) {
+            $action
+                ->requiresConfirmation()
+                ->modalHeading('Отметить заявку как неподходящую?')
+                ->modalDescription('Заявка останется в истории, но исчезнет из списка новых лидов.')
+                ->modalSubmitActionLabel('Отметить');
+        }
+
+        return $action;
+    }
+
+    private static function actionClass(): ?string
+    {
+        if (class_exists(\Filament\Actions\Action::class)) {
+            return \Filament\Actions\Action::class;
+        }
+
+        if (class_exists(\Filament\Tables\Actions\Action::class)) {
+            return \Filament\Tables\Actions\Action::class;
+        }
+
+        return null;
+    }
+
+    private static function actionGroupClass(): ?string
+    {
+        if (class_exists(\Filament\Actions\ActionGroup::class)) {
+            return \Filament\Actions\ActionGroup::class;
+        }
+
+        if (class_exists(\Filament\Tables\Actions\ActionGroup::class)) {
+            return \Filament\Tables\Actions\ActionGroup::class;
+        }
+
+        return null;
     }
 
     private static function renderLeadProcessingRunbook(): HtmlString
