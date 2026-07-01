@@ -41,7 +41,7 @@ class DemoLandingPageTest extends TestCase
         $this->get('/demo')
             ->assertOk()
             ->assertSee('Демо-доступ к системе управления рынком')
-            ->assertSee('Подключиться к демо')
+            ->assertSee('Открыть демо')
             ->assertDontSee('Открыть демо как директор')
             ->assertSee('Live 1C, mail, Telegram и webhooks', false)
             ->assertSee('Презентация и коммерческое предложение')
@@ -50,18 +50,22 @@ class DemoLandingPageTest extends TestCase
             ->assertSee('name="name"', false)
             ->assertSee('name="organization"', false)
             ->assertSee('name="consent"', false)
+            ->assertSee(route('demo.quick-start'), false)
             ->assertSee(route('demo.request'), false)
+            ->assertDontSee(route('demo.sign-in'), false)
             ->assertSee('Отправить заявку');
     }
 
-    public function test_public_demo_sign_in_button_is_shown_only_when_enabled(): void
+    public function test_public_demo_entry_uses_quick_start_form_when_enabled(): void
     {
         config()->set('demo_pilot.public_login_enabled', true);
 
         $this->get('/demo')
             ->assertOk()
-            ->assertSee('Открыть демо как директор')
-            ->assertSee(route('demo.sign-in'), false);
+            ->assertSee('Открыть демо')
+            ->assertSee('После отправки контакта откроется демо-рынок')
+            ->assertSee(route('demo.quick-start'), false)
+            ->assertDontSee(route('demo.sign-in'), false);
     }
 
     public function test_public_demo_sign_in_requires_feature_flag(): void
@@ -229,6 +233,130 @@ class DemoLandingPageTest extends TestCase
             ->assertNotFound();
 
         $this->assertFalse(Auth::check());
+    }
+
+    public function test_quick_demo_start_stores_lead_and_logs_in_demo_director_when_public_login_enabled(): void
+    {
+        config()->set('demo_pilot.public_login_enabled', true);
+
+        $market = $this->createSyntheticDemoMarket();
+
+        $user = User::factory()->create([
+            'name' => 'Анна Волкова',
+            'email' => 'director@demo.marketuchet.local',
+            'market_id' => (int) $market->id,
+            'notification_preferences' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                ],
+            ],
+        ]);
+        $this->assignRole($user, 'market-owner-director');
+
+        $this->post(route('demo.quick-start'), [
+            'name' => 'Елена Соколова',
+            'organization' => 'Рынок Северный',
+            'email' => 'CLIENT@example.test',
+            'phone' => '+7 913 111-22-33',
+            'city' => 'Томск',
+            'consent' => '1',
+        ])
+            ->assertRedirect('/admin/market-map')
+            ->assertSessionHasNoErrors();
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertDatabaseHas('demo_requests', [
+            'status' => DemoRequest::STATUS_NEW,
+            'request_type' => DemoRequest::TYPE_DEMO,
+            'name' => 'Елена Соколова',
+            'organization' => 'Рынок Северный',
+            'email' => 'client@example.test',
+            'phone' => '+7 913 111-22-33',
+            'city' => 'Томск',
+            'source' => 'demo_quick_start',
+        ]);
+    }
+
+    public function test_quick_demo_start_keeps_existing_super_admin_context(): void
+    {
+        config()->set('demo_pilot.public_login_enabled', true);
+
+        $market = $this->createSyntheticDemoMarket();
+        $currentMarket = Market::query()->create([
+            'name' => 'Current Market',
+            'slug' => 'current-market',
+            'code' => 'CURRENT_MARKET',
+        ]);
+
+        $demoUser = User::factory()->create([
+            'name' => 'Demo Director',
+            'email' => 'director@demo.marketuchet.local',
+            'market_id' => (int) $market->id,
+            'notification_preferences' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                ],
+            ],
+        ]);
+        $this->assignRole($demoUser, 'market-owner-director');
+
+        $superAdmin = User::factory()->create([
+            'name' => 'Super Admin',
+            'email' => 'super-admin@example.test',
+        ]);
+        $this->assignRole($superAdmin, 'super-admin');
+
+        $this->actingAs($superAdmin, 'web');
+        session(['filament.admin.selected_market_id' => (int) $currentMarket->id]);
+
+        $this->post(route('demo.quick-start'), [
+            'name' => 'Павел Иванов',
+            'organization' => 'Эко Ярмарка',
+            'email' => 'pavel@example.test',
+            'consent' => '1',
+        ])
+            ->assertRedirect(route('demo.landing'))
+            ->assertSessionHas('demo_public_login_status', 'admin_session_active')
+            ->assertSessionHasNoErrors();
+
+        $this->assertAuthenticatedAs($superAdmin);
+        $this->assertSame((int) $currentMarket->id, (int) session('filament.admin.selected_market_id'));
+        $this->assertNotSame((int) $demoUser->id, (int) Auth::id());
+        $this->assertDatabaseHas('demo_requests', [
+            'name' => 'Павел Иванов',
+            'organization' => 'Эко Ярмарка',
+            'email' => 'pavel@example.test',
+            'source' => 'demo_quick_start',
+        ]);
+    }
+
+    public function test_quick_demo_start_without_public_login_saves_request_without_authentication(): void
+    {
+        $this->post(route('demo.quick-start'), [
+            'name' => 'Ольга Миронова',
+            'organization' => 'Рынок Южный',
+            'phone' => '+7 913 444-55-66',
+            'city' => 'Барнаул',
+            'consent' => '1',
+        ])
+            ->assertRedirect(route('demo.landing', ['request_sent' => 1]))
+            ->assertSessionHas('demo_request_status', 'sent')
+            ->assertSessionHas('demo_quick_start_status', 'access_pending')
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse(Auth::check());
+
+        $demoRequest = DemoRequest::query()->first();
+
+        $this->assertNotNull($demoRequest);
+        $this->assertSame('Ольга Миронова', $demoRequest->name);
+        $this->assertSame('Рынок Южный', $demoRequest->organization);
+        $this->assertSame('+7 913 444-55-66', $demoRequest->phone);
+        $this->assertSame('Барнаул', $demoRequest->city);
+        $this->assertSame('demo_quick_start', $demoRequest->source);
+        $this->assertStringStartsWith('phone-only-', $demoRequest->email);
+        $this->assertStringEndsWith('@demo-request.local', $demoRequest->email);
+        $this->assertTrue((bool) data_get($demoRequest->metadata, 'contact_email_missing'));
     }
 
     public function test_demo_request_form_stores_lead_and_notifies_owner(): void

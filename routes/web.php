@@ -84,6 +84,9 @@ Route::view('/demo', 'demo-pilot-landing')->name('demo.landing');
 Route::post('/demo/request', [DemoRequestController::class, 'store'])
     ->middleware('throttle:5,1')
     ->name('demo.request');
+Route::post('/demo/quick-start', [DemoRequestController::class, 'quickStart'])
+    ->middleware('throttle:5,1')
+    ->name('demo.quick-start');
 Route::post('/demo/sign-in', [DemoAccessController::class, 'signIn'])
     ->middleware('throttle:10,1')
     ->name('demo.sign-in');
