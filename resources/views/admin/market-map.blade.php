@@ -5556,6 +5556,7 @@
           if (!key) return '';
 
           const map = {
+            sqm_month: 'за м² в месяц',
             per_sqm_month: 'за м² в месяц',
             per_space_month: 'за место в месяц',
           };
