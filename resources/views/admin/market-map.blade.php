@@ -8299,11 +8299,9 @@
           function applyMapSnapPoint(xPdf, yPdf, options = {}) {
             const fallback = { x: Number(xPdf), y: Number(yPdf), snapped: false };
             const candidates = [
-              withSnapSource(findVertexSnapPoint(fallback.x, fallback.y, options), 'shape-vertex'),
               withSnapSource(findBackgroundVertexSnapPoint(fallback.x, fallback.y, options), 'background-vertex'),
               withSnapSource(findBackgroundIntersectionSnapPoint(fallback.x, fallback.y, options), 'background-intersection'),
               withSnapSource(findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options), 'background-edge'),
-              withSnapSource(findEdgeSnapPoint(fallback.x, fallback.y, options), 'shape-edge'),
             ];
 
             if (MAP_BACKGROUND_CANVAS_SNAP_ENABLED) {
