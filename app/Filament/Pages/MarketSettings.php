@@ -545,7 +545,7 @@ class MarketSettings extends Page
                     ->schema([
                         Forms\Components\FileUpload::make('map_pdf_path')
                             ->label('Карта (PDF)')
-                            ->helperText('Загрузите векторный PDF (рекомендуется). Файл хранится приватно.')
+                            ->helperText('Загрузите векторный PDF без теней, размытия и декоративных подложек у границ: прилипание ориентируется на контрастные линии PDF. Файл хранится приватно.')
                             ->acceptedFileTypes(['application/pdf'])
                             ->disk('local')
                             ->directory(fn (): string => $this->market ? 'market-maps/market_'.$this->market->id : 'market-maps')
