@@ -7744,33 +7744,13 @@
             const hasAxisCornerBands = rowBands.length > 0 && colBands.length > 0;
 
             const maxArm = Math.max(8, Math.floor(radius * 0.72));
-            const minArm = Math.max(2, Math.round(Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX) * canvasScale));
-            const centerInkRadius = Math.max(1, Math.round(Number(options.backgroundCanvasCornerCenterInkPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX) * canvasScale));
-            const nearArmLength = Math.max(1, Math.round(Number(options.backgroundCanvasCornerNearArmPx || MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX) * canvasScale));
-            const centerGapLength = Math.max(
-              nearArmLength,
-              Math.round(Number(options.backgroundCanvasCornerCenterGapPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_GAP_PX) * canvasScale),
-            );
+            const minArm = Math.max(4, Math.round(Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX) * canvasScale));
+            const centerInkRadius = Math.max(1, Math.round(canvasScale));
 
-            const hasInkNear = (cx, cy, radiusPx) => {
-              const radiusSq = radiusPx * radiusPx;
-
-              for (let y = Math.floor(cy - radiusPx); y <= Math.ceil(cy + radiusPx); y++) {
-                for (let x = Math.floor(cx - radiusPx); x <= Math.ceil(cx + radiusPx); x++) {
-                  if (distanceSq(cx, cy, x, y) > radiusSq) continue;
-                  if (isInkAt(x, y)) return true;
-                }
-              }
-
-              return false;
-            };
-
-            const hasArm = (cx, cy, dx, dy, allowCenterGap = false) => {
+            const hasArm = (cx, cy, dx, dy) => {
               let hits = 0;
-              let nearHits = 0;
-              let firstHitStep = null;
 
-              for (let step = 1; step <= maxArm; step++) {
+              for (let step = 2; step <= maxArm; step++) {
                 const x = Math.round(cx + (dx * step));
                 const y = Math.round(cy + (dy * step));
                 let found = false;
@@ -7781,20 +7761,10 @@
                   found = isInkAt(px, py);
                 }
 
-                if (found) {
-                  hits += 1;
-                  if (firstHitStep === null) firstHitStep = step;
-                  if (step <= nearArmLength) nearHits += 1;
-                }
+                if (found) hits += 1;
               }
 
-              if (allowCenterGap) {
-                return firstHitStep !== null
-                  && firstHitStep <= centerGapLength
-                  && hits >= Math.max(1, minArm - 1);
-              }
-
-              return nearHits > 0 && hits >= minArm;
+              return hits >= minArm;
             };
 
             const sampleInkAtLine = (x, y, normalX, normalY) => {
@@ -7824,7 +7794,6 @@
               }
 
               return firstHitStep !== null
-                && firstHitStep <= centerGapLength
                 && hits >= Math.max(1, minArm - 1);
             };
 
@@ -7986,15 +7955,11 @@
                   const d2 = distanceSq(sx, sy, px, py);
                   if (d2 > threshold * threshold) continue;
 
-                  const hasCenterInk = hasInkNear(cx, cy, centerInkRadius);
-                  const hasStrictHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
-                  const hasStrictVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
-                  const hasRelaxedHorizontal = hasStrictHorizontal || hasArm(cx, cy, -1, 0, true) || hasArm(cx, cy, 1, 0, true);
-                  const hasRelaxedVertical = hasStrictVertical || hasArm(cx, cy, 0, -1, true) || hasArm(cx, cy, 0, 1, true);
-                  if (!hasRelaxedHorizontal || !hasRelaxedVertical) continue;
+                  const hasHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
+                  const hasVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
+                  if (!hasHorizontal || !hasVertical) continue;
 
-                  const relaxedPenalty = hasCenterInk && hasStrictHorizontal && hasStrictVertical ? 0 : 9;
-                  const score = d2 + relaxedPenalty - ((Number(row.score || 0) + Number(col.score || 0)) * 0.015);
+                  const score = d2 - ((Number(row.score || 0) + Number(col.score || 0)) * 0.015);
                   if (score <= bestScore) {
                     bestScore = score;
                     best = { x: px, y: py };
@@ -8441,11 +8406,7 @@
 
           function applyMapSnapPoint(xPdf, yPdf, options = {}) {
             const fallback = { x: Number(xPdf), y: Number(yPdf), snapped: false };
-            const candidates = [
-              withSnapSource(findBackgroundVertexSnapPoint(fallback.x, fallback.y, options), 'background-vertex'),
-              withSnapSource(findBackgroundIntersectionSnapPoint(fallback.x, fallback.y, options), 'background-intersection'),
-              withSnapSource(findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options), 'background-edge'),
-            ];
+            const candidates = [];
 
             if (MAP_BACKGROUND_CANVAS_SNAP_ENABLED) {
               candidates.push(
