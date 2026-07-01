@@ -3503,8 +3503,6 @@
         const CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
         const MAP_MIN_SCALE = 0.2;
         const MAP_MAX_SCALE = 15.4;
-        const MAP_PDF_RENDER_MAX_CANVAS_SIDE_PX = 8192;
-        const MAP_PDF_RENDER_MAX_CANVAS_AREA_PX = 48000000;
         const MAP_VERTEX_SNAP_SCREEN_PX = 10;
         const MAP_EDGE_SNAP_SCREEN_PX = 8;
         const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 15;
@@ -5928,10 +5926,6 @@
           let page = null;
           let scale = 1.0;
           let currentViewport = null;
-          let currentViewportWidth = 0;
-          let currentViewportHeight = 0;
-          let backgroundCanvasScaleX = 1;
-          let backgroundCanvasScaleY = 1;
           let renderRunId = 0;
           let renderQueue = Promise.resolve();
           let activeRenderTask = null;
@@ -6465,49 +6459,6 @@
             if (scaleLabel) scaleLabel.textContent = 'Масштаб: ' + Math.round(scale * 100) + '%';
           }
 
-          function mapDisplayWidth() {
-            return Number(currentViewportWidth || currentViewport?.width || canvas?.getBoundingClientRect?.().width || canvas?.width || 0);
-          }
-
-          function mapDisplayHeight() {
-            return Number(currentViewportHeight || currentViewport?.height || canvas?.getBoundingClientRect?.().height || canvas?.height || 0);
-          }
-
-          function resolvePdfRenderScale(logicalScale) {
-            const requestedScale = Math.max(MAP_MIN_SCALE, Number(logicalScale || 1));
-            if (!page || typeof page.getViewport !== 'function') return requestedScale;
-
-            const baseViewport = page.getViewport({ scale: 1 });
-            const baseWidth = Number(baseViewport?.width || 0);
-            const baseHeight = Number(baseViewport?.height || 0);
-            if (!Number.isFinite(baseWidth) || !Number.isFinite(baseHeight) || baseWidth <= 0 || baseHeight <= 0) {
-              return requestedScale;
-            }
-
-            const maxBySide = Math.min(
-              MAP_PDF_RENDER_MAX_CANVAS_SIDE_PX / baseWidth,
-              MAP_PDF_RENDER_MAX_CANVAS_SIDE_PX / baseHeight,
-            );
-            const maxByArea = Math.sqrt(MAP_PDF_RENDER_MAX_CANVAS_AREA_PX / (baseWidth * baseHeight));
-            const maxRenderScale = Math.max(MAP_MIN_SCALE, Math.min(MAP_MAX_SCALE, maxBySide, maxByArea));
-
-            return Math.min(requestedScale, maxRenderScale);
-          }
-
-          function logicalToBackgroundCanvasPoint(x, y) {
-            return {
-              x: Number(x) * Math.max(0.0001, Number(backgroundCanvasScaleX || 1)),
-              y: Number(y) * Math.max(0.0001, Number(backgroundCanvasScaleY || 1)),
-            };
-          }
-
-          function backgroundCanvasToLogicalPoint(x, y) {
-            return {
-              x: Number(x) / Math.max(0.0001, Number(backgroundCanvasScaleX || 1)),
-              y: Number(y) / Math.max(0.0001, Number(backgroundCanvasScaleY || 1)),
-            };
-          }
-
           function approximateTextWidth(text, fontSize) {
             return String(text || '').length * fontSize * 0.58;
           }
@@ -6669,12 +6620,9 @@
           function redrawShapes() {
             if (!shapesSvg || !currentViewport) return;
 
-            const displayWidth = Math.max(1, Math.round(mapDisplayWidth()));
-            const displayHeight = Math.max(1, Math.round(mapDisplayHeight()));
-
-            shapesSvg.setAttribute('width', String(displayWidth));
-            shapesSvg.setAttribute('height', String(displayHeight));
-            shapesSvg.setAttribute('viewBox', '0 0 ' + displayWidth + ' ' + displayHeight);
+            shapesSvg.setAttribute('width', String(canvas.width));
+            shapesSvg.setAttribute('height', String(canvas.height));
+            shapesSvg.setAttribute('viewBox', '0 0 ' + canvas.width + ' ' + canvas.height);
 
             const parts = [];
             parts.push(
@@ -7052,14 +7000,14 @@
 
           function getCanvasPointFromClient(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            const displayWidth = Math.max(1, mapDisplayWidth());
-            const displayHeight = Math.max(1, mapDisplayHeight());
-            const rectWidth = Math.max(1, Number(rect?.width || displayWidth));
-            const rectHeight = Math.max(1, Number(rect?.height || displayHeight));
+            const canvasWidth = Math.max(1, Number(canvas.width || rect?.width || 1));
+            const canvasHeight = Math.max(1, Number(canvas.height || rect?.height || 1));
+            const rectWidth = Math.max(1, Number(rect?.width || canvasWidth));
+            const rectHeight = Math.max(1, Number(rect?.height || canvasHeight));
 
             return {
-              x: (Number(clientX) - Number(rect.left || 0)) * (displayWidth / rectWidth),
-              y: (Number(clientY) - Number(rect.top || 0)) * (displayHeight / rectHeight),
+              x: (Number(clientX) - Number(rect.left || 0)) * (canvasWidth / rectWidth),
+              y: (Number(clientY) - Number(rect.top || 0)) * (canvasHeight / rectHeight),
             };
           }
 
@@ -7612,11 +7560,9 @@
           function hasBackgroundCanvasInkNearViewportPoint(x, y, radiusPx = MAP_BACKGROUND_VECTOR_CANVAS_CONFIRM_SCREEN_PX) {
             if (!canvas || !ctx) return true;
 
-            const canvasPoint = logicalToBackgroundCanvasPoint(x, y);
-            const canvasScale = Math.max(0.0001, Number(backgroundCanvasScaleX || 1), Number(backgroundCanvasScaleY || 1));
-            const radius = Math.max(1, Math.ceil(Number(radiusPx || 1) * canvasScale));
-            const centerX = Math.round(Number(canvasPoint.x));
-            const centerY = Math.round(Number(canvasPoint.y));
+            const radius = Math.max(1, Math.ceil(Number(radiusPx || 1)));
+            const centerX = Math.round(Number(x));
+            const centerY = Math.round(Number(y));
             if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return false;
 
             const left = Math.max(0, centerX - radius);
@@ -7699,11 +7645,9 @@
             if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
 
             const threshold = Math.max(1, Number(options.backgroundCanvasCornerThresholdPx || MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX));
-            const canvasPoint = logicalToBackgroundCanvasPoint(sx, sy);
-            const canvasScale = Math.max(0.0001, Number(backgroundCanvasScaleX || 1), Number(backgroundCanvasScaleY || 1));
-            const radius = Math.ceil(threshold * canvasScale);
-            const centerX = Math.round(canvasPoint.x);
-            const centerY = Math.round(canvasPoint.y);
+            const radius = Math.ceil(threshold);
+            const centerX = Math.round(sx);
+            const centerY = Math.round(sy);
             const left = Math.max(0, centerX - radius);
             const top = Math.max(0, centerY - radius);
             const right = Math.min(Number(canvas.width || 0), centerX + radius + 1);
@@ -7744,8 +7688,8 @@
             const hasAxisCornerBands = rowBands.length > 0 && colBands.length > 0;
 
             const maxArm = Math.max(8, Math.floor(radius * 0.72));
-            const minArm = Math.max(4, Math.round(Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX) * canvasScale));
-            const centerInkRadius = Math.max(1, Math.round(canvasScale));
+            const minArm = Math.max(4, Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX));
+            const centerInkRadius = Math.max(1, Number(options.backgroundCanvasCornerCenterInkPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX));
 
             const hasArm = (cx, cy, dx, dy) => {
               let hits = 0;
@@ -7915,9 +7859,8 @@
                   if (!hasCanvasLineArm(ix, iy, firstDir.x, firstDir.y)) continue;
                   if (!hasCanvasLineArm(ix, iy, secondDir.x, secondDir.y)) continue;
 
-                  const logicalPoint = backgroundCanvasToLogicalPoint(left + ix + 0.5, top + iy + 0.5);
-                  const px = Number(logicalPoint.x);
-                  const py = Number(logicalPoint.y);
+                  const px = left + ix + 0.5;
+                  const py = top + iy + 0.5;
                   if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
 
                   const d2 = distanceSq(sx, sy, px, py);
@@ -7947,11 +7890,8 @@
                   const cy = Number(row.center);
                   if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
 
-                  const pxCanvas = left + cx + 0.5;
-                  const pyCanvas = top + cy + 0.5;
-                  const logicalPoint = backgroundCanvasToLogicalPoint(pxCanvas, pyCanvas);
-                  const px = Number(logicalPoint.x);
-                  const py = Number(logicalPoint.y);
+                  const px = left + cx + 0.5;
+                  const py = top + cy + 0.5;
                   const d2 = distanceSq(sx, sy, px, py);
                   if (d2 > threshold * threshold) continue;
 
@@ -8022,11 +7962,9 @@
             if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
 
             const threshold = Math.max(1, Number(options.backgroundCanvasThresholdPx || MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX));
-            const canvasPoint = logicalToBackgroundCanvasPoint(sx, sy);
-            const canvasScale = Math.max(0.0001, Number(backgroundCanvasScaleX || 1), Number(backgroundCanvasScaleY || 1));
-            const radius = Math.ceil(threshold * canvasScale);
-            const centerX = Math.round(canvasPoint.x);
-            const centerY = Math.round(canvasPoint.y);
+            const radius = Math.ceil(threshold);
+            const centerX = Math.round(sx);
+            const centerY = Math.round(sy);
             const left = Math.max(0, centerX - radius);
             const top = Math.max(0, centerY - radius);
             const right = Math.min(Number(canvas.width || 0), centerX + radius + 1);
@@ -8055,9 +7993,8 @@
                 const ink = backgroundCanvasInkValue(data, offset);
                 if (ink <= 0) continue;
 
-                const logicalPoint = backgroundCanvasToLogicalPoint(left + x + 0.5, top + y + 0.5);
-                const px = Number(logicalPoint.x);
-                const py = Number(logicalPoint.y);
+                const px = left + x + 0.5;
+                const py = top + y + 0.5;
                 const d2 = distanceSq(sx, sy, px, py);
                 if (d2 > threshold * threshold) continue;
 
@@ -8657,8 +8594,8 @@
             const centerX = stage.scrollLeft + stage.clientWidth / 2;
             const centerY = stage.scrollTop + stage.clientHeight / 2;
 
-            const prevW = mapDisplayWidth() || canvas.width || 1;
-            const prevH = mapDisplayHeight() || canvas.height || 1;
+            const prevW = canvas.width || 1;
+            const prevH = canvas.height || 1;
             const relX = centerX / prevW;
             const relY = centerY / prevH;
 
@@ -8667,20 +8604,11 @@
 
             const viewportWidth = Math.floor(viewport.width);
             const viewportHeight = Math.floor(viewport.height);
-            currentViewportWidth = viewportWidth;
-            currentViewportHeight = viewportHeight;
 
-            const renderScale = resolvePdfRenderScale(scale);
-            const renderViewport = renderScale === scale ? viewport : page.getViewport({ scale: renderScale });
-            const renderViewportWidth = Math.max(1, Math.floor(renderViewport.width));
-            const renderViewportHeight = Math.max(1, Math.floor(renderViewport.height));
-
-            canvas.width = renderViewportWidth;
-            canvas.height = renderViewportHeight;
+            canvas.width = viewportWidth;
+            canvas.height = viewportHeight;
             canvas.style.width = viewportWidth + 'px';
             canvas.style.height = viewportHeight + 'px';
-            backgroundCanvasScaleX = renderViewportWidth / Math.max(1, viewportWidth);
-            backgroundCanvasScaleY = renderViewportHeight / Math.max(1, viewportHeight);
 
             if (canvasWrap) {
               canvasWrap.style.width = viewportWidth + 'px';
@@ -8692,7 +8620,7 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.restore();
 
-            const renderTask = page.render({ canvasContext: ctx, viewport: renderViewport });
+            const renderTask = page.render({ canvasContext: ctx, viewport });
             activeRenderTask = renderTask;
 
             try {
@@ -8711,8 +8639,8 @@
 
             if (runId !== renderRunId) return;
 
-            stage.scrollLeft = Math.max(0, relX * viewportWidth - stage.clientWidth / 2);
-            stage.scrollTop  = Math.max(0, relY * viewportHeight - stage.clientHeight / 2);
+            stage.scrollLeft = Math.max(0, relX * canvas.width - stage.clientWidth / 2);
+            stage.scrollTop  = Math.max(0, relY * canvas.height - stage.clientHeight / 2);
             syncStageOverlayOffsets();
 
             setScaleLabel();
@@ -9141,12 +9069,8 @@
             const selected = diagnostics.selected || null;
             const lines = [];
             lines.push('snap debug');
-            lines.push('scale=' + formatSnapDebugNumber(scale, 3)
-              + ' renderScale=' + formatSnapDebugNumber(backgroundCanvasScaleX, 3)
-              + '/' + formatSnapDebugNumber(backgroundCanvasScaleY, 3));
-            lines.push('display=' + formatSnapDebugNumber(currentViewportWidth, 0)
-              + 'x' + formatSnapDebugNumber(currentViewportHeight, 0)
-              + ' canvas=' + formatSnapDebugNumber(canvas?.width, 0)
+            lines.push('scale=' + formatSnapDebugNumber(scale, 3));
+            lines.push('canvas=' + formatSnapDebugNumber(canvas?.width, 0)
               + 'x' + formatSnapDebugNumber(canvas?.height, 0));
             lines.push('bg segments=' + String(backgroundSnapSegments.length)
               + ' points=' + String(backgroundSnapPoints.length));
