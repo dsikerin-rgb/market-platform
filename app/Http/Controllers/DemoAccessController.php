@@ -39,10 +39,16 @@ class DemoAccessController extends Controller
         $existingUser = $guard->user();
 
         if ($existingUser instanceof User) {
-            if ((int) $existingUser->id === (int) $user->id || $this->isSuperAdmin($existingUser)) {
+            if ((int) $existingUser->id === (int) $user->id) {
                 $this->syncDemoMarketContext($market);
 
                 return redirect()->to($settings->publicLoginRedirectPath());
+            }
+
+            if ($this->isSuperAdmin($existingUser)) {
+                return redirect()
+                    ->route('demo.landing')
+                    ->with('demo_public_login_status', 'admin_session_active');
             }
 
             return redirect()

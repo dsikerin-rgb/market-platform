@@ -96,11 +96,16 @@ class DemoLandingPageTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
-    public function test_public_demo_sign_in_keeps_existing_super_admin_account(): void
+    public function test_public_demo_sign_in_keeps_existing_super_admin_context(): void
     {
         config()->set('demo_pilot.public_login_enabled', true);
 
         $market = $this->createSyntheticDemoMarket();
+        $currentMarket = Market::query()->create([
+            'name' => 'Current Market',
+            'slug' => 'current-market',
+            'code' => 'CURRENT_MARKET',
+        ]);
 
         $demoUser = User::factory()->create([
             'name' => 'Demo Director',
@@ -121,12 +126,24 @@ class DemoLandingPageTest extends TestCase
         $this->assignRole($superAdmin, 'super-admin');
 
         $this->actingAs($superAdmin, 'web');
+        session(['filament.admin.selected_market_id' => (int) $currentMarket->id]);
 
         $this->post(route('demo.sign-in'))
-            ->assertRedirect('/admin/market-map');
+            ->assertRedirect(route('demo.landing'))
+            ->assertSessionHas('demo_public_login_status', 'admin_session_active');
 
         $this->assertAuthenticatedAs($superAdmin);
-        $this->assertSame((int) $market->id, (int) session('filament.admin.selected_market_id'));
+        $this->assertSame((int) $currentMarket->id, (int) session('filament.admin.selected_market_id'));
+        $this->assertNotSame((int) $demoUser->id, (int) Auth::id());
+    }
+
+    public function test_demo_landing_shows_admin_session_warning(): void
+    {
+        $this->withSession(['demo_public_login_status' => 'admin_session_active'])
+            ->get('/demo')
+            ->assertOk()
+            ->assertSee('Вы уже вошли в админку')
+            ->assertSee('отдельном браузере');
     }
 
     public function test_public_demo_sign_in_does_not_replace_existing_market_user(): void

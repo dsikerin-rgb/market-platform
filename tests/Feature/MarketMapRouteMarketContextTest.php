@@ -12,7 +12,7 @@ class MarketMapRouteMarketContextTest extends TestCase
     {
         $source = (string) file_get_contents(base_path('routes/web.php'));
 
-        $start = strpos($source, '$resolveMarketForMap = function (): Market {');
+        $start = strpos($source, '$resolveMarketForMap = function (');
         self::assertIsInt($start);
 
         $end = strpos($source, '$bindingRiskWarnings', $start);
@@ -21,7 +21,11 @@ class MarketMapRouteMarketContextTest extends TestCase
         $resolverSource = substr($source, $start, $end - $start);
 
         self::assertStringContainsString(
-            'app(MarketContext::class)->selectedMarketIdFromSession()',
+            '$marketContext = app(MarketContext::class);',
+            $resolverSource,
+        );
+        self::assertStringContainsString(
+            '$selectedMarketId = $marketContext->selectedMarketIdFromSession();',
             $resolverSource,
         );
         self::assertStringNotContainsString('Filament::getCurrentPanel()?->getId()', $resolverSource);
