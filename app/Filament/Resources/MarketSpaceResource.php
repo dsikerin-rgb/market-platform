@@ -2071,6 +2071,7 @@ class MarketSpaceResource extends BaseResource
     protected static function rentRateUnitOptions(): array
     {
         return [
+            'sqm_month' => 'за м² в месяц',
             'per_sqm_month' => 'за м² в месяц',
             'per_space_month' => 'за место в месяц',
         ];
