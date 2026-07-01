@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Регламент обработки первых лидов добавлен: SLA связи, квалификация, шаблон ответа, карточка заявки и checklist для отдельного решения по public demo flag.',
-    'next_step' => 'Провести rollback drill через flags и отдельно решить, включать ли public demo flag на prod после проверки лид-воронки.',
+    'current_focus' => 'Rollback drill для demo/public demo flags подготовлен: read-only audit command, baseline безопасных флагов и emergency rollback зафиксированы.',
+    'next_step' => 'После staging drill отдельно решить, включать ли public demo flag на prod для самостоятельного входа потенциальных клиентов.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -157,7 +157,7 @@ return [
                 ['title' => 'Prod deploy с flags off', 'status' => 'done'],
                 ['title' => 'Prod demo data import выполнен после pg_dump backup и dry-run preflight; боевой рынок id=1 не обновлялся', 'status' => 'done'],
                 ['title' => 'Prod flags on отдельным решением', 'status' => 'pending'],
-                ['title' => 'Rollback drill через flags', 'status' => 'pending'],
+                ['title' => 'Rollback drill через flags: read-only audit command, staging drill и emergency rollback runbook подготовлены', 'status' => 'done'],
             ],
         ],
     ],
