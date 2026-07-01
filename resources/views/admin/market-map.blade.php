@@ -12,6 +12,11 @@
     $canUseMapSearch = $canEdit || ! $canViewFinanceMap;
     $marketSpaceNotLinked = isset($marketSpaceNotLinked) ? (bool) $marketSpaceNotLinked : false;
     $canOpenPdf = isset($canOpenPdf) ? (bool) $canOpenPdf : false;
+    $currentUser = auth()->user();
+    $canUseSnapDiagnostics = $canEdit
+        && $currentUser
+        && method_exists($currentUser, 'isSuperAdmin')
+        && $currentUser->isSuperAdmin();
 
     $settingsUrl = $settingsUrl ?? url('/admin/market-settings');
     $returnUrl = is_string($returnUrl ?? null) && trim((string) $returnUrl) !== ''
@@ -2417,6 +2422,129 @@
       display: none;
     }
 
+    .snap-diagnostics-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10030;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .snap-diagnostics-modal.show {
+      display: flex;
+    }
+    .snap-diagnostics-modal__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.42);
+      -webkit-backdrop-filter: blur(5px);
+      backdrop-filter: blur(5px);
+    }
+    .snap-diagnostics-modal__dialog {
+      position: relative;
+      width: min(520px, 100%);
+      max-height: min(680px, calc(100vh - 32px));
+      overflow: auto;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.32);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+      padding: 18px;
+      color: #0f172a;
+    }
+    .snap-diagnostics-modal__head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .snap-diagnostics-modal__title {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+    .snap-diagnostics-modal__close {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(148, 163, 184, 0.12);
+      color: #334155;
+    }
+    .snap-diagnostics-modal__section {
+      display: grid;
+      gap: 10px;
+      padding: 12px 0;
+      border-top: 1px solid rgba(148, 163, 184, 0.24);
+    }
+    .snap-diagnostics-modal__section-title {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+    }
+    .snap-diagnostics-modal__check,
+    .snap-diagnostics-modal__range {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 12px;
+      align-items: center;
+      font-size: 13px;
+      color: #1e293b;
+    }
+    .snap-diagnostics-modal__check {
+      grid-template-columns: auto 1fr;
+    }
+    .snap-diagnostics-modal__check input {
+      width: 17px;
+      height: 17px;
+      accent-color: #2563eb;
+    }
+    .snap-diagnostics-modal__range input {
+      grid-column: 1 / -1;
+      width: 100%;
+      accent-color: #2563eb;
+    }
+    .snap-diagnostics-modal__value {
+      min-width: 54px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: #475569;
+    }
+    .snap-diagnostics-modal__status {
+      min-height: 18px;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .snap-diagnostics-modal__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding-top: 12px;
+      border-top: 1px solid rgba(148, 163, 184, 0.24);
+    }
+    .snap-diagnostics-modal__actions button {
+      min-width: 104px;
+    }
+    .snap-diagnostics-modal__reset {
+      background: rgba(148, 163, 184, 0.12);
+      border-color: rgba(148, 163, 184, 0.35);
+    }
+    .snap-diagnostics-modal__done {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+    }
+    .snap-diagnostics-modal__done:hover {
+      background: #1e40af;
+    }
+
     .empty {
       padding: 14px;
       border-radius: 14px;
@@ -3121,6 +3249,9 @@
                     <button id="railSplitHorizontal" type="button" title="Разделить выбранное место горизонтально пополам" aria-label="Разделить выбранное место горизонтально пополам">⇕</button>
                     <button id="railGroup" type="button" title="Группировка мест" aria-label="Группировка мест">⊞</button>
                     <button id="railUngroup" type="button" title="Разгруппировка места" aria-label="Разгруппировка места">⊟</button>
+                    @if ($canUseSnapDiagnostics)
+                      <button id="railSnapDiagnostics" type="button" title="Диагностика прилипания" aria-label="Диагностика прилипания">⚙</button>
+                    @endif
                     <button id="railCancelTool" type="button" title="Отменить текущий инструмент" aria-label="Отменить текущий инструмент">↶</button>
                   </div>
                 @endif
@@ -3273,6 +3404,82 @@
         <div id="popoverBody"></div>
       </div>
       <div id="snapDebugPanel" class="snap-debug-panel" hidden aria-hidden="true"></div>
+
+      @if ($canUseSnapDiagnostics)
+        <div id="snapDiagnosticsModal" class="snap-diagnostics-modal" hidden aria-hidden="true">
+          <div class="snap-diagnostics-modal__backdrop" data-action="close"></div>
+          <div
+            class="snap-diagnostics-modal__dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="snapDiagnosticsTitle"
+          >
+            <div class="snap-diagnostics-modal__head">
+              <h2 id="snapDiagnosticsTitle" class="snap-diagnostics-modal__title">Диагностика прилипания</h2>
+              <button id="snapDiagnosticsClose" class="snap-diagnostics-modal__close" type="button" aria-label="Закрыть">×</button>
+            </div>
+
+            <div class="snap-diagnostics-modal__section">
+              <p class="snap-diagnostics-modal__section-title">Источники</p>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="backgroundCanvasCornerEnabled">
+                <span>Углы и узлы PDF-подложки</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="backgroundCanvasLineEnabled">
+                <span>Линии PDF-подложки</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="backgroundCanvasCornerHoughEnabled">
+                <span>Диагональные углы PDF-подложки</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="shapeVertexEnabled">
+                <span>Точки фигур</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="shapeEdgeEnabled">
+                <span>Линии фигур</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="debugPanelEnabled">
+                <span>Показывать диагностику на карте</span>
+              </label>
+            </div>
+
+            <div class="snap-diagnostics-modal__section">
+              <p class="snap-diagnostics-modal__section-title">Радиус захвата</p>
+              <label class="snap-diagnostics-modal__range">
+                <span>Углы PDF</span>
+                <span class="snap-diagnostics-modal__value" data-snap-value-for="backgroundCanvasCornerThresholdPx"></span>
+                <input type="range" min="8" max="80" step="1" data-snap-setting="backgroundCanvasCornerThresholdPx">
+              </label>
+              <label class="snap-diagnostics-modal__range">
+                <span>Линии PDF</span>
+                <span class="snap-diagnostics-modal__value" data-snap-value-for="backgroundCanvasThresholdPx"></span>
+                <input type="range" min="4" max="60" step="1" data-snap-setting="backgroundCanvasThresholdPx">
+              </label>
+              <label class="snap-diagnostics-modal__range">
+                <span>Точки фигур</span>
+                <span class="snap-diagnostics-modal__value" data-snap-value-for="shapeVertexThresholdPx"></span>
+                <input type="range" min="4" max="40" step="1" data-snap-setting="shapeVertexThresholdPx">
+              </label>
+              <label class="snap-diagnostics-modal__range">
+                <span>Линии фигур</span>
+                <span class="snap-diagnostics-modal__value" data-snap-value-for="shapeEdgeThresholdPx"></span>
+                <input type="range" min="4" max="40" step="1" data-snap-setting="shapeEdgeThresholdPx">
+              </label>
+            </div>
+
+            <div id="snapDiagnosticsStatus" class="snap-diagnostics-modal__status" aria-live="polite"></div>
+
+            <div class="snap-diagnostics-modal__actions">
+              <button id="snapDiagnosticsReset" class="snap-diagnostics-modal__reset" type="button">Сбросить</button>
+              <button id="snapDiagnosticsDone" class="snap-diagnostics-modal__done" type="button">Готово</button>
+            </div>
+          </div>
+        </div>
+      @endif
 
       <div id="identityFixModal" class="identity-fix-modal" hidden aria-hidden="true">
         <div class="identity-fix-modal__backdrop" data-action="close"></div>
@@ -3491,6 +3698,7 @@
         const CAN_VIEW_FINANCE = @json((bool) $canViewFinanceMap);
         const CAN_BIND_CONTRACTS = @json((bool) ($canBindContracts ?? false));
         const CAN_OPEN_PDF = @json((bool) $canOpenPdf);
+        const CAN_USE_SNAP_DIAGNOSTICS = @json((bool) $canUseSnapDiagnostics);
         const INITIAL_MAP_MODE = @json($mapMode ?? 'map');
         const MARKET_ID = @json((int) $marketId);
         const MAP_PAGE = @json((int) ($mapPage ?? 1));
@@ -3533,6 +3741,9 @@
         const MAP_BACKGROUND_NODE_SNAP_LOCK_SCREEN_PX = 0;
         const MAP_BACKGROUND_NODE_SNAP_SWITCH_SCREEN_PX = 10;
         const MAP_VERTEX_AXIS_LOCK_SCREEN_PX = 4;
+        // Cap only the rendered PDF bitmap; map coordinates stay in the full logical viewport.
+        const MAP_PDF_RENDER_MAX_BITMAP_SIDE = 8192;
+        const MAP_PDF_RENDER_MAX_BITMAP_PIXELS = 16777216;
 
         const viewerRoot = document.getElementById('viewerRoot');
 
@@ -3567,7 +3778,13 @@
         const railSplitHorizontalBtn = document.getElementById('railSplitHorizontal');
         const railGroupBtn = document.getElementById('railGroup');
         const railUngroupBtn = document.getElementById('railUngroup');
+        const railSnapDiagnosticsBtn = document.getElementById('railSnapDiagnostics');
         const railCancelToolBtn = document.getElementById('railCancelTool');
+        const snapDiagnosticsModal = document.getElementById('snapDiagnosticsModal');
+        const snapDiagnosticsCloseBtn = document.getElementById('snapDiagnosticsClose');
+        const snapDiagnosticsResetBtn = document.getElementById('snapDiagnosticsReset');
+        const snapDiagnosticsDoneBtn = document.getElementById('snapDiagnosticsDone');
+        const snapDiagnosticsStatus = document.getElementById('snapDiagnosticsStatus');
         const scenarioMapBtn = document.getElementById('scenarioMap');
         const scenarioReviewBtn = document.getElementById('scenarioReview');
         const layerGroup = layerDebtBtn?.closest('.toolbar-group') || null;
@@ -5893,15 +6110,185 @@
           const drawBox = document.getElementById('drawBox');
           const handlesLayer = document.getElementById('handlesLayer');
           const snapDebugPanel = document.getElementById('snapDebugPanel');
-          const snapDebugEnabled = (() => {
+          const snapDebugEnabledFromRequest = (() => {
             try {
               const params = new URLSearchParams(window.location.search || '');
-              return params.get('snap_debug') === '1'
-                || window.localStorage?.getItem('marketMapSnapDebug') === '1';
+              return CAN_USE_SNAP_DIAGNOSTICS && (params.get('snap_debug') === '1'
+                || window.localStorage?.getItem('marketMapSnapDebug') === '1');
             } catch (error) {
               return false;
             }
           })();
+          const snapSettingsStorageKey = 'marketMapSnapSettings:v1';
+          const snapSettingsDefaults = Object.freeze({
+            backgroundCanvasCornerEnabled: true,
+            backgroundCanvasLineEnabled: true,
+            backgroundCanvasCornerHoughEnabled: false,
+            shapeVertexEnabled: false,
+            shapeEdgeEnabled: false,
+            debugPanelEnabled: false,
+            backgroundCanvasCornerThresholdPx: MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX,
+            backgroundCanvasThresholdPx: MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX,
+            shapeVertexThresholdPx: MAP_VERTEX_SNAP_SCREEN_PX,
+            shapeEdgeThresholdPx: MAP_EDGE_SNAP_SCREEN_PX,
+          });
+          const snapSettingRanges = Object.freeze({
+            backgroundCanvasCornerThresholdPx: { min: 8, max: 80 },
+            backgroundCanvasThresholdPx: { min: 4, max: 60 },
+            shapeVertexThresholdPx: { min: 4, max: 40 },
+            shapeEdgeThresholdPx: { min: 4, max: 40 },
+          });
+
+          function clampSnapNumber(value, fallback, min, max) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return fallback;
+
+            return Math.max(min, Math.min(max, numeric));
+          }
+
+          function normalizeSnapSettings(raw = {}) {
+            const source = raw && typeof raw === 'object' ? raw : {};
+            const next = { ...snapSettingsDefaults };
+            for (const key of [
+              'backgroundCanvasCornerEnabled',
+              'backgroundCanvasLineEnabled',
+              'backgroundCanvasCornerHoughEnabled',
+              'shapeVertexEnabled',
+              'shapeEdgeEnabled',
+              'debugPanelEnabled',
+            ]) {
+              if (Object.prototype.hasOwnProperty.call(source, key)) {
+                next[key] = Boolean(source[key]);
+              }
+            }
+
+            for (const [key, range] of Object.entries(snapSettingRanges)) {
+              next[key] = clampSnapNumber(source[key], snapSettingsDefaults[key], range.min, range.max);
+            }
+
+            return next;
+          }
+
+          function loadSnapSettings() {
+            if (!CAN_USE_SNAP_DIAGNOSTICS) {
+              return { ...snapSettingsDefaults };
+            }
+
+            try {
+              const rawValue = window.localStorage?.getItem(snapSettingsStorageKey);
+              if (rawValue) {
+                return normalizeSnapSettings(JSON.parse(rawValue));
+              }
+            } catch (error) {
+              console.warn(error);
+            }
+
+            return normalizeSnapSettings({
+              ...snapSettingsDefaults,
+              debugPanelEnabled: snapDebugEnabledFromRequest,
+            });
+          }
+
+          let snapSettings = loadSnapSettings();
+
+          function saveSnapSettings() {
+            if (!CAN_USE_SNAP_DIAGNOSTICS) return;
+
+            try {
+              window.localStorage?.setItem(snapSettingsStorageKey, JSON.stringify(snapSettings));
+              if (snapSettings.debugPanelEnabled) {
+                window.localStorage?.setItem('marketMapSnapDebug', '1');
+              } else {
+                window.localStorage?.removeItem('marketMapSnapDebug');
+              }
+            } catch (error) {
+              console.warn(error);
+            }
+          }
+
+          function setSnapDiagnosticsStatus(text) {
+            if (!snapDiagnosticsStatus) return;
+
+            snapDiagnosticsStatus.textContent = text || '';
+          }
+
+          function syncSnapDiagnosticsControls() {
+            if (!snapDiagnosticsModal) return;
+
+            const inputs = snapDiagnosticsModal.querySelectorAll('[data-snap-setting]');
+            inputs.forEach((input) => {
+              const key = input.getAttribute('data-snap-setting');
+              if (!key || !Object.prototype.hasOwnProperty.call(snapSettings, key)) return;
+
+              if (input.type === 'checkbox') {
+                input.checked = Boolean(snapSettings[key]);
+              } else {
+                input.value = String(snapSettings[key]);
+              }
+            });
+
+            const values = snapDiagnosticsModal.querySelectorAll('[data-snap-value-for]');
+            values.forEach((node) => {
+              const key = node.getAttribute('data-snap-value-for');
+              if (!key || !Object.prototype.hasOwnProperty.call(snapSettings, key)) return;
+
+              node.textContent = String(Math.round(Number(snapSettings[key]))) + ' px';
+            });
+
+            setSnapDiagnosticsStatus('Локально в этом браузере. Сброс возвращает baseline.');
+          }
+
+          function closeSnapDiagnosticsModal() {
+            if (!snapDiagnosticsModal) return;
+
+            snapDiagnosticsModal.hidden = true;
+            snapDiagnosticsModal.classList.remove('show');
+            snapDiagnosticsModal.setAttribute('aria-hidden', 'true');
+            railSnapDiagnosticsBtn?.classList.remove('is-active');
+          }
+
+          function openSnapDiagnosticsModal() {
+            if (!CAN_USE_SNAP_DIAGNOSTICS || !snapDiagnosticsModal) return;
+
+            syncSnapDiagnosticsControls();
+            snapDiagnosticsModal.hidden = false;
+            snapDiagnosticsModal.classList.add('show');
+            snapDiagnosticsModal.setAttribute('aria-hidden', 'false');
+            railSnapDiagnosticsBtn?.classList.add('is-active');
+          }
+
+          function updateSnapSettingFromInput(input) {
+            if (!input) return;
+
+            const key = input.getAttribute('data-snap-setting');
+            if (!key || !Object.prototype.hasOwnProperty.call(snapSettings, key)) return;
+
+            const nextSettings = { ...snapSettings };
+            if (input.type === 'checkbox') {
+              nextSettings[key] = Boolean(input.checked);
+            } else {
+              const range = snapSettingRanges[key];
+              if (!range) return;
+              nextSettings[key] = clampSnapNumber(input.value, snapSettingsDefaults[key], range.min, range.max);
+            }
+
+            snapSettings = normalizeSnapSettings(nextSettings);
+            saveSnapSettings();
+            syncSnapDiagnosticsControls();
+            resetMapSnapLock();
+            renderSnapDebugPanel();
+            redrawShapes();
+          }
+
+          function resetSnapDiagnosticsSettings() {
+            snapSettings = { ...snapSettingsDefaults };
+            saveSnapSettings();
+            syncSnapDiagnosticsControls();
+            resetMapSnapLock();
+            renderSnapDebugPanel();
+            redrawShapes();
+            setSnapDiagnosticsStatus('Baseline восстановлен.');
+          }
 
           if (!stage || !canvas || !overlay) {
             fallbackToIframe('missing DOM nodes');
@@ -5926,6 +6313,9 @@
           let page = null;
           let scale = 1.0;
           let currentViewport = null;
+          let logicalViewportWidth = 0;
+          let logicalViewportHeight = 0;
+          let pdfBitmapScaleRatio = 1;
           let renderRunId = 0;
           let renderQueue = Promise.resolve();
           let activeRenderTask = null;
@@ -6617,12 +7007,20 @@
 
           loadShapesRef = loadShapes;
 
+          function getLogicalViewportSize() {
+            const width = Math.max(1, Math.floor(Number(logicalViewportWidth || currentViewport?.width || canvas?.clientWidth || 1)));
+            const height = Math.max(1, Math.floor(Number(logicalViewportHeight || currentViewport?.height || canvas?.clientHeight || 1)));
+
+            return { width, height };
+          }
+
           function redrawShapes() {
             if (!shapesSvg || !currentViewport) return;
 
-            shapesSvg.setAttribute('width', String(canvas.width));
-            shapesSvg.setAttribute('height', String(canvas.height));
-            shapesSvg.setAttribute('viewBox', '0 0 ' + canvas.width + ' ' + canvas.height);
+            const viewportSize = getLogicalViewportSize();
+            shapesSvg.setAttribute('width', String(viewportSize.width));
+            shapesSvg.setAttribute('height', String(viewportSize.height));
+            shapesSvg.setAttribute('viewBox', '0 0 ' + viewportSize.width + ' ' + viewportSize.height);
 
             const parts = [];
             parts.push(
@@ -6972,7 +7370,7 @@
               }
             }
 
-            if (snapDebugEnabled && editMode && lastSnapDiagnostics?.input) {
+            if (snapSettings.debugPanelEnabled && editMode && lastSnapDiagnostics?.input) {
               const inputX = Number(lastSnapDiagnostics.input.sx);
               const inputY = Number(lastSnapDiagnostics.input.sy);
               if (Number.isFinite(inputX) && Number.isFinite(inputY)) {
@@ -7000,15 +7398,57 @@
 
           function getCanvasPointFromClient(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            const canvasWidth = Math.max(1, Number(canvas.width || rect?.width || 1));
-            const canvasHeight = Math.max(1, Number(canvas.height || rect?.height || 1));
-            const rectWidth = Math.max(1, Number(rect?.width || canvasWidth));
-            const rectHeight = Math.max(1, Number(rect?.height || canvasHeight));
+            const viewportSize = getLogicalViewportSize();
+            const rectWidth = Math.max(1, Number(rect?.width || viewportSize.width));
+            const rectHeight = Math.max(1, Number(rect?.height || viewportSize.height));
 
             return {
-              x: (Number(clientX) - Number(rect.left || 0)) * (canvasWidth / rectWidth),
-              y: (Number(clientY) - Number(rect.top || 0)) * (canvasHeight / rectHeight),
+              x: (Number(clientX) - Number(rect.left || 0)) * (viewportSize.width / rectWidth),
+              y: (Number(clientY) - Number(rect.top || 0)) * (viewportSize.height / rectHeight),
             };
+          }
+
+          function getPdfBitmapRenderScale(logicalViewport) {
+            const viewportWidth = Math.max(1, Number(logicalViewport?.width || 1));
+            const viewportHeight = Math.max(1, Number(logicalViewport?.height || 1));
+            const sideRatio = Math.min(
+              1,
+              MAP_PDF_RENDER_MAX_BITMAP_SIDE / viewportWidth,
+              MAP_PDF_RENDER_MAX_BITMAP_SIDE / viewportHeight,
+            );
+            const areaRatio = Math.min(
+              1,
+              Math.sqrt(MAP_PDF_RENDER_MAX_BITMAP_PIXELS / Math.max(1, viewportWidth * viewportHeight)),
+            );
+            const ratio = Math.max(0.05, Math.min(1, sideRatio, areaRatio));
+
+            return Math.max(MAP_MIN_SCALE, Number(scale || 1) * ratio);
+          }
+
+          function getPdfBitmapScaleRatio() {
+            return Math.max(0.0001, Number(pdfBitmapScaleRatio || 1));
+          }
+
+          function viewportPointToPdfBitmapPoint(x, y) {
+            const ratio = getPdfBitmapScaleRatio();
+
+            return {
+              x: Number(x) * ratio,
+              y: Number(y) * ratio,
+            };
+          }
+
+          function pdfBitmapPointToViewportPoint(x, y) {
+            const ratio = getPdfBitmapScaleRatio();
+
+            return {
+              x: Number(x) / ratio,
+              y: Number(y) / ratio,
+            };
+          }
+
+          function viewportRadiusToPdfBitmapRadius(radiusPx) {
+            return Math.max(1, Math.ceil(Number(radiusPx || 1) * getPdfBitmapScaleRatio()));
           }
 
           function findVertexSnapPoint(xPdf, yPdf, options = {}) {
@@ -7560,9 +8000,10 @@
           function hasBackgroundCanvasInkNearViewportPoint(x, y, radiusPx = MAP_BACKGROUND_VECTOR_CANVAS_CONFIRM_SCREEN_PX) {
             if (!canvas || !ctx) return true;
 
-            const radius = Math.max(1, Math.ceil(Number(radiusPx || 1)));
-            const centerX = Math.round(Number(x));
-            const centerY = Math.round(Number(y));
+            const radius = viewportRadiusToPdfBitmapRadius(radiusPx);
+            const bitmapPoint = viewportPointToPdfBitmapPoint(x, y);
+            const centerX = Math.round(Number(bitmapPoint.x));
+            const centerY = Math.round(Number(bitmapPoint.y));
             if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return false;
 
             const left = Math.max(0, centerX - radius);
@@ -7645,9 +8086,14 @@
             if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
 
             const threshold = Math.max(1, Number(options.backgroundCanvasCornerThresholdPx || MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX));
-            const radius = Math.ceil(threshold);
-            const centerX = Math.round(sx);
-            const centerY = Math.round(sy);
+            const thresholdBitmap = viewportRadiusToPdfBitmapRadius(threshold);
+            const radius = thresholdBitmap;
+            const bitmapSourcePoint = viewportPointToPdfBitmapPoint(sx, sy);
+            const sourceBitmapX = Number(bitmapSourcePoint.x);
+            const sourceBitmapY = Number(bitmapSourcePoint.y);
+            const centerX = Math.round(sourceBitmapX);
+            const centerY = Math.round(sourceBitmapY);
+            if (!Number.isFinite(sourceBitmapX) || !Number.isFinite(sourceBitmapY)) return null;
             const left = Math.max(0, centerX - radius);
             const top = Math.max(0, centerY - radius);
             const right = Math.min(Number(canvas.width || 0), centerX + radius + 1);
@@ -7687,9 +8133,9 @@
             const colBands = collectBackgroundCanvasInkBands(cols, Math.max(6, height * 0.22));
             const hasAxisCornerBands = rowBands.length > 0 && colBands.length > 0;
 
-            const maxArm = Math.max(8, Math.floor(radius * 0.72));
-            const minArm = Math.max(4, Number(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX));
-            const centerInkRadius = Math.max(1, Number(options.backgroundCanvasCornerCenterInkPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX));
+            const maxArm = Math.max(4, Math.floor(radius * 0.72));
+            const minArm = Math.max(2, viewportRadiusToPdfBitmapRadius(options.backgroundCanvasCornerMinArmPx || MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX));
+            const centerInkRadius = Math.max(1, viewportRadiusToPdfBitmapRadius(options.backgroundCanvasCornerCenterInkPx || MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX));
 
             const hasArm = (cx, cy, dx, dy) => {
               let hits = 0;
@@ -7837,7 +8283,7 @@
               if (lines.length < 2) return null;
 
               let bestCorner = null;
-              let bestCornerScore = threshold * threshold;
+              let bestCornerScore = thresholdBitmap * thresholdBitmap;
 
               for (let i = 0; i < lines.length; i++) {
                 for (let j = i + 1; j < lines.length; j++) {
@@ -7863,8 +8309,8 @@
                   const py = top + iy + 0.5;
                   if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
 
-                  const d2 = distanceSq(sx, sy, px, py);
-                  if (d2 > threshold * threshold) continue;
+                  const d2 = distanceSq(sourceBitmapX, sourceBitmapY, px, py);
+                  if (d2 > thresholdBitmap * thresholdBitmap) continue;
 
                   const score = d2
                     - ((Number(first.score || 0) + Number(second.score || 0)) * 0.018)
@@ -7881,7 +8327,7 @@
             };
 
             let best = null;
-            let bestScore = threshold * threshold;
+            let bestScore = thresholdBitmap * thresholdBitmap;
 
             if (hasAxisCornerBands) {
               for (const row of rowBands) {
@@ -7892,8 +8338,8 @@
 
                   const px = left + cx + 0.5;
                   const py = top + cy + 0.5;
-                  const d2 = distanceSq(sx, sy, px, py);
-                  if (d2 > threshold * threshold) continue;
+                  const d2 = distanceSq(sourceBitmapX, sourceBitmapY, px, py);
+                  if (d2 > thresholdBitmap * thresholdBitmap) continue;
 
                   const hasHorizontal = hasArm(cx, cy, -1, 0) || hasArm(cx, cy, 1, 0);
                   const hasVertical = hasArm(cx, cy, 0, -1) || hasArm(cx, cy, 0, 1);
@@ -7918,7 +8364,8 @@
 
             if (!best) return null;
 
-            const pdfPoint = currentViewport.convertToPdfPoint(best.x, best.y);
+            const viewportBest = pdfBitmapPointToViewportPoint(best.x, best.y);
+            const pdfPoint = currentViewport.convertToPdfPoint(viewportBest.x, viewportBest.y);
             if (!Array.isArray(pdfPoint)) return null;
 
             const pxPdf = Number(pdfPoint[0]);
@@ -7934,7 +8381,7 @@
               Number(options.backgroundCanvasCornerFallbackMaxOffsetPx || MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX),
             );
             const currentScaleValue = Number(scale || currentViewport?.scale || 0);
-            const fallbackOffsetSq = distanceSq(sx, sy, best.x, best.y);
+            const fallbackOffsetSq = distanceSq(sx, sy, viewportBest.x, viewportBest.y);
 
             if (!Number.isFinite(currentScaleValue) || currentScaleValue < fallbackMinScale) {
               return null;
@@ -7962,9 +8409,14 @@
             if (!Number.isFinite(sx) || !Number.isFinite(sy)) return null;
 
             const threshold = Math.max(1, Number(options.backgroundCanvasThresholdPx || MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX));
-            const radius = Math.ceil(threshold);
-            const centerX = Math.round(sx);
-            const centerY = Math.round(sy);
+            const thresholdBitmap = viewportRadiusToPdfBitmapRadius(threshold);
+            const radius = thresholdBitmap;
+            const bitmapSourcePoint = viewportPointToPdfBitmapPoint(sx, sy);
+            const sourceBitmapX = Number(bitmapSourcePoint.x);
+            const sourceBitmapY = Number(bitmapSourcePoint.y);
+            const centerX = Math.round(sourceBitmapX);
+            const centerY = Math.round(sourceBitmapY);
+            if (!Number.isFinite(sourceBitmapX) || !Number.isFinite(sourceBitmapY)) return null;
             const left = Math.max(0, centerX - radius);
             const top = Math.max(0, centerY - radius);
             const right = Math.min(Number(canvas.width || 0), centerX + radius + 1);
@@ -7985,7 +8437,7 @@
             if (!data || data.length < 4) return null;
 
             let best = null;
-            let bestScore = threshold * threshold;
+            let bestScore = thresholdBitmap * thresholdBitmap;
 
             for (let y = 0; y < height; y++) {
               for (let x = 0; x < width; x++) {
@@ -7995,8 +8447,8 @@
 
                 const px = left + x + 0.5;
                 const py = top + y + 0.5;
-                const d2 = distanceSq(sx, sy, px, py);
-                if (d2 > threshold * threshold) continue;
+                const d2 = distanceSq(sourceBitmapX, sourceBitmapY, px, py);
+                if (d2 > thresholdBitmap * thresholdBitmap) continue;
 
                 const score = d2 - (ink * 0.015);
                 if (score <= bestScore) {
@@ -8008,7 +8460,8 @@
 
             if (!best) return null;
 
-            const pdfPoint = currentViewport.convertToPdfPoint(best.x, best.y);
+            const viewportBest = pdfBitmapPointToViewportPoint(best.x, best.y);
+            const pdfPoint = currentViewport.convertToPdfPoint(viewportBest.x, viewportBest.y);
             if (!Array.isArray(pdfPoint)) return null;
 
             const pxPdf = Number(pdfPoint[0]);
@@ -8344,11 +8797,36 @@
           function applyMapSnapPoint(xPdf, yPdf, options = {}) {
             const fallback = { x: Number(xPdf), y: Number(yPdf), snapped: false };
             const candidates = [];
+            const snapOptions = {
+              ...options,
+              backgroundCanvasCornerThresholdPx: snapSettings.backgroundCanvasCornerThresholdPx,
+              backgroundCanvasCornerHoughEnabled: snapSettings.backgroundCanvasCornerHoughEnabled,
+              backgroundCanvasThresholdPx: snapSettings.backgroundCanvasThresholdPx,
+              thresholdPx: snapSettings.shapeVertexThresholdPx,
+              edgeThresholdPx: snapSettings.shapeEdgeThresholdPx,
+            };
 
-            if (MAP_BACKGROUND_CANVAS_SNAP_ENABLED) {
+            if (MAP_BACKGROUND_CANVAS_SNAP_ENABLED && snapSettings.backgroundCanvasCornerEnabled) {
               candidates.push(
-                withSnapSource(findBackgroundCanvasCornerSnapPoint(fallback.x, fallback.y, options), 'background-canvas-corner'),
-                withSnapSource(findBackgroundCanvasSnapPoint(fallback.x, fallback.y, options), 'background-canvas'),
+                withSnapSource(findBackgroundCanvasCornerSnapPoint(fallback.x, fallback.y, snapOptions), 'background-canvas-corner'),
+              );
+            }
+
+            if (MAP_BACKGROUND_CANVAS_SNAP_ENABLED && snapSettings.backgroundCanvasLineEnabled) {
+              candidates.push(
+                withSnapSource(findBackgroundCanvasSnapPoint(fallback.x, fallback.y, snapOptions), 'background-canvas'),
+              );
+            }
+
+            if (snapSettings.shapeVertexEnabled) {
+              candidates.push(
+                withSnapSource(findVertexSnapPoint(fallback.x, fallback.y, snapOptions), 'shape-vertex'),
+              );
+            }
+
+            if (snapSettings.shapeEdgeEnabled) {
+              candidates.push(
+                withSnapSource(findEdgeSnapPoint(fallback.x, fallback.y, snapOptions), 'shape-edge'),
               );
             }
 
@@ -8594,21 +9072,31 @@
             const centerX = stage.scrollLeft + stage.clientWidth / 2;
             const centerY = stage.scrollTop + stage.clientHeight / 2;
 
-            const prevW = canvas.width || 1;
-            const prevH = canvas.height || 1;
-            const relX = centerX / prevW;
-            const relY = centerY / prevH;
+            const prevViewportSize = getLogicalViewportSize();
+            const relX = centerX / prevViewportSize.width;
+            const relY = centerY / prevViewportSize.height;
 
-            const viewport = page.getViewport({ scale });
-            currentViewport = viewport;
+            const logicalViewport = page.getViewport({ scale });
+            currentViewport = logicalViewport;
 
-            const viewportWidth = Math.floor(viewport.width);
-            const viewportHeight = Math.floor(viewport.height);
+            const viewportWidth = Math.max(1, Math.floor(logicalViewport.width));
+            const viewportHeight = Math.max(1, Math.floor(logicalViewport.height));
+            logicalViewportWidth = viewportWidth;
+            logicalViewportHeight = viewportHeight;
 
-            canvas.width = viewportWidth;
-            canvas.height = viewportHeight;
+            const renderScale = getPdfBitmapRenderScale(logicalViewport);
+            const renderViewport = page.getViewport({ scale: renderScale });
+            const bitmapWidth = Math.max(1, Math.floor(renderViewport.width));
+            const bitmapHeight = Math.max(1, Math.floor(renderViewport.height));
+
+            canvas.width = bitmapWidth;
+            canvas.height = bitmapHeight;
             canvas.style.width = viewportWidth + 'px';
             canvas.style.height = viewportHeight + 'px';
+            pdfBitmapScaleRatio = Math.max(
+              0.0001,
+              Math.min(bitmapWidth / viewportWidth, bitmapHeight / viewportHeight),
+            );
 
             if (canvasWrap) {
               canvasWrap.style.width = viewportWidth + 'px';
@@ -8620,7 +9108,7 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.restore();
 
-            const renderTask = page.render({ canvasContext: ctx, viewport });
+            const renderTask = page.render({ canvasContext: ctx, viewport: renderViewport });
             activeRenderTask = renderTask;
 
             try {
@@ -8639,8 +9127,8 @@
 
             if (runId !== renderRunId) return;
 
-            stage.scrollLeft = Math.max(0, relX * canvas.width - stage.clientWidth / 2);
-            stage.scrollTop  = Math.max(0, relY * canvas.height - stage.clientHeight / 2);
+            stage.scrollLeft = Math.max(0, relX * viewportWidth - stage.clientWidth / 2);
+            stage.scrollTop  = Math.max(0, relY * viewportHeight - stage.clientHeight / 2);
             syncStageOverlayOffsets();
 
             setScaleLabel();
@@ -9052,7 +9540,7 @@
           function renderSnapDebugPanel() {
             if (!snapDebugPanel) return;
 
-            if (!snapDebugEnabled || !editMode) {
+            if (!snapSettings.debugPanelEnabled || !editMode) {
               snapDebugPanel.hidden = true;
               snapDebugPanel.setAttribute('aria-hidden', 'true');
               return;
@@ -9072,8 +9560,21 @@
             lines.push('scale=' + formatSnapDebugNumber(scale, 3));
             lines.push('canvas=' + formatSnapDebugNumber(canvas?.width, 0)
               + 'x' + formatSnapDebugNumber(canvas?.height, 0));
+            lines.push('logical=' + formatSnapDebugNumber(logicalViewportWidth, 0)
+              + 'x' + formatSnapDebugNumber(logicalViewportHeight, 0)
+              + ' bitmapRatio=' + formatSnapDebugNumber(pdfBitmapScaleRatio, 3));
             lines.push('bg segments=' + String(backgroundSnapSegments.length)
               + ' points=' + String(backgroundSnapPoints.length));
+            lines.push('enabled='
+              + 'pdf-corner:' + (snapSettings.backgroundCanvasCornerEnabled ? 'on' : 'off')
+              + ' pdf-line:' + (snapSettings.backgroundCanvasLineEnabled ? 'on' : 'off')
+              + ' shape-point:' + (snapSettings.shapeVertexEnabled ? 'on' : 'off')
+              + ' shape-line:' + (snapSettings.shapeEdgeEnabled ? 'on' : 'off'));
+            lines.push('radius='
+              + ' pdf-corner:' + formatSnapDebugNumber(snapSettings.backgroundCanvasCornerThresholdPx, 0)
+              + ' pdf-line:' + formatSnapDebugNumber(snapSettings.backgroundCanvasThresholdPx, 0)
+              + ' shape-point:' + formatSnapDebugNumber(snapSettings.shapeVertexThresholdPx, 0)
+              + ' shape-line:' + formatSnapDebugNumber(snapSettings.shapeEdgeThresholdPx, 0));
             lines.push('cursor viewport x=' + formatSnapDebugNumber(diagnostics.input?.sx)
               + ' y=' + formatSnapDebugNumber(diagnostics.input?.sy));
             lines.push('selected=' + (selected ? selected.sourceType : 'none')
@@ -9462,6 +9963,7 @@
                 clearHandles();
                 hidePopover();
                 closeSpaceSplitModal();
+                closeSnapDiagnosticsModal();
                 toast('Разметка выключена');
               }
             });
@@ -9487,6 +9989,26 @@
             closeGroupMembershipModal();
             hidePopover();
           });
+
+          if (CAN_USE_SNAP_DIAGNOSTICS) {
+            syncSnapDiagnosticsControls();
+
+            railSnapDiagnosticsBtn?.addEventListener('click', () => {
+              openSnapDiagnosticsModal();
+            });
+            snapDiagnosticsCloseBtn?.addEventListener('click', closeSnapDiagnosticsModal);
+            snapDiagnosticsDoneBtn?.addEventListener('click', closeSnapDiagnosticsModal);
+            snapDiagnosticsResetBtn?.addEventListener('click', resetSnapDiagnosticsSettings);
+            snapDiagnosticsModal?.addEventListener('click', (event) => {
+              if (event.target instanceof HTMLElement && event.target.dataset.action === 'close') {
+                closeSnapDiagnosticsModal();
+              }
+            });
+            snapDiagnosticsModal?.querySelectorAll('[data-snap-setting]').forEach((input) => {
+              input.addEventListener('input', () => updateSnapSettingFromInput(input));
+              input.addEventListener('change', () => updateSnapSettingFromInput(input));
+            });
+          }
 
           if (CAN_EDIT && spaceSearchInput) {
             spaceSearchInput.addEventListener('input', () => {
