@@ -46,7 +46,9 @@ php artisan demo:flags-audit
    - `/demo` открывается;
    - вход ведет в синтетический demo market;
    - карта, арендаторы, договоры и заявки открываются;
-   - live 1C/webhook-интеграций у demo market нет.
+   - live 1C/webhook-интеграций у demo market нет;
+   - staff rail, quick chat и live feed не смешивают сотрудников demo и боевого рынка;
+   - выход из кабинета арендатора возвращает в админку без 419 и сохраняет market context исходной страницы.
 5. Отключить public demo flag.
 6. Проверить, что `/demo` больше не выполняет public login.
 7. Повторить `php artisan demo:flags-audit`.
@@ -73,6 +75,8 @@ php artisan demo:flags-audit
    - обычный `/admin` открывается;
    - `/demo` не выполняет public login;
    - боевой рынок id=1 открывается;
+   - staff rail, quick chat и live feed показывают сотрудников выбранного боевого рынка, а не demo;
+   - вход/выход из кабинета арендатора не приводит к 419;
    - Horizon running;
    - ошибок в текущем deploy smoke нет.
 
