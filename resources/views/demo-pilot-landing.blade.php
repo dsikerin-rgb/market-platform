@@ -506,6 +506,12 @@
             color: #075c4b;
         }
 
+        .form-status--warning {
+            border-color: #f0c36d;
+            background: #fff8e7;
+            color: #7a4a05;
+        }
+
         .form-errors {
             border: 1px solid #f0b7a5;
             background: #fff2ed;
@@ -793,6 +799,16 @@
                     @if (session('demo_request_status') === 'sent' || request()->boolean('request_sent'))
                         <div class="form-status" role="status">
                             Заявка отправлена. Мы свяжемся с вами и согласуем формат показа.
+                        </div>
+                    @endif
+
+                    @if (session('demo_public_login_status') === 'admin_session_active')
+                        <div class="form-status form-status--warning" role="status">
+                            Вы уже вошли в админку. Чтобы не переключить текущий рынок, откройте демо в отдельном браузере, инкогнито или выйдите из текущей учётной записи.
+                        </div>
+                    @elseif (session('demo_public_login_status') === 'already_authenticated')
+                        <div class="form-status form-status--warning" role="status">
+                            Вы уже вошли в сервис. Чтобы открыть публичное демо, используйте отдельный браузер, инкогнито или выйдите из текущей учётной записи.
                         </div>
                     @endif
 
