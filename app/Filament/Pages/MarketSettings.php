@@ -22,6 +22,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
@@ -883,12 +884,12 @@ class MarketSettings extends Page
         abort_unless($this->market, 404);
         abort_unless($this->canEditMarket, 403);
 
-        $state = array_replace($this->form->getState(), $this->data);
+        $state = array_replace($this->data, $this->form->getState());
 
         // Нормализуем путь (Filament отдаёт строку для single upload).
         $newMapPath = $state['map_pdf_path'] ?? null;
         if (is_array($newMapPath)) {
-            $newMapPath = $newMapPath[0] ?? null;
+            $newMapPath = Arr::first($newMapPath);
         }
         $newMapPath = (is_string($newMapPath) && $newMapPath !== '') ? $newMapPath : null;
 
