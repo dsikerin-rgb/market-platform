@@ -12,6 +12,11 @@
     $canUseMapSearch = $canEdit || ! $canViewFinanceMap;
     $marketSpaceNotLinked = isset($marketSpaceNotLinked) ? (bool) $marketSpaceNotLinked : false;
     $canOpenPdf = isset($canOpenPdf) ? (bool) $canOpenPdf : false;
+    $currentUser = auth()->user();
+    $canUseSnapDiagnostics = $canEdit
+        && $currentUser
+        && method_exists($currentUser, 'isSuperAdmin')
+        && $currentUser->isSuperAdmin();
 
     $settingsUrl = $settingsUrl ?? url('/admin/market-settings');
     $returnUrl = is_string($returnUrl ?? null) && trim((string) $returnUrl) !== ''
@@ -2417,6 +2422,129 @@
       display: none;
     }
 
+    .snap-diagnostics-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10030;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .snap-diagnostics-modal.show {
+      display: flex;
+    }
+    .snap-diagnostics-modal__backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.42);
+      -webkit-backdrop-filter: blur(5px);
+      backdrop-filter: blur(5px);
+    }
+    .snap-diagnostics-modal__dialog {
+      position: relative;
+      width: min(520px, 100%);
+      max-height: min(680px, calc(100vh - 32px));
+      overflow: auto;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.32);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+      padding: 18px;
+      color: #0f172a;
+    }
+    .snap-diagnostics-modal__head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .snap-diagnostics-modal__title {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+    .snap-diagnostics-modal__close {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(148, 163, 184, 0.12);
+      color: #334155;
+    }
+    .snap-diagnostics-modal__section {
+      display: grid;
+      gap: 10px;
+      padding: 12px 0;
+      border-top: 1px solid rgba(148, 163, 184, 0.24);
+    }
+    .snap-diagnostics-modal__section-title {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+    }
+    .snap-diagnostics-modal__check,
+    .snap-diagnostics-modal__range {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 12px;
+      align-items: center;
+      font-size: 13px;
+      color: #1e293b;
+    }
+    .snap-diagnostics-modal__check {
+      grid-template-columns: auto 1fr;
+    }
+    .snap-diagnostics-modal__check input {
+      width: 17px;
+      height: 17px;
+      accent-color: #2563eb;
+    }
+    .snap-diagnostics-modal__range input {
+      grid-column: 1 / -1;
+      width: 100%;
+      accent-color: #2563eb;
+    }
+    .snap-diagnostics-modal__value {
+      min-width: 54px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: #475569;
+    }
+    .snap-diagnostics-modal__status {
+      min-height: 18px;
+      font-size: 12px;
+      color: #64748b;
+    }
+    .snap-diagnostics-modal__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding-top: 12px;
+      border-top: 1px solid rgba(148, 163, 184, 0.24);
+    }
+    .snap-diagnostics-modal__actions button {
+      min-width: 104px;
+    }
+    .snap-diagnostics-modal__reset {
+      background: rgba(148, 163, 184, 0.12);
+      border-color: rgba(148, 163, 184, 0.35);
+    }
+    .snap-diagnostics-modal__done {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #fff;
+      -webkit-text-fill-color: #fff;
+    }
+    .snap-diagnostics-modal__done:hover {
+      background: #1e40af;
+    }
+
     .empty {
       padding: 14px;
       border-radius: 14px;
@@ -3121,6 +3249,9 @@
                     <button id="railSplitHorizontal" type="button" title="Разделить выбранное место горизонтально пополам" aria-label="Разделить выбранное место горизонтально пополам">⇕</button>
                     <button id="railGroup" type="button" title="Группировка мест" aria-label="Группировка мест">⊞</button>
                     <button id="railUngroup" type="button" title="Разгруппировка места" aria-label="Разгруппировка места">⊟</button>
+                    @if ($canUseSnapDiagnostics)
+                      <button id="railSnapDiagnostics" type="button" title="Диагностика прилипания" aria-label="Диагностика прилипания">⚙</button>
+                    @endif
                     <button id="railCancelTool" type="button" title="Отменить текущий инструмент" aria-label="Отменить текущий инструмент">↶</button>
                   </div>
                 @endif
@@ -3273,6 +3404,82 @@
         <div id="popoverBody"></div>
       </div>
       <div id="snapDebugPanel" class="snap-debug-panel" hidden aria-hidden="true"></div>
+
+      @if ($canUseSnapDiagnostics)
+        <div id="snapDiagnosticsModal" class="snap-diagnostics-modal" hidden aria-hidden="true">
+          <div class="snap-diagnostics-modal__backdrop" data-action="close"></div>
+          <div
+            class="snap-diagnostics-modal__dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="snapDiagnosticsTitle"
+          >
+            <div class="snap-diagnostics-modal__head">
+              <h2 id="snapDiagnosticsTitle" class="snap-diagnostics-modal__title">Диагностика прилипания</h2>
+              <button id="snapDiagnosticsClose" class="snap-diagnostics-modal__close" type="button" aria-label="Закрыть">×</button>
+            </div>
+
+            <div class="snap-diagnostics-modal__section">
+              <p class="snap-diagnostics-modal__section-title">Источники</p>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="backgroundCanvasCornerEnabled">
+                <span>Углы и узлы PDF-подложки</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="backgroundCanvasLineEnabled">
+                <span>Линии PDF-подложки</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="backgroundCanvasCornerHoughEnabled">
+                <span>Диагональные углы PDF-подложки</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="shapeVertexEnabled">
+                <span>Точки фигур</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="shapeEdgeEnabled">
+                <span>Линии фигур</span>
+              </label>
+              <label class="snap-diagnostics-modal__check">
+                <input type="checkbox" data-snap-setting="debugPanelEnabled">
+                <span>Показывать диагностику на карте</span>
+              </label>
+            </div>
+
+            <div class="snap-diagnostics-modal__section">
+              <p class="snap-diagnostics-modal__section-title">Радиус захвата</p>
+              <label class="snap-diagnostics-modal__range">
+                <span>Углы PDF</span>
+                <span class="snap-diagnostics-modal__value" data-snap-value-for="backgroundCanvasCornerThresholdPx"></span>
+                <input type="range" min="8" max="80" step="1" data-snap-setting="backgroundCanvasCornerThresholdPx">
+              </label>
+              <label class="snap-diagnostics-modal__range">
+                <span>Линии PDF</span>
+                <span class="snap-diagnostics-modal__value" data-snap-value-for="backgroundCanvasThresholdPx"></span>
+                <input type="range" min="4" max="60" step="1" data-snap-setting="backgroundCanvasThresholdPx">
+              </label>
+              <label class="snap-diagnostics-modal__range">
+                <span>Точки фигур</span>
+                <span class="snap-diagnostics-modal__value" data-snap-value-for="shapeVertexThresholdPx"></span>
+                <input type="range" min="4" max="40" step="1" data-snap-setting="shapeVertexThresholdPx">
+              </label>
+              <label class="snap-diagnostics-modal__range">
+                <span>Линии фигур</span>
+                <span class="snap-diagnostics-modal__value" data-snap-value-for="shapeEdgeThresholdPx"></span>
+                <input type="range" min="4" max="40" step="1" data-snap-setting="shapeEdgeThresholdPx">
+              </label>
+            </div>
+
+            <div id="snapDiagnosticsStatus" class="snap-diagnostics-modal__status" aria-live="polite"></div>
+
+            <div class="snap-diagnostics-modal__actions">
+              <button id="snapDiagnosticsReset" class="snap-diagnostics-modal__reset" type="button">Сбросить</button>
+              <button id="snapDiagnosticsDone" class="snap-diagnostics-modal__done" type="button">Готово</button>
+            </div>
+          </div>
+        </div>
+      @endif
 
       <div id="identityFixModal" class="identity-fix-modal" hidden aria-hidden="true">
         <div class="identity-fix-modal__backdrop" data-action="close"></div>
@@ -3491,6 +3698,7 @@
         const CAN_VIEW_FINANCE = @json((bool) $canViewFinanceMap);
         const CAN_BIND_CONTRACTS = @json((bool) ($canBindContracts ?? false));
         const CAN_OPEN_PDF = @json((bool) $canOpenPdf);
+        const CAN_USE_SNAP_DIAGNOSTICS = @json((bool) $canUseSnapDiagnostics);
         const INITIAL_MAP_MODE = @json($mapMode ?? 'map');
         const MARKET_ID = @json((int) $marketId);
         const MAP_PAGE = @json((int) ($mapPage ?? 1));
@@ -3570,7 +3778,13 @@
         const railSplitHorizontalBtn = document.getElementById('railSplitHorizontal');
         const railGroupBtn = document.getElementById('railGroup');
         const railUngroupBtn = document.getElementById('railUngroup');
+        const railSnapDiagnosticsBtn = document.getElementById('railSnapDiagnostics');
         const railCancelToolBtn = document.getElementById('railCancelTool');
+        const snapDiagnosticsModal = document.getElementById('snapDiagnosticsModal');
+        const snapDiagnosticsCloseBtn = document.getElementById('snapDiagnosticsClose');
+        const snapDiagnosticsResetBtn = document.getElementById('snapDiagnosticsReset');
+        const snapDiagnosticsDoneBtn = document.getElementById('snapDiagnosticsDone');
+        const snapDiagnosticsStatus = document.getElementById('snapDiagnosticsStatus');
         const scenarioMapBtn = document.getElementById('scenarioMap');
         const scenarioReviewBtn = document.getElementById('scenarioReview');
         const layerGroup = layerDebtBtn?.closest('.toolbar-group') || null;
@@ -5896,15 +6110,185 @@
           const drawBox = document.getElementById('drawBox');
           const handlesLayer = document.getElementById('handlesLayer');
           const snapDebugPanel = document.getElementById('snapDebugPanel');
-          const snapDebugEnabled = (() => {
+          const snapDebugEnabledFromRequest = (() => {
             try {
               const params = new URLSearchParams(window.location.search || '');
-              return params.get('snap_debug') === '1'
-                || window.localStorage?.getItem('marketMapSnapDebug') === '1';
+              return CAN_USE_SNAP_DIAGNOSTICS && (params.get('snap_debug') === '1'
+                || window.localStorage?.getItem('marketMapSnapDebug') === '1');
             } catch (error) {
               return false;
             }
           })();
+          const snapSettingsStorageKey = 'marketMapSnapSettings:v1';
+          const snapSettingsDefaults = Object.freeze({
+            backgroundCanvasCornerEnabled: true,
+            backgroundCanvasLineEnabled: true,
+            backgroundCanvasCornerHoughEnabled: false,
+            shapeVertexEnabled: false,
+            shapeEdgeEnabled: false,
+            debugPanelEnabled: false,
+            backgroundCanvasCornerThresholdPx: MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX,
+            backgroundCanvasThresholdPx: MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX,
+            shapeVertexThresholdPx: MAP_VERTEX_SNAP_SCREEN_PX,
+            shapeEdgeThresholdPx: MAP_EDGE_SNAP_SCREEN_PX,
+          });
+          const snapSettingRanges = Object.freeze({
+            backgroundCanvasCornerThresholdPx: { min: 8, max: 80 },
+            backgroundCanvasThresholdPx: { min: 4, max: 60 },
+            shapeVertexThresholdPx: { min: 4, max: 40 },
+            shapeEdgeThresholdPx: { min: 4, max: 40 },
+          });
+
+          function clampSnapNumber(value, fallback, min, max) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return fallback;
+
+            return Math.max(min, Math.min(max, numeric));
+          }
+
+          function normalizeSnapSettings(raw = {}) {
+            const source = raw && typeof raw === 'object' ? raw : {};
+            const next = { ...snapSettingsDefaults };
+            for (const key of [
+              'backgroundCanvasCornerEnabled',
+              'backgroundCanvasLineEnabled',
+              'backgroundCanvasCornerHoughEnabled',
+              'shapeVertexEnabled',
+              'shapeEdgeEnabled',
+              'debugPanelEnabled',
+            ]) {
+              if (Object.prototype.hasOwnProperty.call(source, key)) {
+                next[key] = Boolean(source[key]);
+              }
+            }
+
+            for (const [key, range] of Object.entries(snapSettingRanges)) {
+              next[key] = clampSnapNumber(source[key], snapSettingsDefaults[key], range.min, range.max);
+            }
+
+            return next;
+          }
+
+          function loadSnapSettings() {
+            if (!CAN_USE_SNAP_DIAGNOSTICS) {
+              return { ...snapSettingsDefaults };
+            }
+
+            try {
+              const rawValue = window.localStorage?.getItem(snapSettingsStorageKey);
+              if (rawValue) {
+                return normalizeSnapSettings(JSON.parse(rawValue));
+              }
+            } catch (error) {
+              console.warn(error);
+            }
+
+            return normalizeSnapSettings({
+              ...snapSettingsDefaults,
+              debugPanelEnabled: snapDebugEnabledFromRequest,
+            });
+          }
+
+          let snapSettings = loadSnapSettings();
+
+          function saveSnapSettings() {
+            if (!CAN_USE_SNAP_DIAGNOSTICS) return;
+
+            try {
+              window.localStorage?.setItem(snapSettingsStorageKey, JSON.stringify(snapSettings));
+              if (snapSettings.debugPanelEnabled) {
+                window.localStorage?.setItem('marketMapSnapDebug', '1');
+              } else {
+                window.localStorage?.removeItem('marketMapSnapDebug');
+              }
+            } catch (error) {
+              console.warn(error);
+            }
+          }
+
+          function setSnapDiagnosticsStatus(text) {
+            if (!snapDiagnosticsStatus) return;
+
+            snapDiagnosticsStatus.textContent = text || '';
+          }
+
+          function syncSnapDiagnosticsControls() {
+            if (!snapDiagnosticsModal) return;
+
+            const inputs = snapDiagnosticsModal.querySelectorAll('[data-snap-setting]');
+            inputs.forEach((input) => {
+              const key = input.getAttribute('data-snap-setting');
+              if (!key || !Object.prototype.hasOwnProperty.call(snapSettings, key)) return;
+
+              if (input.type === 'checkbox') {
+                input.checked = Boolean(snapSettings[key]);
+              } else {
+                input.value = String(snapSettings[key]);
+              }
+            });
+
+            const values = snapDiagnosticsModal.querySelectorAll('[data-snap-value-for]');
+            values.forEach((node) => {
+              const key = node.getAttribute('data-snap-value-for');
+              if (!key || !Object.prototype.hasOwnProperty.call(snapSettings, key)) return;
+
+              node.textContent = String(Math.round(Number(snapSettings[key]))) + ' px';
+            });
+
+            setSnapDiagnosticsStatus('Локально в этом браузере. Сброс возвращает baseline.');
+          }
+
+          function closeSnapDiagnosticsModal() {
+            if (!snapDiagnosticsModal) return;
+
+            snapDiagnosticsModal.hidden = true;
+            snapDiagnosticsModal.classList.remove('show');
+            snapDiagnosticsModal.setAttribute('aria-hidden', 'true');
+            railSnapDiagnosticsBtn?.classList.remove('is-active');
+          }
+
+          function openSnapDiagnosticsModal() {
+            if (!CAN_USE_SNAP_DIAGNOSTICS || !snapDiagnosticsModal) return;
+
+            syncSnapDiagnosticsControls();
+            snapDiagnosticsModal.hidden = false;
+            snapDiagnosticsModal.classList.add('show');
+            snapDiagnosticsModal.setAttribute('aria-hidden', 'false');
+            railSnapDiagnosticsBtn?.classList.add('is-active');
+          }
+
+          function updateSnapSettingFromInput(input) {
+            if (!input) return;
+
+            const key = input.getAttribute('data-snap-setting');
+            if (!key || !Object.prototype.hasOwnProperty.call(snapSettings, key)) return;
+
+            const nextSettings = { ...snapSettings };
+            if (input.type === 'checkbox') {
+              nextSettings[key] = Boolean(input.checked);
+            } else {
+              const range = snapSettingRanges[key];
+              if (!range) return;
+              nextSettings[key] = clampSnapNumber(input.value, snapSettingsDefaults[key], range.min, range.max);
+            }
+
+            snapSettings = normalizeSnapSettings(nextSettings);
+            saveSnapSettings();
+            syncSnapDiagnosticsControls();
+            resetMapSnapLock();
+            renderSnapDebugPanel();
+            redrawShapes();
+          }
+
+          function resetSnapDiagnosticsSettings() {
+            snapSettings = { ...snapSettingsDefaults };
+            saveSnapSettings();
+            syncSnapDiagnosticsControls();
+            resetMapSnapLock();
+            renderSnapDebugPanel();
+            redrawShapes();
+            setSnapDiagnosticsStatus('Baseline восстановлен.');
+          }
 
           if (!stage || !canvas || !overlay) {
             fallbackToIframe('missing DOM nodes');
@@ -6986,7 +7370,7 @@
               }
             }
 
-            if (snapDebugEnabled && editMode && lastSnapDiagnostics?.input) {
+            if (snapSettings.debugPanelEnabled && editMode && lastSnapDiagnostics?.input) {
               const inputX = Number(lastSnapDiagnostics.input.sx);
               const inputY = Number(lastSnapDiagnostics.input.sy);
               if (Number.isFinite(inputX) && Number.isFinite(inputY)) {
@@ -8413,11 +8797,36 @@
           function applyMapSnapPoint(xPdf, yPdf, options = {}) {
             const fallback = { x: Number(xPdf), y: Number(yPdf), snapped: false };
             const candidates = [];
+            const snapOptions = {
+              ...options,
+              backgroundCanvasCornerThresholdPx: snapSettings.backgroundCanvasCornerThresholdPx,
+              backgroundCanvasCornerHoughEnabled: snapSettings.backgroundCanvasCornerHoughEnabled,
+              backgroundCanvasThresholdPx: snapSettings.backgroundCanvasThresholdPx,
+              thresholdPx: snapSettings.shapeVertexThresholdPx,
+              edgeThresholdPx: snapSettings.shapeEdgeThresholdPx,
+            };
 
-            if (MAP_BACKGROUND_CANVAS_SNAP_ENABLED) {
+            if (MAP_BACKGROUND_CANVAS_SNAP_ENABLED && snapSettings.backgroundCanvasCornerEnabled) {
               candidates.push(
-                withSnapSource(findBackgroundCanvasCornerSnapPoint(fallback.x, fallback.y, options), 'background-canvas-corner'),
-                withSnapSource(findBackgroundCanvasSnapPoint(fallback.x, fallback.y, options), 'background-canvas'),
+                withSnapSource(findBackgroundCanvasCornerSnapPoint(fallback.x, fallback.y, snapOptions), 'background-canvas-corner'),
+              );
+            }
+
+            if (MAP_BACKGROUND_CANVAS_SNAP_ENABLED && snapSettings.backgroundCanvasLineEnabled) {
+              candidates.push(
+                withSnapSource(findBackgroundCanvasSnapPoint(fallback.x, fallback.y, snapOptions), 'background-canvas'),
+              );
+            }
+
+            if (snapSettings.shapeVertexEnabled) {
+              candidates.push(
+                withSnapSource(findVertexSnapPoint(fallback.x, fallback.y, snapOptions), 'shape-vertex'),
+              );
+            }
+
+            if (snapSettings.shapeEdgeEnabled) {
+              candidates.push(
+                withSnapSource(findEdgeSnapPoint(fallback.x, fallback.y, snapOptions), 'shape-edge'),
               );
             }
 
@@ -9131,7 +9540,7 @@
           function renderSnapDebugPanel() {
             if (!snapDebugPanel) return;
 
-            if (!snapDebugEnabled || !editMode) {
+            if (!snapSettings.debugPanelEnabled || !editMode) {
               snapDebugPanel.hidden = true;
               snapDebugPanel.setAttribute('aria-hidden', 'true');
               return;
@@ -9151,8 +9560,21 @@
             lines.push('scale=' + formatSnapDebugNumber(scale, 3));
             lines.push('canvas=' + formatSnapDebugNumber(canvas?.width, 0)
               + 'x' + formatSnapDebugNumber(canvas?.height, 0));
+            lines.push('logical=' + formatSnapDebugNumber(logicalViewportWidth, 0)
+              + 'x' + formatSnapDebugNumber(logicalViewportHeight, 0)
+              + ' bitmapRatio=' + formatSnapDebugNumber(pdfBitmapScaleRatio, 3));
             lines.push('bg segments=' + String(backgroundSnapSegments.length)
               + ' points=' + String(backgroundSnapPoints.length));
+            lines.push('enabled='
+              + 'pdf-corner:' + (snapSettings.backgroundCanvasCornerEnabled ? 'on' : 'off')
+              + ' pdf-line:' + (snapSettings.backgroundCanvasLineEnabled ? 'on' : 'off')
+              + ' shape-point:' + (snapSettings.shapeVertexEnabled ? 'on' : 'off')
+              + ' shape-line:' + (snapSettings.shapeEdgeEnabled ? 'on' : 'off'));
+            lines.push('radius='
+              + ' pdf-corner:' + formatSnapDebugNumber(snapSettings.backgroundCanvasCornerThresholdPx, 0)
+              + ' pdf-line:' + formatSnapDebugNumber(snapSettings.backgroundCanvasThresholdPx, 0)
+              + ' shape-point:' + formatSnapDebugNumber(snapSettings.shapeVertexThresholdPx, 0)
+              + ' shape-line:' + formatSnapDebugNumber(snapSettings.shapeEdgeThresholdPx, 0));
             lines.push('cursor viewport x=' + formatSnapDebugNumber(diagnostics.input?.sx)
               + ' y=' + formatSnapDebugNumber(diagnostics.input?.sy));
             lines.push('selected=' + (selected ? selected.sourceType : 'none')
@@ -9541,6 +9963,7 @@
                 clearHandles();
                 hidePopover();
                 closeSpaceSplitModal();
+                closeSnapDiagnosticsModal();
                 toast('Разметка выключена');
               }
             });
@@ -9566,6 +9989,26 @@
             closeGroupMembershipModal();
             hidePopover();
           });
+
+          if (CAN_USE_SNAP_DIAGNOSTICS) {
+            syncSnapDiagnosticsControls();
+
+            railSnapDiagnosticsBtn?.addEventListener('click', () => {
+              openSnapDiagnosticsModal();
+            });
+            snapDiagnosticsCloseBtn?.addEventListener('click', closeSnapDiagnosticsModal);
+            snapDiagnosticsDoneBtn?.addEventListener('click', closeSnapDiagnosticsModal);
+            snapDiagnosticsResetBtn?.addEventListener('click', resetSnapDiagnosticsSettings);
+            snapDiagnosticsModal?.addEventListener('click', (event) => {
+              if (event.target instanceof HTMLElement && event.target.dataset.action === 'close') {
+                closeSnapDiagnosticsModal();
+              }
+            });
+            snapDiagnosticsModal?.querySelectorAll('[data-snap-setting]').forEach((input) => {
+              input.addEventListener('input', () => updateSnapSettingFromInput(input));
+              input.addEventListener('change', () => updateSnapSettingFromInput(input));
+            });
+          }
 
           if (CAN_EDIT && spaceSearchInput) {
             spaceSearchInput.addEventListener('input', () => {
