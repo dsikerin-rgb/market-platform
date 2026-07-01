@@ -8,9 +8,13 @@ use App\Http\Middleware\RestoreAdminFromImpersonation;
 use App\Http\Middleware\RedirectAdminTokenMismatch;
 use App\Http\Middleware\PreventCabinetPageCache;
 use App\Http\Middleware\SetLocale;
+use App\Support\CabinetTokenMismatchRecovery;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -43,6 +47,12 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (HttpExceptionInterface $exception, Request $request) {
+            if ($exception->getStatusCode() !== 419 || ! $exception->getPrevious() instanceof TokenMismatchException) {
+                return null;
+            }
+
+            return app(CabinetTokenMismatchRecovery::class)->recover($request);
+        });
     })
     ->create();
