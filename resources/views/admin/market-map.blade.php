@@ -12,11 +12,7 @@
     $canUseMapSearch = $canEdit || ! $canViewFinanceMap;
     $marketSpaceNotLinked = isset($marketSpaceNotLinked) ? (bool) $marketSpaceNotLinked : false;
     $canOpenPdf = isset($canOpenPdf) ? (bool) $canOpenPdf : false;
-    $currentUser = auth()->user();
-    $canUseSnapDiagnostics = $canEdit
-        && $currentUser
-        && method_exists($currentUser, 'isSuperAdmin')
-        && $currentUser->isSuperAdmin();
+    $canUseSnapDiagnostics = $canEdit;
 
     $settingsUrl = $settingsUrl ?? url('/admin/market-settings');
     $returnUrl = is_string($returnUrl ?? null) && trim((string) $returnUrl) !== ''
