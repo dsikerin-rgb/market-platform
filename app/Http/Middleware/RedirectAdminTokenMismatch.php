@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\Auth\PortalAccessService;
 use App\Services\Cabinet\TenantImpersonationService;
 use App\Support\AdminPanelImpersonation;
+use App\Support\MarketContext;
 use Closure;
 use Filament\Facades\Filament;
 use Illuminate\Http\Request;
@@ -63,6 +64,7 @@ class RedirectAdminTokenMismatch
         $impersonatorId = (int) ($context['impersonator_user_id'] ?? 0);
         $tenantId = (int) ($context['tenant_id'] ?? 0);
         $adminReturnUrl = (string) ($context['admin_return_url'] ?? '');
+        $marketId = app(TenantImpersonationService::class)->resolveMarketIdFromContext($context);
 
         if ($auditId > 0) {
             app(TenantImpersonationService::class)->markEnded($auditId, $request);
@@ -87,6 +89,7 @@ class RedirectAdminTokenMismatch
 
         Auth::login($impersonator);
         $request->session()->regenerate();
+        app(MarketContext::class)->syncSelectedMarketIdInSession($marketId, 'admin');
 
         if ($adminReturnUrl !== '') {
             return redirect()->to($adminReturnUrl);

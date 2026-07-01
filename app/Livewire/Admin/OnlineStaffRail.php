@@ -202,6 +202,10 @@ class OnlineStaffRail extends Component
             });
 
         if ($this->isSuperAdmin($user)) {
+            if ($marketId <= 0) {
+                return $query->whereKey((int) $user->id);
+            }
+
             return $query->when($marketId > 0, function (Builder $scoped) use ($marketId, $user): Builder {
                 return $scoped->where(function (Builder $marketScoped) use ($marketId, $user): void {
                     $marketScoped

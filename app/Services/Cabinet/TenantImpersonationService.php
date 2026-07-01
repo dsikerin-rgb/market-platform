@@ -110,6 +110,28 @@ class TenantImpersonationService
         return is_array($payload) ? $payload : null;
     }
 
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public function resolveMarketIdFromContext(array $context): ?int
+    {
+        $marketId = (int) ($context['market_id'] ?? 0);
+        if ($marketId > 0) {
+            return $marketId;
+        }
+
+        $tenantId = (int) ($context['tenant_id'] ?? 0);
+        if ($tenantId <= 0) {
+            return null;
+        }
+
+        $marketId = (int) Tenant::query()
+            ->whereKey($tenantId)
+            ->value('market_id');
+
+        return $marketId > 0 ? $marketId : null;
+    }
+
     public function recordDenied(
         User $impersonator,
         Tenant $tenant,

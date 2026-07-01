@@ -149,6 +149,42 @@ class StaffPresenceRailTest extends TestCase
             ->assertSee('Visible Super Admin');
     }
 
+    public function test_super_admin_without_selected_market_does_not_see_staff_from_all_markets(): void
+    {
+        $marketA = Market::query()->create([
+            'name' => 'Market A',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+        $marketB = Market::query()->create([
+            'name' => 'Market B',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsSuperAdmin();
+
+        User::factory()->create([
+            'name' => 'Market A Staff',
+            'market_id' => (int) $marketA->id,
+            'tenant_id' => null,
+            'email' => 'market-a-staff@example.test',
+            'last_seen_at' => now(),
+        ]);
+
+        User::factory()->create([
+            'name' => 'Market B Staff',
+            'market_id' => (int) $marketB->id,
+            'tenant_id' => null,
+            'email' => 'market-b-staff@example.test',
+            'last_seen_at' => now(),
+        ]);
+
+        Livewire::test(OnlineStaffRail::class)
+            ->assertDontSee('Market A Staff')
+            ->assertDontSee('Market B Staff');
+    }
+
     private function actingAsMarketAdmin(Market $market): User
     {
         Role::findOrCreate('market-admin', 'web');
@@ -159,6 +195,24 @@ class StaffPresenceRailTest extends TestCase
             'email' => 'presence-admin-' . uniqid('', true) . '@example.test',
         ]);
         $user->assignRole('market-admin');
+
+        Filament::setCurrentPanel(Filament::getPanel('admin'));
+        $this->actingAs($user, Filament::getAuthGuard());
+
+        return $user;
+    }
+
+    private function actingAsSuperAdmin(): User
+    {
+        Role::findOrCreate('super-admin', 'web');
+
+        $user = User::factory()->create([
+            'name' => 'Scoped Super Admin',
+            'market_id' => null,
+            'tenant_id' => null,
+            'email' => 'presence-super-admin-' . uniqid('', true) . '@example.test',
+        ]);
+        $user->assignRole('super-admin');
 
         Filament::setCurrentPanel(Filament::getPanel('admin'));
         $this->actingAs($user, Filament::getAuthGuard());

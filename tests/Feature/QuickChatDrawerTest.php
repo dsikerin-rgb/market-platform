@@ -1257,7 +1257,7 @@ class QuickChatDrawerTest extends TestCase
             ->assertSee('Напишите первое сообщение, чтобы начать переписку.');
     }
 
-    public function test_super_admin_can_find_staff_dialog_candidate_without_selected_market(): void
+    public function test_super_admin_does_not_find_staff_dialog_candidates_without_selected_market(): void
     {
         $market = Market::query()->create([
             'name' => 'Test Market',
@@ -1279,7 +1279,47 @@ class QuickChatDrawerTest extends TestCase
         Livewire::test(QuickChatDrawer::class)
             ->call('openDrawer')
             ->set('search', 'Searchable')
-            ->assertSee('Searchable Staff Candidate');
+            ->assertDontSee('Searchable Staff Candidate');
+    }
+
+    public function test_super_admin_finds_staff_dialog_candidates_only_in_selected_market(): void
+    {
+        $marketA = Market::query()->create([
+            'name' => 'Test Market A',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+        $marketB = Market::query()->create([
+            'name' => 'Test Market B',
+            'timezone' => 'Europe/Moscow',
+            'is_active' => true,
+        ]);
+
+        $this->actingAsSuperAdmin();
+        session(['filament.admin.selected_market_id' => (int) $marketA->id]);
+        Role::findOrCreate('market-admin', 'web');
+
+        $marketAStaff = User::factory()->create([
+            'name' => 'Selected Market Staff',
+            'market_id' => (int) $marketA->id,
+            'tenant_id' => null,
+            'email' => 'selected-market-staff@example.test',
+        ]);
+        $marketAStaff->assignRole('market-admin');
+
+        $marketBStaff = User::factory()->create([
+            'name' => 'Other Market Staff',
+            'market_id' => (int) $marketB->id,
+            'tenant_id' => null,
+            'email' => 'other-market-staff@example.test',
+        ]);
+        $marketBStaff->assignRole('market-admin');
+
+        Livewire::test(QuickChatDrawer::class)
+            ->call('openDrawer')
+            ->set('search', 'Market Staff')
+            ->assertSee('Selected Market Staff')
+            ->assertDontSee('Other Market Staff');
     }
 
     public function test_staff_can_start_staff_dialog_with_super_admin_without_market_id(): void
