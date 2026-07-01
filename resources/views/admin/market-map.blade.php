@@ -3515,6 +3515,7 @@
         const MAP_BACKGROUND_INTERSECTION_EXTENSION_PX = 8;
         const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
         const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 56;
+        const MAP_BACKGROUND_CANVAS_SNAP_ENABLED = false;
         const MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX = 7;
         const MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX = 3;
         const MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX = 5;
@@ -8297,15 +8298,22 @@
 
           function applyMapSnapPoint(xPdf, yPdf, options = {}) {
             const fallback = { x: Number(xPdf), y: Number(yPdf), snapped: false };
-            const snapPoint = selectBestMapSnapPoint(fallback.x, fallback.y, [
+            const candidates = [
               withSnapSource(findVertexSnapPoint(fallback.x, fallback.y, options), 'shape-vertex'),
               withSnapSource(findBackgroundVertexSnapPoint(fallback.x, fallback.y, options), 'background-vertex'),
               withSnapSource(findBackgroundIntersectionSnapPoint(fallback.x, fallback.y, options), 'background-intersection'),
-              withSnapSource(findBackgroundCanvasCornerSnapPoint(fallback.x, fallback.y, options), 'background-canvas-corner'),
               withSnapSource(findBackgroundEdgeSnapPoint(fallback.x, fallback.y, options), 'background-edge'),
-              withSnapSource(findBackgroundCanvasSnapPoint(fallback.x, fallback.y, options), 'background-canvas'),
               withSnapSource(findEdgeSnapPoint(fallback.x, fallback.y, options), 'shape-edge'),
-            ]);
+            ];
+
+            if (MAP_BACKGROUND_CANVAS_SNAP_ENABLED) {
+              candidates.push(
+                withSnapSource(findBackgroundCanvasCornerSnapPoint(fallback.x, fallback.y, options), 'background-canvas-corner'),
+                withSnapSource(findBackgroundCanvasSnapPoint(fallback.x, fallback.y, options), 'background-canvas'),
+              );
+            }
+
+            const snapPoint = selectBestMapSnapPoint(fallback.x, fallback.y, candidates);
 
             if (!snapPoint) {
               snapPreviewPoint = null;
