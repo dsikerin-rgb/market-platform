@@ -104,6 +104,30 @@ class MarketMapLinkingTest extends TestCase
         ]);
     }
 
+    public function test_super_admin_map_link_syncs_context_from_requested_space(): void
+    {
+        $this->actingAsSuperAdmin();
+
+        $staleMarket = $this->createMarketWithMap();
+        $targetMarket = $this->createMarketWithMap();
+        $this->selectMarketInSession($staleMarket);
+
+        $space = MarketSpace::create([
+            'market_id' => (int) $targetMarket->id,
+            'number' => 'A-101',
+        ]);
+
+        $response = $this->get(route('filament.admin.market-map', [
+            'market_space_id' => (int) $space->id,
+            'page' => 1,
+            'version' => 1,
+        ]));
+
+        $response->assertOk();
+        $response->assertViewHas('market', fn (Market $market): bool => (int) $market->id === (int) $targetMarket->id);
+        $this->assertSame((int) $targetMarket->id, (int) session('filament.admin.selected_market_id'));
+    }
+
     public function test_market_map_returns_unbound_view_when_space_not_linked(): void
     {
         $this->actingAsSuperAdmin();

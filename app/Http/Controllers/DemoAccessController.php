@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Market;
 use App\Models\User;
 use App\Support\DemoPilotSettings;
+use App\Support\MarketContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -34,8 +35,24 @@ class DemoAccessController extends Controller
         abort_unless($user, 404);
         abort_unless($this->isAllowedPublicDemoUser($user, $market, $settings), 404);
 
-        Auth::guard('web')->login($user);
+        $guard = Auth::guard('web');
+        $existingUser = $guard->user();
+
+        if ($existingUser instanceof User) {
+            if ((int) $existingUser->id === (int) $user->id || $this->isSuperAdmin($existingUser)) {
+                $this->syncDemoMarketContext($market);
+
+                return redirect()->to($settings->publicLoginRedirectPath());
+            }
+
+            return redirect()
+                ->route('demo.landing')
+                ->with('demo_public_login_status', 'already_authenticated');
+        }
+
+        $guard->login($user);
         $request->session()->regenerate();
+        $this->syncDemoMarketContext($market);
 
         return redirect()->to($settings->publicLoginRedirectPath());
     }
@@ -60,5 +77,15 @@ class DemoAccessController extends Controller
         $source = data_get($user->notification_preferences, 'demo_pilot.synthetic_source');
 
         return $source === null || $source === '' || $source === $settings->syntheticSource();
+    }
+
+    private function syncDemoMarketContext(Market $market): void
+    {
+        app(MarketContext::class)->syncSelectedMarketIdInSession((int) $market->id, 'admin');
+    }
+
+    private function isSuperAdmin(User $user): bool
+    {
+        return method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
     }
 }
