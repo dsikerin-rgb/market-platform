@@ -32,20 +32,33 @@ class DemoAccessController extends Controller
             ->first();
 
         abort_unless($user, 404);
-        abort_unless((int) ($user->market_id ?? 0) === (int) $market->id, 404);
-        abort_unless(
-            data_get($user->notification_preferences, 'demo_pilot.synthetic_source') === $settings->syntheticSource(),
-            404,
-        );
-        abort_unless(
-            method_exists($user, 'hasAnyRole')
-                && $user->hasAnyRole(['market-owner-director', 'market-admin', 'demo-market-admin']),
-            404,
-        );
+        abort_unless($this->isAllowedPublicDemoUser($user, $market, $settings), 404);
 
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
 
         return redirect()->to($settings->publicLoginRedirectPath());
+    }
+
+    private function isAllowedPublicDemoUser(User $user, Market $market, DemoPilotSettings $settings): bool
+    {
+        if ((int) ($user->market_id ?? 0) !== (int) $market->id) {
+            return false;
+        }
+
+        if (mb_strtolower(trim((string) $user->email), 'UTF-8') !== $settings->publicLoginEmail()) {
+            return false;
+        }
+
+        if (
+            ! method_exists($user, 'hasAnyRole')
+            || ! $user->hasAnyRole(['market-owner-director', 'market-admin', 'demo-market-admin'])
+        ) {
+            return false;
+        }
+
+        $source = data_get($user->notification_preferences, 'demo_pilot.synthetic_source');
+
+        return $source === null || $source === '' || $source === $settings->syntheticSource();
     }
 }
