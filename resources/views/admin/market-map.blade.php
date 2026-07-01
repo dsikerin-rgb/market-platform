@@ -3505,17 +3505,18 @@
         const MAP_MAX_SCALE = 15.4;
         const MAP_PDF_RENDER_MAX_CANVAS_SIDE_PX = 8192;
         const MAP_PDF_RENDER_MAX_CANVAS_AREA_PX = 48000000;
-        const MAP_VERTEX_SNAP_SCREEN_PX = 20;
-        const MAP_EDGE_SNAP_SCREEN_PX = 10;
-        const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 28;
+        const MAP_VERTEX_SNAP_SCREEN_PX = 10;
+        const MAP_EDGE_SNAP_SCREEN_PX = 8;
+        const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 15;
         const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 16;
-        const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 40;
-        const MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX = 64;
-        const MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS = 36;
+        const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 36;
+        const MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX = 58;
+        const MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS = 64;
         const MAP_BACKGROUND_INTERSECTION_EXTENSION_PX = 8;
         const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
-        const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 56;
+        const MAP_BACKGROUND_CANVAS_CORNER_SNAP_SCREEN_PX = 40;
         const MAP_BACKGROUND_CANVAS_SNAP_ENABLED = true;
+        const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_ENABLED = false;
         const MAP_BACKGROUND_CANVAS_CORNER_MIN_ARM_PX = 7;
         const MAP_BACKGROUND_CANVAS_CORNER_CENTER_INK_PX = 3;
         const MAP_BACKGROUND_CANVAS_CORNER_NEAR_ARM_PX = 5;
@@ -3524,14 +3525,14 @@
         const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_RHO_STEP_PX = 2;
         const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MAX_LINES = 18;
         const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MIN_VOTE_RATIO = 0.11;
-        const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MIN_SCALE = 1.5;
+        const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MIN_SCALE = 0;
         const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX = 38;
         const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 18;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_VECTOR_CANVAS_CONFIRM_SCREEN_PX = 5;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
         const MAP_BACKGROUND_SNAP_MAX_POINTS = 16000;
-        const MAP_BACKGROUND_NODE_SNAP_LOCK_SCREEN_PX = 52;
+        const MAP_BACKGROUND_NODE_SNAP_LOCK_SCREEN_PX = 0;
         const MAP_BACKGROUND_NODE_SNAP_SWITCH_SCREEN_PX = 10;
         const MAP_VERTEX_AXIS_LOCK_SCREEN_PX = 4;
 
@@ -7967,9 +7968,8 @@
               return bestCorner;
             };
 
-            const angledCorner = findAngledCanvasCorner();
-            let best = angledCorner ? { x: Number(angledCorner.x), y: Number(angledCorner.y) } : null;
-            let bestScore = angledCorner ? Number(angledCorner.score) : threshold * threshold;
+            let best = null;
+            let bestScore = threshold * threshold;
 
             if (hasAxisCornerBands) {
               for (const row of rowBands) {
@@ -8003,6 +8003,14 @@
               }
             }
 
+            if (!best && Boolean(options.backgroundCanvasCornerHoughEnabled || MAP_BACKGROUND_CANVAS_CORNER_HOUGH_ENABLED)) {
+              const angledCorner = findAngledCanvasCorner();
+              if (angledCorner) {
+                best = { x: Number(angledCorner.x), y: Number(angledCorner.y) };
+                bestScore = Number(angledCorner.score);
+              }
+            }
+
             if (!best) return null;
 
             const pdfPoint = currentViewport.convertToPdfPoint(best.x, best.y);
@@ -8011,11 +8019,6 @@
             const pxPdf = Number(pdfPoint[0]);
             const pyPdf = Number(pdfPoint[1]);
             if (!Number.isFinite(pxPdf) || !Number.isFinite(pyPdf)) return null;
-
-            const vectorCorner = findNearbyBackgroundVectorCornerSnapPoint(pxPdf, pyPdf, options);
-            if (vectorCorner) {
-              return vectorCorner;
-            }
 
             const fallbackMinScale = Math.max(
               0,
@@ -8360,7 +8363,7 @@
             };
             const backgroundPointCandidates = viable.filter((item) => isBackgroundPointSnapSource(item.candidate.snapSourceType));
 
-            if (activeMapSnapLock && isBackgroundPointSnapSource(activeMapSnapLock.snapSourceType)) {
+            if (MAP_BACKGROUND_NODE_SNAP_LOCK_SCREEN_PX > 0 && activeMapSnapLock && isBackgroundPointSnapSource(activeMapSnapLock.snapSourceType)) {
               const lockViewportPoint = currentViewport.convertToViewportPoint(Number(activeMapSnapLock.x), Number(activeMapSnapLock.y));
 
               if (Array.isArray(lockViewportPoint)) {
@@ -8544,6 +8547,25 @@
 
               handlesLayer.appendChild(el);
             }
+          }
+
+          function syncActiveVertexHandlePosition(shape, index) {
+            if (!handlesLayer || !currentViewport || !shape) return;
+
+            const activeHandle = handlesLayer.querySelector('.handleDot.active');
+            if (!activeHandle) return;
+
+            const poly = Array.isArray(shape.polygon) ? shape.polygon : [];
+            const point = poly[Number(index)];
+            const x = Number((point && (point.x ?? point[0])) ?? NaN);
+            const y = Number((point && (point.y ?? point[1])) ?? NaN);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+            const viewportPoint = currentViewport.convertToViewportPoint(x, y);
+            if (!Array.isArray(viewportPoint)) return;
+
+            activeHandle.style.left = Number(viewportPoint[0]).toFixed(2) + 'px';
+            activeHandle.style.top = Number(viewportPoint[1]).toFixed(2) + 'px';
           }
 
           async function centerOnBbox(bbox, opts = {}) {
@@ -10231,7 +10253,7 @@
 
               shape.polygon = poly;
               redrawShapes();
-              renderHandles();
+              syncActiveVertexHandlePosition(shape, idx);
 
               return;
             }
