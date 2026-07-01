@@ -3507,10 +3507,10 @@
         const MAP_PDF_RENDER_MAX_CANVAS_AREA_PX = 48000000;
         const MAP_VERTEX_SNAP_SCREEN_PX = 20;
         const MAP_EDGE_SNAP_SCREEN_PX = 10;
-        const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 15;
+        const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 28;
         const MAP_BACKGROUND_EDGE_SNAP_SCREEN_PX = 16;
-        const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 28;
-        const MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX = 44;
+        const MAP_BACKGROUND_INTERSECTION_SNAP_SCREEN_PX = 40;
+        const MAP_BACKGROUND_INTERSECTION_NEARBY_SCREEN_PX = 64;
         const MAP_BACKGROUND_INTERSECTION_MAX_NEARBY_SEGMENTS = 36;
         const MAP_BACKGROUND_INTERSECTION_EXTENSION_PX = 8;
         const MAP_BACKGROUND_CANVAS_SNAP_SCREEN_PX = 22;
@@ -3526,10 +3526,12 @@
         const MAP_BACKGROUND_CANVAS_CORNER_HOUGH_MIN_VOTE_RATIO = 0.11;
         const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MIN_SCALE = 1.5;
         const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX = 38;
-        const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 12;
+        const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 18;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
         const MAP_BACKGROUND_SNAP_MAX_POINTS = 16000;
+        const MAP_BACKGROUND_NODE_SNAP_LOCK_SCREEN_PX = 52;
+        const MAP_BACKGROUND_NODE_SNAP_SWITCH_SCREEN_PX = 10;
         const MAP_VERTEX_AXIS_LOCK_SCREEN_PX = 4;
 
         const viewerRoot = document.getElementById('viewerRoot');
@@ -5945,6 +5947,7 @@
           let polyDrawing = false;
           let polyDraft = [];
           let snapPreviewPoint = null;
+          let activeMapSnapLock = null;
           let lastSnapDiagnostics = null;
           let polygonSaveStates = new Map();
           let backgroundSnapSegments = [];
@@ -6622,12 +6625,14 @@
               polyDrawing = true;
               polyDraft = [];
               snapPreviewPoint = null;
+              resetMapSnapLock();
               setHint('Полигон: клик — точка • Enter/клик по первой — сохранить • Backspace — назад • Esc — отмена');
               toast('Полигон: добавляй точки кликом');
             } else {
               polyDrawing = false;
               polyDraft = [];
               snapPreviewPoint = null;
+              resetMapSnapLock();
               if (tool === 'rect') {
                 setHint('Прямоугольник: Shift+drag — создать • клик — карточка');
               } else {
@@ -8184,6 +8189,23 @@
               || sourceType === 'background-canvas-corner';
           }
 
+          function resetMapSnapLock() {
+            activeMapSnapLock = null;
+          }
+
+          function createMapSnapLock(candidate) {
+            if (!candidate || !isBackgroundPointSnapSource(candidate.snapSourceType)) return null;
+
+            return {
+              x: Number(candidate.x),
+              y: Number(candidate.y),
+              source: candidate.source || 'background',
+              snapSourceType: candidate.snapSourceType,
+              edge: candidate.edge || null,
+              edges: Array.isArray(candidate.edges) ? candidate.edges : [],
+            };
+          }
+
           function selectBestMapSnapPoint(xPdf, yPdf, candidates) {
             if (!currentViewport || !Array.isArray(candidates) || candidates.length === 0) return null;
 
@@ -8248,26 +8270,75 @@
 
             if (viable.length === 0) {
               setSnapDiagnostics(diagnostics);
+              resetMapSnapLock();
               return null;
+            }
+
+            const pickBest = (items) => {
+              let bestItem = null;
+              let bestScore = Infinity;
+
+              for (const item of items) {
+                const candidate = item.candidate;
+                const score = item.d2 * mapSnapSourceWeight(candidate.snapSourceType);
+                if (score < bestScore) {
+                  bestScore = score;
+                  bestItem = item;
+                }
+              }
+
+              return bestItem;
+            };
+            const backgroundPointCandidates = viable.filter((item) => isBackgroundPointSnapSource(item.candidate.snapSourceType));
+
+            if (activeMapSnapLock && isBackgroundPointSnapSource(activeMapSnapLock.snapSourceType)) {
+              const lockViewportPoint = currentViewport.convertToViewportPoint(Number(activeMapSnapLock.x), Number(activeMapSnapLock.y));
+
+              if (Array.isArray(lockViewportPoint)) {
+                const lockX = Number(lockViewportPoint[0]);
+                const lockY = Number(lockViewportPoint[1]);
+
+                if (Number.isFinite(lockX) && Number.isFinite(lockY)) {
+                  const lockD2 = distanceSq(sx, sy, lockX, lockY);
+                  const lockThreshold = Math.max(1, MAP_BACKGROUND_NODE_SNAP_LOCK_SCREEN_PX);
+                  const switchThreshold = Math.max(0, MAP_BACKGROUND_NODE_SNAP_SWITCH_SCREEN_PX);
+
+                  if (lockD2 <= lockThreshold * lockThreshold) {
+                    const bestNodeItem = pickBest(backgroundPointCandidates);
+
+                    if (!bestNodeItem || bestNodeItem.d2 + (switchThreshold * switchThreshold) >= lockD2) {
+                      diagnostics.selected = {
+                        sourceType: activeMapSnapLock.snapSourceType || 'unknown',
+                        d2: lockD2,
+                        px: lockX,
+                        py: lockY,
+                        locked: true,
+                      };
+                      setSnapDiagnostics(diagnostics);
+
+                      return {
+                        ...activeMapSnapLock,
+                        snapped: true,
+                      };
+                    }
+                  } else {
+                    resetMapSnapLock();
+                  }
+                } else {
+                  resetMapSnapLock();
+                }
+              } else {
+                resetMapSnapLock();
+              }
             }
 
             const bestPriority = viable.reduce((priority, item) => {
               return Math.min(priority, mapSnapSourcePriority(item.candidate.snapSourceType));
             }, Infinity);
             const pool = viable.filter((item) => mapSnapSourcePriority(item.candidate.snapSourceType) === bestPriority);
-            let best = null;
-            let bestItem = null;
-            let bestScore = Infinity;
-
-            for (const item of pool) {
-              const candidate = item.candidate;
-              const score = item.d2 * mapSnapSourceWeight(candidate.snapSourceType);
-              if (score < bestScore) {
-                bestScore = score;
-                best = candidate;
-                bestItem = item;
-              }
-            }
+            const bestItem = pickBest(pool);
+            const best = bestItem?.candidate || null;
+            activeMapSnapLock = createMapSnapLock(best);
 
             if (bestItem) {
               diagnostics.selected = {
@@ -8315,6 +8386,7 @@
 
             if (!snapPoint) {
               snapPreviewPoint = null;
+              resetMapSnapLock();
               return fallback;
             }
 
@@ -8387,6 +8459,7 @@
                 if (!Number.isFinite(startCanvas.x) || !Number.isFinite(startCanvas.y)) return;
 
                 activeVertexIndex = idx;
+                resetMapSnapLock();
                 draggingVertex = {
                   shapeId: sid,
                   index: idx,
@@ -8959,6 +9032,7 @@
             renderHandles();
 
             snapPreviewPoint = null;
+            resetMapSnapLock();
             queueShapePolygonSave(shape.id, poly, { successToast: 'Точка удалена' });
 
             return true;
@@ -9089,6 +9163,7 @@
             renderHandles();
 
             snapPreviewPoint = null;
+            resetMapSnapLock();
             queueShapePolygonSave(shape.id, poly, { successToast: 'Точка добавлена' });
           }
 
@@ -9105,6 +9180,7 @@
             polyDrawing = false;
             polyDraft = [];
             snapPreviewPoint = null;
+            resetMapSnapLock();
             redrawShapes();
             renderHandles();
 
@@ -9118,6 +9194,7 @@
             polyDrawing = false;
             polyDraft = [];
             snapPreviewPoint = null;
+            resetMapSnapLock();
             redrawShapes();
             renderHandles();
             toast('Полигон отменён');
@@ -9955,6 +10032,7 @@
               const start = snappedCanvasPointFromClient(e.clientX, e.clientY);
               drawStart = start.canvas;
               drawStartPdf = start.pdf;
+              resetMapSnapLock();
               showDrawBox(drawStart.x, drawStart.y, drawStart.x, drawStart.y);
               redrawShapes();
               e.preventDefault();
@@ -9988,12 +10066,14 @@
               drawStartPdf = null;
 
               hideDrawBox();
+              resetMapSnapLock();
 
               if (!page || !currentViewport || !s) return;
 
               const endSnapped = snappedCanvasPointFromClient(e.clientX, e.clientY);
               const endPdf = endSnapped.pdf;
               snapPreviewPoint = null;
+              resetMapSnapLock();
 
               const startCanvas = s;
               const endCanvas = endSnapped.canvas || end;
@@ -10124,6 +10204,7 @@
 
             const { shapeId } = draggingVertex;
             draggingVertex = null;
+            resetMapSnapLock();
 
             if (!draggingVertexMoved) {
               draggingVertexMoved = false;
@@ -10185,6 +10266,7 @@
 
               const snappedPoint = applyMapSnapPoint(xPdf, yPdf);
               polyDraft.push({ x: Number(snappedPoint.x), y: Number(snappedPoint.y) });
+              resetMapSnapLock();
               redrawShapes();
               toast('Точка: ' + String(polyDraft.length));
               return;
