@@ -3502,7 +3502,8 @@
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         const CSRF_TOKEN = csrfMeta ? csrfMeta.getAttribute('content') : '';
         const MAP_MIN_SCALE = 0.2;
-        const MAP_MAX_SCALE = 15.4;
+        // Keep the PDF canvas within browser-safe dimensions while preserving 1:1 map coordinates.
+        const MAP_MAX_SCALE = 7;
         const MAP_VERTEX_SNAP_SCREEN_PX = 10;
         const MAP_EDGE_SNAP_SCREEN_PX = 8;
         const MAP_BACKGROUND_VERTEX_SNAP_SCREEN_PX = 15;
