@@ -854,6 +854,8 @@ class QuickChatDrawer extends Component
             $marketId = $this->resolveMarketId($user);
             if ($marketId > 0) {
                 $query->where('market_id', $marketId);
+            } else {
+                $query->whereRaw('1 = 0');
             }
         } else {
             $marketId = (int) ($user->market_id ?? 0);
@@ -1907,7 +1909,10 @@ class QuickChatDrawer extends Component
         }
 
         if ($this->isSuperAdmin($user)) {
-            return true;
+            $marketId = $this->resolveMarketId($user);
+
+            return $marketId > 0
+                && (int) ($peer->market_id ?? 0) === $marketId;
         }
 
         return (int) ($user->market_id ?? 0) > 0
@@ -1961,6 +1966,11 @@ class QuickChatDrawer extends Component
 
         $peerId = $this->staffPeerId($conversation, $user);
         if ($peerId <= 0) {
+            return null;
+        }
+
+        $peer = User::query()->whereKey($peerId)->first();
+        if (! $peer || ! $this->canAccessStaffPeer($user, $peer)) {
             return null;
         }
 
@@ -2080,6 +2090,23 @@ class QuickChatDrawer extends Component
                 ->where('created_by_user_id', (int) $user->id)
                 ->orWhere('recipient_user_id', (int) $user->id);
         });
+
+        $this->scopeStaffConversationMarket($query, $user);
+    }
+
+    private function scopeStaffConversationMarket(Builder $query, User $user): void
+    {
+        $marketId = $this->isSuperAdmin($user)
+            ? $this->resolveMarketId($user)
+            : (int) ($user->market_id ?? 0);
+
+        if ($marketId > 0) {
+            $query->where('staff_conversations.market_id', $marketId);
+
+            return;
+        }
+
+        $query->whereRaw('1 = 0');
     }
 
     private function scopeTicketSearch(Builder $query): void
@@ -2136,7 +2163,7 @@ class QuickChatDrawer extends Component
             return 0;
         }
 
-        return (int) StaffConversationMessage::query()
+        $query = StaffConversationMessage::query()
             ->join('staff_conversations', 'staff_conversations.id', '=', 'staff_conversation_messages.staff_conversation_id')
             ->whereNull('staff_conversation_messages.read_at')
             ->where('staff_conversation_messages.user_id', '<>', (int) $user->id)
@@ -2144,8 +2171,11 @@ class QuickChatDrawer extends Component
                 $query
                     ->where('staff_conversations.created_by_user_id', (int) $user->id)
                     ->orWhere('staff_conversations.recipient_user_id', (int) $user->id);
-            })
-            ->count();
+            });
+
+        $this->scopeStaffConversationMarket($query, $user);
+
+        return (int) $query->count();
     }
 
     private function unreadIncomingMessagesCount(): int

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Cabinet\TenantImpersonationService;
 use App\Support\AdminPanelImpersonation;
 use App\Support\CabinetAssistanceMode;
+use App\Support\MarketContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -76,6 +77,7 @@ class CabinetImpersonationController extends Controller
             'impersonator_name' => (string) ($impersonator->name ?? ''),
             'tenant_id' => (int) $tenant->id,
             'tenant_name' => (string) ($tenant->display_name ?? $tenant->name ?? ''),
+            'market_id' => (int) $tenant->market_id,
             'audit_id' => $auditId,
             'access_mode' => (string) ($payload['access_mode'] ?? CabinetAssistanceMode::MODE_FULL),
             'admin_return_url' => (string) ($payload['admin_return_url'] ?? url('/admin/tenants/' . (int) $tenant->id . '/edit')),
@@ -101,6 +103,7 @@ class CabinetImpersonationController extends Controller
         $impersonatorId = (int) ($context['impersonator_user_id'] ?? 0);
         $tenantId = (int) ($context['tenant_id'] ?? 0);
         $adminReturnUrl = (string) ($context['admin_return_url'] ?? '');
+        $marketId = $service->resolveMarketIdFromContext($context);
 
         if ($auditId > 0) {
             $service->markEnded($auditId, $request);
@@ -125,6 +128,7 @@ class CabinetImpersonationController extends Controller
 
         Auth::login($impersonator);
         $request->session()->regenerate();
+        app(MarketContext::class)->syncSelectedMarketIdInSession($marketId, 'admin');
 
         if ($adminReturnUrl !== '') {
             return redirect()->to($adminReturnUrl);

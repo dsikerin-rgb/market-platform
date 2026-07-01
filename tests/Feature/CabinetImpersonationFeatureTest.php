@@ -13,9 +13,9 @@ use App\Services\Cabinet\TenantImpersonationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Session\ArraySessionHandler;
 use Illuminate\Session\Store;
 use Spatie\Permission\Models\Role;
-use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Tests\TestCase;
 
 class CabinetImpersonationFeatureTest extends TestCase
@@ -45,6 +45,10 @@ class CabinetImpersonationFeatureTest extends TestCase
         $consume = $this->get($impersonationUrl);
         $consume->assertRedirect(route('cabinet.dashboard'));
         $this->assertAuthenticatedAs($context['cabinetUser'], 'web');
+        $this->assertSame(
+            (int) $context['market']->id,
+            (int) (session(TenantImpersonationService::SESSION_KEY)['market_id'] ?? 0),
+        );
 
         $audit = CabinetImpersonationAudit::query()->firstOrFail();
         $this->assertSame(CabinetImpersonationAudit::STATUS_ACTIVE, $audit->status);
@@ -161,7 +165,7 @@ class CabinetImpersonationFeatureTest extends TestCase
         $request = Request::create('/livewire/update', 'POST', server: [
             'HTTP_REFERER' => url('/admin/tenants/' . (int) $context['tenant']->id . '/edit'),
         ]);
-        $session = new Store('test-session', new MockArraySessionStorage());
+        $session = new Store('test-session', new ArraySessionHandler(120));
         $session->start();
         $session->put(TenantImpersonationService::SESSION_KEY, [
             'impersonator_user_id' => (int) $admin->id,
@@ -287,11 +291,39 @@ class CabinetImpersonationFeatureTest extends TestCase
 
         $exit = $this->post(route('cabinet.impersonation.exit'));
         $exit->assertRedirect(url('/admin/tenants/' . (int) $context['tenant']->id . '/edit'));
+        $exit->assertSessionHas('dashboard_market_id', (int) $context['market']->id);
+        $exit->assertSessionHas('filament.admin.selected_market_id', (int) $context['market']->id);
         $this->assertAuthenticatedAs($admin, 'web');
 
         $audit = CabinetImpersonationAudit::query()->firstOrFail();
         $this->assertSame(CabinetImpersonationAudit::STATUS_ENDED, $audit->status);
         $this->assertNotNull($audit->ended_at);
+    }
+
+    public function test_exit_restores_market_context_from_tenant_for_legacy_impersonation_session(): void
+    {
+        $context = $this->createTenantWithCabinetUser();
+        $admin = $this->createUser(
+            marketId: (int) $context['market']->id,
+            role: 'super-admin',
+        );
+
+        $this->actingAs($context['cabinetUser'], 'web');
+        $this->withSession([
+            TenantImpersonationService::SESSION_KEY => [
+                'impersonator_user_id' => (int) $admin->id,
+                'tenant_id' => (int) $context['tenant']->id,
+                'audit_id' => 0,
+                'admin_return_url' => url('/admin/tenants/' . (int) $context['tenant']->id . '/edit'),
+            ],
+        ]);
+
+        $exit = $this->post(route('cabinet.impersonation.exit'));
+
+        $exit->assertRedirect(url('/admin/tenants/' . (int) $context['tenant']->id . '/edit'));
+        $exit->assertSessionHas('dashboard_market_id', (int) $context['market']->id);
+        $exit->assertSessionHas('filament.admin.selected_market_id', (int) $context['market']->id);
+        $this->assertAuthenticatedAs($admin, 'web');
     }
 
     public function test_super_admin_still_sees_impersonation_button_on_admin_page_during_impersonation(): void
