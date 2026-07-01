@@ -329,6 +329,55 @@
             gap: 14px;
         }
 
+        .offer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        .offer-card {
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #ffffff;
+            padding: 20px;
+        }
+
+        .offer-card h3 {
+            margin: 0 0 12px;
+            font-size: 18px;
+            line-height: 1.25;
+        }
+
+        .offer-list {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: grid;
+            gap: 10px;
+        }
+
+        .offer-list li {
+            color: var(--muted);
+            display: grid;
+            grid-template-columns: 28px 1fr;
+            gap: 10px;
+            align-items: start;
+        }
+
+        .offer-list strong {
+            color: var(--accent-dark);
+        }
+
+        .offer-note {
+            margin-top: 16px;
+            border-radius: 8px;
+            background: #eef7f4;
+            color: #075c4b;
+            padding: 14px;
+            font-weight: 700;
+        }
+
         .step-number {
             width: 34px;
             height: 34px;
@@ -494,6 +543,7 @@
             .hero-facts,
             .feature-grid,
             .plans,
+            .offer-grid,
             .steps,
             .final-layout,
             .form-grid {
@@ -542,6 +592,7 @@
             </a>
             <div class="nav-actions">
                 <a class="nav-link" href="{{ route('login') }}">Войти</a>
+                <a class="nav-link" href="#offer">КП</a>
                 <a class="nav-link" href="#demo-request">Заявка</a>
             </div>
         </nav>
@@ -640,6 +691,38 @@
                             <li>Live-интеграции только после staging-проверки и backup.</li>
                         </ul>
                     </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="offer" class="section">
+            <div class="section-inner">
+                <div class="section-head">
+                    <h2>Презентация и коммерческое предложение</h2>
+                    <p class="section-lead">Клиент сразу понимает, что увидит на показе, как устроен пилот и чем ограничена бесплатная версия.</p>
+                </div>
+                <div class="offer-grid">
+                    <article class="offer-card">
+                        <h3>Сценарий показа на 15 минут</h3>
+                        <ol class="offer-list">
+                            <li><strong>1</strong><span>Карта рынка: свободные места, долги, служебные зоны и групповые места на островах.</span></li>
+                            <li><strong>2</strong><span>Арендаторы, договоры, ставки, начисления, платежи и карточка места.</span></li>
+                            <li><strong>3</strong><span>Рабочие роли: директор, администратор, оператор и арендатор.</span></li>
+                            <li><strong>4</strong><span>Переход к пилоту: какие данные нужны и какие интеграции подключаются позже.</span></li>
+                        </ol>
+                    </article>
+                    <article class="offer-card">
+                        <h3>Что входит в пилот</h3>
+                        <ul class="offer-list">
+                            <li><strong>•</strong><span>Один рынок или ограниченная зона объекта без переноса всего бизнеса сразу.</span></li>
+                            <li><strong>•</strong><span>Импорт мест, арендаторов, договоров и стартовых финансовых остатков.</span></li>
+                            <li><strong>•</strong><span>Настройка ролей сотрудников и безопасная проверка интеграции с 1C.</span></li>
+                            <li><strong>•</strong><span>Короткий итоговый отчёт: что готово к запуску, что требует ручной сверки.</span></li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="offer-note">
+                    Бесплатная версия ограничивается демо-данными или узким пилотным контуром. Live 1C и боевые записи включаются только после staging-проверки, backup и отдельного согласования.
                 </div>
             </div>
         </section>
