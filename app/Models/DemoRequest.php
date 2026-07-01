@@ -12,6 +12,9 @@ class DemoRequest extends Model
     use HasFactory;
 
     public const STATUS_NEW = 'new';
+    public const STATUS_CONTACTED = 'contacted';
+    public const STATUS_QUALIFIED = 'qualified';
+    public const STATUS_REJECTED = 'rejected';
 
     public const TYPE_DEMO = 'demo';
     public const TYPE_PILOT = 'pilot';
@@ -51,6 +54,34 @@ class DemoRequest extends Model
             self::TYPE_PILOT => 'ограниченный пилот',
             self::TYPE_FREE => 'бесплатная версия',
             default => 'демо',
+        };
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function statusOptions(): array
+    {
+        return [
+            self::STATUS_NEW => 'Новая',
+            self::STATUS_CONTACTED => 'Связались',
+            self::STATUS_QUALIFIED => 'Квалифицирована',
+            self::STATUS_REJECTED => 'Не подходит',
+        ];
+    }
+
+    public static function statusLabel(?string $status): string
+    {
+        return self::statusOptions()[$status ?: self::STATUS_NEW] ?? (string) ($status ?: self::STATUS_NEW);
+    }
+
+    public static function statusColor(?string $status): string
+    {
+        return match ($status) {
+            self::STATUS_CONTACTED => 'info',
+            self::STATUS_QUALIFIED => 'success',
+            self::STATUS_REJECTED => 'danger',
+            default => 'warning',
         };
     }
 }
