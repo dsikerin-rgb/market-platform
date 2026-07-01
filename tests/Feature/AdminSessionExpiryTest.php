@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Http\Middleware\RedirectAdminTokenMismatch;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Tests\TestCase;
@@ -58,5 +59,31 @@ class AdminSessionExpiryTest extends TestCase
 
         self::assertSame(302, $response->getStatusCode());
         self::assertSame('/admin', parse_url((string) $response->headers->get('Location'), PHP_URL_PATH));
+    }
+
+    public function test_cabinet_impersonation_exit_token_mismatch_is_recovered_by_exception_renderer(): void
+    {
+        $request = Request::create('/cabinet/impersonation/exit', 'POST');
+        $request->setLaravelSession($this->app['session']->driver());
+
+        $response = $this->app
+            ->make(ExceptionHandler::class)
+            ->render($request, new TokenMismatchException());
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('/admin', parse_url((string) $response->headers->get('Location'), PHP_URL_PATH));
+    }
+
+    public function test_cabinet_logout_token_mismatch_is_recovered_by_exception_renderer(): void
+    {
+        $request = Request::create('/cabinet/logout', 'POST');
+        $request->setLaravelSession($this->app['session']->driver());
+
+        $response = $this->app
+            ->make(ExceptionHandler::class)
+            ->render($request, new TokenMismatchException());
+
+        self::assertSame(302, $response->getStatusCode());
+        self::assertSame('/cabinet/login', parse_url((string) $response->headers->get('Location'), PHP_URL_PATH));
     }
 }
