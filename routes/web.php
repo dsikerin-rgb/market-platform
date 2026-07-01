@@ -849,13 +849,32 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
     /**
      * Единая логика выбора рынка + проверка доступа (просмотр карты).
      */
-    $resolveMarketForMap = function (): Market {
+    $resolveMarketForMap = function (Request|MarketSpace|null $context = null): Market {
         $user = Filament::auth()->user();
         abort_unless($user, 403);
 
         $isSuperAdmin = method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+        $marketContext = app(MarketContext::class);
 
-        $selectedMarketId = app(MarketContext::class)->selectedMarketIdFromSession();
+        $selectedMarketId = $marketContext->selectedMarketIdFromSession();
+
+        if ($isSuperAdmin && $context instanceof MarketSpace && (int) ($context->market_id ?? 0) > 0) {
+            $selectedMarketId = (int) $context->market_id;
+        }
+
+        if ($isSuperAdmin && $context instanceof Request) {
+            $requestedSpaceId = $context->query('market_space_id');
+
+            if (is_numeric($requestedSpaceId) && (int) $requestedSpaceId > 0) {
+                $spaceMarketId = MarketSpace::query()
+                    ->whereKey((int) $requestedSpaceId)
+                    ->value('market_id');
+
+                if (is_numeric($spaceMarketId) && (int) $spaceMarketId > 0) {
+                    $selectedMarketId = (int) $spaceMarketId;
+                }
+            }
+        }
 
         if ($isSuperAdmin) {
             $market = filled($selectedMarketId)
@@ -891,6 +910,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         }
 
         abort_unless($market, 404);
+        $marketContext->syncSelectedMarketIdInSession((int) $market->id, 'admin');
 
         return $market;
     };
@@ -4960,7 +4980,7 @@ Route::middleware(['web', 'panel:admin', FilamentAuthenticate::class])->group(fu
         $canBindContracts,
         $buildMapReviewProgress
     ) {
-        $market = $resolveMarketForMap();
+        $market = $resolveMarketForMap($request);
 
         $mapPath = data_get($market->settings ?? [], 'map_pdf_path');
 

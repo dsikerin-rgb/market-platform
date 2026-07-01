@@ -96,6 +96,80 @@ class DemoLandingPageTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
+    public function test_public_demo_sign_in_keeps_existing_super_admin_account(): void
+    {
+        config()->set('demo_pilot.public_login_enabled', true);
+
+        $market = $this->createSyntheticDemoMarket();
+
+        $demoUser = User::factory()->create([
+            'name' => 'Demo Director',
+            'email' => 'director@demo.marketuchet.local',
+            'market_id' => (int) $market->id,
+            'notification_preferences' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                ],
+            ],
+        ]);
+        $this->assignRole($demoUser, 'market-owner-director');
+
+        $superAdmin = User::factory()->create([
+            'name' => 'Super Admin',
+            'email' => 'super-admin@example.test',
+        ]);
+        $this->assignRole($superAdmin, 'super-admin');
+
+        $this->actingAs($superAdmin, 'web');
+
+        $this->post(route('demo.sign-in'))
+            ->assertRedirect('/admin/market-map');
+
+        $this->assertAuthenticatedAs($superAdmin);
+        $this->assertSame((int) $market->id, (int) session('filament.admin.selected_market_id'));
+    }
+
+    public function test_public_demo_sign_in_does_not_replace_existing_market_user(): void
+    {
+        config()->set('demo_pilot.public_login_enabled', true);
+
+        $market = $this->createSyntheticDemoMarket();
+
+        $demoUser = User::factory()->create([
+            'name' => 'Demo Director',
+            'email' => 'director@demo.marketuchet.local',
+            'market_id' => (int) $market->id,
+            'notification_preferences' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                ],
+            ],
+        ]);
+        $this->assignRole($demoUser, 'market-owner-director');
+
+        $currentMarket = Market::query()->create([
+            'name' => 'Current Market',
+            'slug' => 'current-market',
+            'code' => 'CURRENT_MARKET',
+        ]);
+
+        $currentUser = User::factory()->create([
+            'name' => 'Current Market Admin',
+            'email' => 'current-admin@example.test',
+            'market_id' => (int) $currentMarket->id,
+        ]);
+        $this->assignRole($currentUser, 'market-admin');
+
+        $this->actingAs($currentUser, 'web');
+
+        $this->post(route('demo.sign-in'))
+            ->assertRedirect(route('demo.landing'))
+            ->assertSessionHas('demo_public_login_status', 'already_authenticated');
+
+        $this->assertAuthenticatedAs($currentUser);
+        $this->assertNotSame((int) $demoUser->id, (int) Auth::id());
+    }
+
     public function test_public_demo_sign_in_accepts_existing_demo_director_without_user_marker(): void
     {
         config()->set('demo_pilot.public_login_enabled', true);
