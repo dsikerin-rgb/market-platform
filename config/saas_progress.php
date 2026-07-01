@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Public demo readiness подготовлен: read-only preflight проверяет демо-рынок, публичного пользователя, роли, source-маркеры и опасные flags перед включением /demo.',
-    'next_step' => 'Выполнить staging public demo drill через demo:public-readiness; prod public demo flag включать только отдельным решением после smoke.',
+    'current_focus' => 'Public demo readiness дополнен smoke-проверками сессий: правый staff rail и выход из кабинета арендатора должны сохранять market context и не ломать админку.',
+    'next_step' => 'Перед следующим включением /demo выполнить staging drill: demo:flags-audit, demo:public-readiness, вход через /demo, проверка staff rail, вход/выход из кабинета арендатора без 419; prod flag включать только отдельным решением после smoke.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -122,6 +122,8 @@ return [
                 ['title' => 'Механизм демо-доступов: пароль только через env, владелец показа 321_123@bk.ru, без перезаписи реального аккаунта', 'status' => 'done'],
                 ['title' => 'Public demo entry подготовлен и задеплоен за feature flag: /demo может открыть synthetic demo-директора без публикации пароля; на prod flag выключен до отдельного решения', 'status' => 'done'],
                 ['title' => 'Public demo readiness command: demo:public-readiness проверяет демо-рынок, публичного пользователя, роли, source-маркеры, redirect и flags без записи данных', 'status' => 'done'],
+                ['title' => 'Public demo session guards: существующая super-admin сессия не заменяется demo-пользователем, staff rail/quick chat/live feed должны оставаться в market context текущей админской страницы', 'status' => 'done'],
+                ['title' => 'Tenant cabinet exit guards: выход из кабинета арендатора возвращает в админку без 419 и восстанавливает market context исходного рынка', 'status' => 'done'],
                 ['title' => 'Простая карта рынка с 5 фигурами мест', 'status' => 'done'],
                 ['title' => 'Demo-карта на staging сбалансирована: 228/228 фигур привязаны, острова оформлены как групповые места, O2/O5/O6/O7 разделены на 2-4 арендатора, 130 дочерних мест, 16 родительских групп, 0 фигур без привязки, ставки подняты примерно на 30% с более дорогими центральными и входными зонами', 'status' => 'done'],
                 ['title' => 'Prod demo market создан отдельным рынком: id=2, 244 места, 228 фигур, 21 арендатор, 5 пользователей, PDF-подложка, 0 live 1C/webhook интеграций', 'status' => 'done'],
@@ -159,6 +161,7 @@ return [
                 ['title' => 'Prod demo data import выполнен после pg_dump backup и dry-run preflight; боевой рынок id=1 не обновлялся', 'status' => 'done'],
                 ['title' => 'Prod flags on отдельным решением', 'status' => 'pending'],
                 ['title' => 'Public demo readiness checklist добавлен для staging/prod перед включением /demo', 'status' => 'done'],
+                ['title' => 'Public demo smoke checklist расширен проверками staff rail и выхода из кабинета арендатора после найденных regressions', 'status' => 'done'],
                 ['title' => 'Rollback drill через flags: read-only audit command, staging drill и emergency rollback runbook подготовлены', 'status' => 'done'],
             ],
         ],
