@@ -3528,6 +3528,7 @@
         const MAP_BACKGROUND_CANVAS_CORNER_FALLBACK_MAX_OFFSET_SCREEN_PX = 38;
         const MAP_BACKGROUND_CANVAS_CORNER_VECTOR_CONFIRM_SCREEN_PX = 18;
         const MAP_BACKGROUND_CANVAS_INK_LUMA_MAX = 244;
+        const MAP_BACKGROUND_VECTOR_CANVAS_CONFIRM_SCREEN_PX = 5;
         const MAP_BACKGROUND_SNAP_MAX_SEGMENTS = 16000;
         const MAP_BACKGROUND_SNAP_MAX_POINTS = 16000;
         const MAP_BACKGROUND_NODE_SNAP_LOCK_SCREEN_PX = 52;
@@ -7050,7 +7051,15 @@
 
           function getCanvasPointFromClient(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            return { x: clientX - rect.left, y: clientY - rect.top };
+            const displayWidth = Math.max(1, mapDisplayWidth());
+            const displayHeight = Math.max(1, mapDisplayHeight());
+            const rectWidth = Math.max(1, Number(rect?.width || displayWidth));
+            const rectHeight = Math.max(1, Number(rect?.height || displayHeight));
+
+            return {
+              x: (Number(clientX) - Number(rect.left || 0)) * (displayWidth / rectWidth),
+              y: (Number(clientY) - Number(rect.top || 0)) * (displayHeight / rectHeight),
+            };
           }
 
           function findVertexSnapPoint(xPdf, yPdf, options = {}) {
@@ -7597,6 +7606,49 @@
             if (luma > MAP_BACKGROUND_CANVAS_INK_LUMA_MAX) return 0;
 
             return Math.max(1, 255 - luma);
+          }
+
+          function hasBackgroundCanvasInkNearViewportPoint(x, y, radiusPx = MAP_BACKGROUND_VECTOR_CANVAS_CONFIRM_SCREEN_PX) {
+            if (!canvas || !ctx) return true;
+
+            const canvasPoint = logicalToBackgroundCanvasPoint(x, y);
+            const canvasScale = Math.max(0.0001, Number(backgroundCanvasScaleX || 1), Number(backgroundCanvasScaleY || 1));
+            const radius = Math.max(1, Math.ceil(Number(radiusPx || 1) * canvasScale));
+            const centerX = Math.round(Number(canvasPoint.x));
+            const centerY = Math.round(Number(canvasPoint.y));
+            if (!Number.isFinite(centerX) || !Number.isFinite(centerY)) return false;
+
+            const left = Math.max(0, centerX - radius);
+            const top = Math.max(0, centerY - radius);
+            const right = Math.min(Number(canvas.width || 0), centerX + radius + 1);
+            const bottom = Math.min(Number(canvas.height || 0), centerY + radius + 1);
+            const width = right - left;
+            const height = bottom - top;
+            if (width <= 0 || height <= 0) return false;
+
+            let imageData = null;
+            try {
+              imageData = ctx.getImageData(left, top, width, height);
+            } catch (error) {
+              return true;
+            }
+
+            const data = imageData?.data;
+            if (!data || data.length < 4) return false;
+
+            const radiusSq = radius * radius;
+            for (let yy = 0; yy < height; yy++) {
+              for (let xx = 0; xx < width; xx++) {
+                const px = left + xx;
+                const py = top + yy;
+                if (distanceSq(centerX, centerY, px, py) > radiusSq) continue;
+                if (backgroundCanvasInkValue(data, ((yy * width) + xx) * 4) > 0) {
+                  return true;
+                }
+              }
+            }
+
+            return false;
           }
 
           function collectBackgroundCanvasInkBands(scores, minScore) {
@@ -8161,15 +8213,16 @@
             switch (sourceType) {
               case 'shape-vertex':
                 return 0;
-              case 'background-vertex':
-              case 'background-intersection':
               case 'background-canvas-corner':
                 return 1;
-              case 'shape-edge':
+              case 'background-vertex':
+              case 'background-intersection':
                 return 2;
-              case 'background-edge':
+              case 'shape-edge':
                 return 3;
               case 'background-canvas':
+                return 3;
+              case 'background-edge':
                 return 4;
               default:
                 return 5;
@@ -8187,6 +8240,12 @@
             return sourceType === 'background-vertex'
               || sourceType === 'background-intersection'
               || sourceType === 'background-canvas-corner';
+          }
+
+          function isVectorBackgroundSnapSource(sourceType) {
+            return sourceType === 'background-vertex'
+              || sourceType === 'background-intersection'
+              || sourceType === 'background-edge';
           }
 
           function resetMapSnapLock() {
@@ -8252,6 +8311,16 @@
                 continue;
               }
 
+              const sourceType = candidate.snapSourceType || 'unknown';
+              if (isVectorBackgroundSnapSource(sourceType) && !hasBackgroundCanvasInkNearViewportPoint(px, py)) {
+                diagnostics.candidates.push({
+                  sourceType,
+                  missing: true,
+                  rejected: 'no-visible-ink',
+                });
+                continue;
+              }
+
               const d2 = distanceSq(sx, sy, px, py);
 
               viable.push({
@@ -8261,7 +8330,7 @@
                 py,
               });
               diagnostics.candidates.push({
-                sourceType: candidate.snapSourceType || 'unknown',
+                sourceType,
                 d2,
                 px,
                 py,
