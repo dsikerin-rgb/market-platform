@@ -29,6 +29,7 @@ use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
 use App\Http\Middleware\RestoreAdminFromImpersonation;
 use App\Http\Middleware\TrackAdminUserPresence;
+use App\Support\MarketplacePublicUrl;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -195,7 +196,7 @@ class AdminPanelProvider extends PanelProvider
                     $mapUrl = route('filament.admin.market-map', [
                         'return_url' => request()->fullUrl(),
                     ]);
-                    $marketplaceUrl = route('marketplace.entry');
+                    $marketplaceUrl = app(MarketplacePublicUrl::class)->forCurrentAdmin($user);
 
                     return view('filament.components.topbar-quick-links', [
                         'mapUrl' => $mapUrl,

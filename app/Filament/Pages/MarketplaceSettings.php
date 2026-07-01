@@ -8,6 +8,7 @@ use App\Filament\Resources\MarketplaceSlideResource;
 use App\Models\Market;
 use App\Models\MarketplaceSlide;
 use App\Support\MarketContext;
+use App\Support\MarketplacePublicUrl;
 use App\Support\MarketplaceSettingsValue;
 use Filament\Facades\Filament;
 use Filament\Forms;
@@ -345,7 +346,7 @@ class MarketplaceSettings extends Page
         }
 
         try {
-            $this->publicMarketplaceUrl = route('marketplace.entry');
+            $this->publicMarketplaceUrl = app(MarketplacePublicUrl::class)->forMarket($this->market);
         } catch (\Throwable) {
             $this->publicMarketplaceUrl = null;
         }

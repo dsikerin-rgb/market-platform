@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Debt\DebtDecisionPolicy;
 use App\Support\AdminCapabilities;
 use App\Support\MarketContext;
+use App\Support\MarketplacePublicUrl;
 use App\Support\MarketplaceSettingsValue;
 use App\Support\TestingModeNoticeSettings;
 use App\Support\UserNotificationPreferences;
@@ -1285,7 +1286,7 @@ class MarketSettings extends Page
         }
 
         try {
-            $this->marketplacePublicUrl = route('marketplace.entry');
+            $this->marketplacePublicUrl = app(MarketplacePublicUrl::class)->forMarket($this->market);
         } catch (\Throwable) {
             $this->marketplacePublicUrl = null;
         }
