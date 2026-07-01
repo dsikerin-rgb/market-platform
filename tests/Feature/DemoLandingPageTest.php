@@ -73,16 +73,7 @@ class DemoLandingPageTest extends TestCase
     {
         config()->set('demo_pilot.public_login_enabled', true);
 
-        $market = Market::query()->create([
-            'name' => 'Демо-рынок Центральный',
-            'slug' => 'demo-market',
-            'code' => 'DEMO_MARKET',
-            'settings' => [
-                'demo_pilot' => [
-                    'synthetic_source' => 'demo_pilot',
-                ],
-            ],
-        ]);
+        $market = $this->createSyntheticDemoMarket();
 
         $user = User::factory()->create([
             'name' => 'Анна Волкова',
@@ -100,6 +91,50 @@ class DemoLandingPageTest extends TestCase
             ->assertRedirect('/admin/market-map');
 
         $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_public_demo_sign_in_accepts_existing_demo_director_without_user_marker(): void
+    {
+        config()->set('demo_pilot.public_login_enabled', true);
+
+        $market = $this->createSyntheticDemoMarket();
+
+        $user = User::factory()->create([
+            'name' => 'Existing Demo Director',
+            'email' => 'director@demo.marketuchet.local',
+            'market_id' => (int) $market->id,
+            'notification_preferences' => null,
+        ]);
+        $this->assignRole($user, 'market-owner-director');
+
+        $this->post(route('demo.sign-in'))
+            ->assertRedirect('/admin/market-map');
+
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_public_demo_sign_in_rejects_conflicting_user_marker(): void
+    {
+        config()->set('demo_pilot.public_login_enabled', true);
+
+        $market = $this->createSyntheticDemoMarket();
+
+        $user = User::factory()->create([
+            'name' => 'Conflicting Demo Director',
+            'email' => 'director@demo.marketuchet.local',
+            'market_id' => (int) $market->id,
+            'notification_preferences' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'manual_fixture',
+                ],
+            ],
+        ]);
+        $this->assignRole($user, 'market-owner-director');
+
+        $this->post(route('demo.sign-in'))
+            ->assertNotFound();
+
+        $this->assertFalse(Auth::check());
     }
 
     public function test_demo_request_form_stores_lead_and_notifies_owner(): void
@@ -244,6 +279,20 @@ class DemoLandingPageTest extends TestCase
         $migration->up();
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    private function createSyntheticDemoMarket(): Market
+    {
+        return Market::query()->create([
+            'name' => 'Демо-рынок Центральный',
+            'slug' => 'demo-market',
+            'code' => 'DEMO_MARKET',
+            'settings' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                ],
+            ],
+        ]);
     }
 
     private function assignRole(User $user, string $roleName): void
