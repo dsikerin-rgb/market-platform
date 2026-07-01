@@ -157,6 +157,8 @@
         .button {
             padding: 0 20px;
             border: 1px solid transparent;
+            cursor: pointer;
+            font: inherit;
         }
 
         .button-primary {
@@ -167,6 +169,10 @@
         .button-secondary {
             border-color: rgba(255, 255, 255, 0.34);
             color: #ffffff;
+        }
+
+        .inline-entry-form {
+            margin: 0;
         }
 
         .hero-facts {
@@ -363,6 +369,14 @@
             color: #ffffff;
         }
 
+        .demo-entry-form {
+            margin: 0 0 12px;
+        }
+
+        .demo-entry-note {
+            font-size: 13px;
+        }
+
         .request-form {
             display: grid;
             gap: 12px;
@@ -541,7 +555,14 @@
                     Для первых клиентов можно начать с демо или ограниченной бесплатной версии.
                 </p>
                 <div class="hero-actions" aria-label="Основные действия">
-                    <a class="button button-primary" href="#demo-request">Подключиться к демо</a>
+                    @if (config('demo_pilot.public_login_enabled'))
+                        <form class="inline-entry-form" method="post" action="{{ route('demo.sign-in') }}">
+                            @csrf
+                            <button class="button button-primary" type="submit">Открыть демо как директор</button>
+                        </form>
+                    @else
+                        <a class="button button-primary" href="#demo-request">Подключиться к демо</a>
+                    @endif
                     <a class="button button-secondary" href="{{ route('login') }}">Войти в сервис</a>
                 </div>
                 <div class="hero-facts" aria-label="Что входит в демо">
@@ -675,6 +696,16 @@
                 </div>
                 <div class="contact-panel">
                     <p>Первый безопасный шаг: показать демо на синтетических данных, затем согласовать пилотный контур.</p>
+
+                    @if (config('demo_pilot.public_login_enabled'))
+                        <form class="demo-entry-form" method="post" action="{{ route('demo.sign-in') }}">
+                            @csrf
+                            <button class="button" type="submit">Открыть демо сейчас</button>
+                        </form>
+                        <p class="demo-entry-note">
+                            Откроется демо-рынок в роли директора. Пароль не публикуется, данные синтетические, внешние интеграции выключены.
+                        </p>
+                    @endif
 
                     @if (session('demo_request_status') === 'sent' || request()->boolean('request_sent'))
                         <div class="form-status" role="status">

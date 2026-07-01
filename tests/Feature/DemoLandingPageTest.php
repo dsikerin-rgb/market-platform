@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\DemoRequest;
+use App\Models\Market;
 use App\Models\User;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class DemoLandingPageTest extends TestCase
@@ -39,12 +42,64 @@ class DemoLandingPageTest extends TestCase
             ->assertOk()
             ->assertSee('Демо-доступ к системе управления рынком')
             ->assertSee('Подключиться к демо')
+            ->assertDontSee('Открыть демо как директор')
             ->assertSee('Live 1C, mail, Telegram и webhooks', false)
             ->assertSee('name="name"', false)
             ->assertSee('name="organization"', false)
             ->assertSee('name="consent"', false)
             ->assertSee(route('demo.request'), false)
             ->assertSee('Отправить заявку');
+    }
+
+    public function test_public_demo_sign_in_button_is_shown_only_when_enabled(): void
+    {
+        config()->set('demo_pilot.public_login_enabled', true);
+
+        $this->get('/demo')
+            ->assertOk()
+            ->assertSee('Открыть демо как директор')
+            ->assertSee(route('demo.sign-in'), false);
+    }
+
+    public function test_public_demo_sign_in_requires_feature_flag(): void
+    {
+        $this->post(route('demo.sign-in'))
+            ->assertNotFound();
+
+        $this->assertFalse(Auth::check());
+    }
+
+    public function test_public_demo_sign_in_logs_in_synthetic_director(): void
+    {
+        config()->set('demo_pilot.public_login_enabled', true);
+
+        $market = Market::query()->create([
+            'name' => 'Демо-рынок Центральный',
+            'slug' => 'demo-market',
+            'code' => 'DEMO_MARKET',
+            'settings' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                ],
+            ],
+        ]);
+
+        $user = User::factory()->create([
+            'name' => 'Анна Волкова',
+            'email' => 'director@demo.marketuchet.local',
+            'market_id' => (int) $market->id,
+            'notification_preferences' => [
+                'demo_pilot' => [
+                    'synthetic_source' => 'demo_pilot',
+                ],
+            ],
+        ]);
+        $this->assignRole($user, 'market-owner-director');
+
+        $this->post(route('demo.sign-in'))
+            ->assertRedirect('/admin/market-map');
+
+        $this->assertAuthenticatedAs($user);
     }
 
     public function test_demo_request_form_stores_lead_and_notifies_owner(): void
@@ -130,6 +185,22 @@ class DemoLandingPageTest extends TestCase
         Schema::dropIfExists('demo_requests');
         Schema::dropIfExists('notifications');
         Schema::dropIfExists('users');
+        Schema::dropIfExists('model_has_roles');
+        Schema::dropIfExists('roles');
+        Schema::dropIfExists('markets');
+
+        Schema::create('markets', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('slug')->nullable()->unique();
+            $table->string('code')->nullable()->unique();
+            $table->string('address')->nullable();
+            $table->string('timezone')->default('Europe/Moscow');
+            $table->boolean('is_active')->default(true);
+            $table->json('settings')->nullable();
+            $table->json('features')->nullable();
+            $table->timestamps();
+        });
 
         Schema::create('users', function (Blueprint $table): void {
             $table->id();
@@ -145,6 +216,21 @@ class DemoLandingPageTest extends TestCase
             $table->timestamps();
         });
 
+        Schema::create('roles', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->string('guard_name');
+            $table->timestamps();
+            $table->unique(['name', 'guard_name']);
+        });
+
+        Schema::create('model_has_roles', function (Blueprint $table): void {
+            $table->unsignedBigInteger('role_id');
+            $table->string('model_type');
+            $table->unsignedBigInteger('model_id');
+            $table->primary(['role_id', 'model_id', 'model_type']);
+        });
+
         Schema::create('notifications', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->string('type');
@@ -156,5 +242,25 @@ class DemoLandingPageTest extends TestCase
 
         $migration = require database_path('migrations/2026_06_30_100000_create_demo_requests_table.php');
         $migration->up();
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    private function assignRole(User $user, string $roleName): void
+    {
+        $roleId = DB::table('roles')->insertGetId([
+            'name' => $roleName,
+            'guard_name' => 'web',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('model_has_roles')->insert([
+            'role_id' => $roleId,
+            'model_type' => User::class,
+            'model_id' => (int) $user->id,
+        ]);
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

@@ -21,6 +21,7 @@ use App\Http\Controllers\Cabinet\RequestsController;
 use App\Http\Controllers\Cabinet\ShowcaseController;
 use App\Http\Controllers\Cabinet\SpacesController;
 use App\Http\Controllers\Cabinet\TelegramConnectController;
+use App\Http\Controllers\DemoAccessController;
 use App\Http\Controllers\DemoRequestController;
 use App\Http\Controllers\Marketplace\AnnouncementController as MarketplaceAnnouncementController;
 use App\Http\Controllers\Marketplace\BuyerAuthController as MarketplaceBuyerAuthController;
@@ -83,6 +84,9 @@ Route::view('/demo', 'demo-pilot-landing')->name('demo.landing');
 Route::post('/demo/request', [DemoRequestController::class, 'store'])
     ->middleware('throttle:5,1')
     ->name('demo.request');
+Route::post('/demo/sign-in', [DemoAccessController::class, 'signIn'])
+    ->middleware('throttle:10,1')
+    ->name('demo.sign-in');
 
 Route::get('/media/{path}', function (string $path) {
     return MarketplaceMediaStorage::serve($path);

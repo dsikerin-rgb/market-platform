@@ -41,6 +41,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public demo entry
+    |--------------------------------------------------------------------------
+    |
+    | Keep disabled by default. When enabled, the /demo page can open the
+    | synthetic demo market without publishing a shared password.
+    |
+    */
+    'public_login_enabled' => env('DEMO_PILOT_PUBLIC_LOGIN_ENABLED', false),
+    'public_login_email' => env('DEMO_PILOT_PUBLIC_LOGIN_EMAIL'),
+    'public_login_redirect' => env('DEMO_PILOT_PUBLIC_LOGIN_REDIRECT', '/admin/market-map'),
+
+    /*
+    |--------------------------------------------------------------------------
     | External integrations
     |--------------------------------------------------------------------------
     |

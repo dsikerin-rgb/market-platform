@@ -65,6 +65,37 @@ class DemoPilotSettings
         return 'demo access password must be at least ' . self::MIN_ACCESS_PASSWORD_LENGTH . ' characters when configured.';
     }
 
+    public function publicLoginEnabled(): bool
+    {
+        return (bool) config('demo_pilot.public_login_enabled', false);
+    }
+
+    public function publicLoginEmail(): string
+    {
+        $email = mb_strtolower(trim((string) config('demo_pilot.public_login_email', '')), 'UTF-8');
+
+        if ($email !== '') {
+            return $email;
+        }
+
+        return 'director@' . $this->emailDomain();
+    }
+
+    public function publicLoginRedirectPath(): string
+    {
+        $path = trim((string) config('demo_pilot.public_login_redirect', '/admin/market-map'));
+
+        if ($path === '' || ! str_starts_with($path, '/')) {
+            return '/admin/market-map';
+        }
+
+        if (str_starts_with($path, '//')) {
+            return '/admin/market-map';
+        }
+
+        return $path;
+    }
+
     /**
      * @return list<string>
      */
