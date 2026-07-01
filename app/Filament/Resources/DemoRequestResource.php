@@ -13,6 +13,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 
 class DemoRequestResource extends BaseResource
@@ -48,6 +49,13 @@ class DemoRequestResource extends BaseResource
 
     public static function form(Schema $schema): Schema
     {
+        $runbookFields = [
+            Forms\Components\Placeholder::make('lead_processing_runbook')
+                ->label('Регламент обработки')
+                ->content(static fn (): HtmlString => static::renderLeadProcessingRunbook())
+                ->columnSpanFull(),
+        ];
+
         $statusFields = [
             Forms\Components\Select::make('status')
                 ->label('Статус')
@@ -121,12 +129,14 @@ class DemoRequestResource extends BaseResource
 
         if (class_exists(Forms\Components\Grid::class)) {
             return $schema->components([
+                ...$runbookFields,
                 Forms\Components\Grid::make(2)->components($statusFields),
                 Forms\Components\Grid::make(2)->components($readOnlyFields),
             ]);
         }
 
         return $schema->components([
+            ...$runbookFields,
             ...$statusFields,
             ...$readOnlyFields,
         ]);
@@ -276,6 +286,18 @@ class DemoRequestResource extends BaseResource
     public static function canDelete($record): bool
     {
         return false;
+    }
+
+    private static function renderLeadProcessingRunbook(): HtmlString
+    {
+        return new HtmlString(<<<'HTML'
+<div class="space-y-2 text-sm leading-6 text-gray-700 dark:text-gray-200">
+    <p><strong>SLA:</strong> связаться в тот же рабочий день; в рабочее время - желательно в течение 2 часов.</p>
+    <p><strong>Квалификация:</strong> город, формат объекта, количество мест, текущий учет, 1С, карта/PDF, договоры, долги и готовность к пилоту.</p>
+    <p><strong>Статусы:</strong> «Связались» после первого контакта; «Квалифицирована» после согласованного демо/пилота; «Не подходит» для спама, дублей и нерелевантных заявок.</p>
+    <p><strong>Prod:</strong> public demo flag включается только отдельным решением; общий пароль публично не публикуется.</p>
+</div>
+HTML);
     }
 
     private static function canAccessDemoRequests(): bool
