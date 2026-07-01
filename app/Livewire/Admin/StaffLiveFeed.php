@@ -268,6 +268,16 @@ class StaffLiveFeed extends Component
                     ->orWhere('staff_conversations.recipient_user_id', (int) $user->id);
             });
 
+        $marketId = $this->resolveMarketId();
+        if ($marketId <= 0) {
+            return [
+                'count' => 0,
+                'senders' => [],
+            ];
+        }
+
+        $baseQuery->where('staff_conversations.market_id', $marketId);
+
         $count = (clone $baseQuery)->count('staff_conversation_messages.id');
 
         if ($count < 1) {

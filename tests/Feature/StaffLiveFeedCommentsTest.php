@@ -159,6 +159,60 @@ class StaffLiveFeedCommentsTest extends TestCase
             ->assertDontSee('Hidden Sender');
     }
 
+    public function test_super_admin_unread_staff_message_summary_uses_selected_market(): void
+    {
+        $marketA = $this->createMarket('Selected Market');
+        $marketB = $this->createMarket('Other Market');
+        $superAdmin = $this->actingAsSuperAdmin();
+        session(['filament.admin.selected_market_id' => (int) $marketA->id]);
+
+        $selectedSender = User::factory()->create([
+            'name' => 'Selected Market Sender',
+            'market_id' => (int) $marketA->id,
+            'tenant_id' => null,
+            'email' => 'selected-market-feed-sender@example.test',
+        ]);
+        $otherSender = User::factory()->create([
+            'name' => 'Other Market Sender',
+            'market_id' => (int) $marketB->id,
+            'tenant_id' => null,
+            'email' => 'other-market-feed-sender@example.test',
+        ]);
+
+        $selectedConversation = StaffConversation::query()->create([
+            'market_id' => (int) $marketA->id,
+            'created_by_user_id' => (int) $selectedSender->id,
+            'recipient_user_id' => (int) $superAdmin->id,
+            'subject' => 'Selected market topic',
+            'last_message_at' => now(),
+        ]);
+        StaffConversationMessage::query()->create([
+            'staff_conversation_id' => (int) $selectedConversation->id,
+            'user_id' => (int) $selectedSender->id,
+            'body' => 'Selected market unread message',
+            'read_at' => null,
+        ]);
+
+        $otherConversation = StaffConversation::query()->create([
+            'market_id' => (int) $marketB->id,
+            'created_by_user_id' => (int) $otherSender->id,
+            'recipient_user_id' => (int) $superAdmin->id,
+            'subject' => 'Other market topic',
+            'last_message_at' => now(),
+        ]);
+        StaffConversationMessage::query()->create([
+            'staff_conversation_id' => (int) $otherConversation->id,
+            'user_id' => (int) $otherSender->id,
+            'body' => 'Other market unread message',
+            'read_at' => null,
+        ]);
+
+        Livewire::test(StaffLiveFeed::class)
+            ->assertSeeHtml('staff-live-feed__unread-alert')
+            ->assertSee('Selected Market Sender')
+            ->assertDontSee('Other Market Sender');
+    }
+
     private function createMarket(string $name): Market
     {
         return Market::query()->create([
