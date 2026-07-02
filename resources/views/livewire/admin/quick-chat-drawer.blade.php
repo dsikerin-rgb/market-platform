@@ -802,15 +802,15 @@
         .quick-chat__composer {
             border-top: 1px solid rgba(148, 163, 184, 0.22);
             background: #fff;
-            padding: 0;
+            padding: 0 0 max(0.42rem, env(safe-area-inset-bottom));
         }
 
         .quick-chat__composer-row {
             display: flex;
-            align-items: flex-end;
+            align-items: center;
             gap: 0.35rem;
-            min-height: 4.35rem;
-            padding: 0.62rem 0.72rem;
+            min-height: 4.65rem;
+            padding: 0.58rem 0.72rem 0.52rem;
         }
 
         .quick-chat__composer-main {
@@ -821,7 +821,7 @@
         .quick-chat__input-shell {
             display: grid;
             grid-template-columns: auto minmax(0, 1fr);
-            align-items: end;
+            align-items: center;
             gap: 0.55rem;
             min-width: 0;
         }
@@ -837,10 +837,10 @@
             overflow-y: hidden;
             border: 0;
             background: transparent;
-            padding: 0.48rem 0 0.56rem;
+            padding: 0.46rem 0 0.7rem;
             color: #0f172a;
             font-size: 0.95rem;
-            line-height: 1.42;
+            line-height: 1.36;
             outline: none;
             scrollbar-gutter: stable;
         }
@@ -884,11 +884,10 @@
         .quick-chat__file-label {
             display: inline-flex;
             align-items: center;
-            align-self: end;
+            align-self: center;
             justify-content: center;
             width: 2.25rem;
             height: 2.25rem;
-            margin-bottom: 0.18rem;
             border: 0;
             border-radius: 999px;
             background: transparent;
@@ -932,7 +931,6 @@
             flex: 0 0 auto;
             width: 2.65rem;
             height: 2.65rem;
-            margin-bottom: 0.05rem;
             border: 0;
             border-radius: 999px;
             background: transparent;
@@ -1373,10 +1371,17 @@
                                                     this.$el.style.overflowY = this.$el.scrollHeight > maxHeight ? 'auto' : 'hidden';
                                                 },
                                             }"
-                                            x-init="resize()"
+                                            x-init="
+                                                resize();
+                                                if (document.fonts) {
+                                                    document.fonts.ready.then(() => resize());
+                                                }
+                                            "
                                             x-effect="$wire.messageBody; $nextTick(() => resize())"
+                                            x-on:focus="resize()"
                                             x-on:input="resize()"
                                             x-on:quick-chat-updated.window="$nextTick(() => resize())"
+                                            x-on:resize.window="$nextTick(() => resize())"
                                         ></textarea>
                                     </div>
 
