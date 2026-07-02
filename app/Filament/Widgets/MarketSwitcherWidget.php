@@ -108,7 +108,10 @@ class MarketSwitcherWidget extends Widget
 
     private function resolveSelectedMarketIdFromContext(): ?int
     {
-        return app(MarketContext::class)->selectedMarketIdFromSession();
+        $marketContext = app(MarketContext::class);
+
+        return $marketContext->selectedMarketIdFromSession()
+            ?? $marketContext->rememberedSelectedMarketIdForUser();
     }
 
     private function syncSelectedMarketId(?int $marketId): void
@@ -119,7 +122,7 @@ class MarketSwitcherWidget extends Widget
     private function resolveDefaultMarketId(): ?int
     {
         $marketId = Market::query()
-            ->orderBy('name')
+            ->orderBy('id')
             ->value('id');
 
         return $marketId ? (int) $marketId : null;

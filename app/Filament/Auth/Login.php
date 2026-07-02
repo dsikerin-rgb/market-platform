@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Auth;
 
+use App\Models\User;
+use App\Support\MarketContext;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
@@ -41,6 +43,8 @@ class Login extends BaseLogin
 
                 return;
             }
+
+            $this->restoreRememberedAdminMarket($user);
 
             redirect()->intended(Filament::getUrl());
 
@@ -126,6 +130,8 @@ class Login extends BaseLogin
 
         session()->regenerate();
 
+        $this->restoreRememberedAdminMarket($user);
+
         return app(LoginResponse::class);
     }
 
@@ -152,5 +158,17 @@ class Login extends BaseLogin
         ]);
 
         return $hasMerchantRole && ! $hasAdminRole;
+    }
+
+    private function restoreRememberedAdminMarket(mixed $user): void
+    {
+        if (! $user instanceof User) {
+            return;
+        }
+
+        app(MarketContext::class)->restoreRememberedSelectedMarketIdInSession(
+            $user,
+            Filament::getCurrentPanel()?->getId() ?? 'admin',
+        );
     }
 }

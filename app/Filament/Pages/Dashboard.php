@@ -720,7 +720,10 @@ class Dashboard extends BaseDashboard
 
     private function resolveSelectedMarketIdFromContext(): ?int
     {
-        return app(MarketContext::class)->selectedMarketIdFromSession();
+        $marketContext = app(MarketContext::class);
+
+        return $marketContext->selectedMarketIdFromSession()
+            ?? $marketContext->rememberedSelectedMarketIdForUser();
     }
 
     private function syncDashboardMarketId(): void
@@ -742,7 +745,7 @@ class Dashboard extends BaseDashboard
     private function resolveDefaultMarketId(): int
     {
         $marketId = Market::query()
-            ->orderBy('name')
+            ->orderBy('id')
             ->value('id');
 
         return $marketId ? (int) $marketId : 0;
