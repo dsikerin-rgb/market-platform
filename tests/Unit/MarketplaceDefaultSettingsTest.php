@@ -27,6 +27,7 @@ class MarketplaceDefaultSettingsTest extends TestCase
 
         self::assertSame('Демо-рынок Центральный', $settings['brand_name']);
         self::assertSame('marketplace/brand/demo-market-logo.svg', $settings['logo_path']);
+        self::assertSame('', $settings['favicon_path']);
         self::assertSame('Демонстрационный рынок', $settings['hero_eyebrow']);
         self::assertSame('Покупки на демо-рынке в одном месте', $settings['hero_title']);
         self::assertSame('рынка «Демо-рынок Центральный»', $settings['market_public_label']);
@@ -44,6 +45,7 @@ class MarketplaceDefaultSettingsTest extends TestCase
 
         self::assertSame('Маркетплейс Экоярмарки', $settings['brand_name']);
         self::assertSame('', $settings['logo_path']);
+        self::assertSame('', $settings['favicon_path']);
         self::assertSame('Городская Экоярмарка', $settings['hero_eyebrow']);
         self::assertSame('Покупки на Экоярмарке в одном месте', $settings['hero_title']);
         self::assertSame('Экоярмарки', $settings['market_public_label']);
@@ -67,6 +69,30 @@ class MarketplaceDefaultSettingsTest extends TestCase
         self::assertSame(Storage::disk('public')->url('marketplace/brand/custom-upload.svg'), $url);
     }
 
+    public function test_favicon_path_uses_explicit_favicon_before_logo(): void
+    {
+        $url = $this->controller()->exposeMarketplaceFaviconUrl([
+            'logo_path' => 'marketplace/brand/demo-market-logo.svg',
+            'favicon_path' => 'marketplace/brand/custom-favicon.png',
+        ]);
+
+        self::assertSame(Storage::disk('public')->url('marketplace/brand/custom-favicon.png'), $url);
+    }
+
+    public function test_favicon_falls_back_to_logo_then_default(): void
+    {
+        $controller = $this->controller();
+
+        self::assertSame(
+            asset('marketplace/brand/demo-market-logo.svg'),
+            $controller->exposeMarketplaceFaviconUrl([
+                'logo_path' => 'marketplace/brand/demo-market-logo.svg',
+            ])
+        );
+
+        self::assertSame(asset('favicon.png'), $controller->exposeMarketplaceFaviconUrl([]));
+    }
+
     private function controller(): object
     {
         return new class extends BaseMarketplaceController {
@@ -84,6 +110,14 @@ class MarketplaceDefaultSettingsTest extends TestCase
             public function exposeMarketplaceLogoUrl(array $settings): string
             {
                 return $this->resolveMarketplaceLogoUrl($settings);
+            }
+
+            /**
+             * @param  array<string, mixed>  $settings
+             */
+            public function exposeMarketplaceFaviconUrl(array $settings): string
+            {
+                return $this->resolveMarketplaceFaviconUrl($settings);
             }
         };
     }
