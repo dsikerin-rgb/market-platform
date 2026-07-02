@@ -121,14 +121,16 @@
 
         .market-attention-widget__empty {
             border-radius: 1.25rem;
-            border: 1px dashed rgba(34, 197, 94, 0.35);
-            background: rgba(34, 197, 94, 0.06);
-            padding: 1.25rem;
+            border: 1px solid rgba(34, 197, 94, 0.24);
+            background: rgba(240, 253, 244, 0.96);
+            box-shadow: 0 16px 36px -28px rgba(15, 23, 42, 0.45);
+            padding: 1rem 3.5rem 1rem 1.15rem;
         }
 
         .dark .market-attention-widget__empty {
-            border-color: rgba(34, 197, 94, 0.28);
-            background: rgba(21, 128, 61, 0.12);
+            border-color: rgba(74, 222, 128, 0.24);
+            background: rgba(20, 83, 45, 0.92);
+            box-shadow: 0 16px 36px -28px rgba(0, 0, 0, 0.72);
         }
 
         .market-attention-widget__empty--dismissing {
@@ -146,8 +148,8 @@
             width: 2rem;
             height: 2rem;
             border-radius: 9999px;
-            color: rgba(16, 185, 129, 0.9);
-            background: rgba(255, 255, 255, 0.72);
+            color: rgb(5, 150, 105);
+            background: rgba(255, 255, 255, 0.96);
             box-shadow: 0 8px 20px -16px rgba(15, 23, 42, 0.35);
             transition: transform 120ms ease, background-color 120ms ease, color 120ms ease;
         }
@@ -166,6 +168,13 @@
         .dark .market-attention-widget__empty-close:hover {
             background: rgba(15, 23, 42, 0.82);
             color: rgb(220, 252, 231);
+        }
+
+        .market-attention-widget__empty-body {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.9rem;
+            max-width: 42rem;
         }
 
         @keyframes market-attention-empty-out {
@@ -444,12 +453,6 @@
             background: transparent;
         }
 
-        .market-attention-widget__toast-empty {
-            align-self: start;
-            max-width: 28rem;
-            margin-left: auto;
-        }
-
         @media (max-width: 1023px) {
             .market-attention-widget__toast-layout {
                 grid-template-columns: minmax(0, 1fr);
@@ -459,8 +462,7 @@
                 align-items: stretch;
             }
 
-            .market-attention-widget__card--toast,
-            .market-attention-widget__toast-empty {
+            .market-attention-widget__card--toast {
                 width: 100%;
                 max-width: none;
             }
@@ -523,8 +525,8 @@
         <div class="market-attention-widget__surface">
             <div class="market-attention-widget__mesh"></div>
 
-            <div class="relative z-10 {{ $useToastStack ? 'market-attention-widget__toast-layout' : 'space-y-5' }}">
-                <div class="{{ $useToastStack ? 'space-y-5' : '' }}">
+            <div class="relative z-10 {{ $useToastStack && $items !== [] ? 'market-attention-widget__toast-layout' : 'space-y-5' }}">
+                <div class="{{ $useToastStack && $items !== [] ? 'space-y-5' : '' }}">
                     <div class="market-attention-widget__heading">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-3">
@@ -623,7 +625,9 @@
                         x-cloak
                         x-show="open"
                         x-bind:class="{ 'market-attention-widget__empty--dismissing': closing }"
-                        class="market-attention-widget__empty relative z-10{{ $useToastStack ? ' market-attention-widget__toast-empty' : '' }}"
+                        class="market-attention-widget__empty relative z-10"
+                        role="status"
+                        aria-live="polite"
                     >
                         <button
                             type="button"
@@ -634,7 +638,7 @@
                             <x-filament::icon icon="heroicon-m-x-mark" class="h-4 w-4" />
                         </button>
 
-                        <div class="flex items-start gap-4">
+                        <div class="market-attention-widget__empty-body">
                             <div class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-success-500/12 text-success-600 ring-1 ring-inset ring-success-500/20 dark:bg-success-400/12 dark:text-success-300 dark:ring-success-400/20">
                                 <x-filament::icon icon="heroicon-m-check-badge" class="h-6 w-6" />
                             </div>
