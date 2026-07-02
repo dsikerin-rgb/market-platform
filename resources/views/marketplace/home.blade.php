@@ -5,6 +5,8 @@
 @section('content')
     @php
         $marketSlug = $market->slug;
+        $marketPublicLabel = trim((string) ($marketplaceSettings['market_public_label'] ?? ''));
+        $marketPublicLabel = $marketPublicLabel !== '' ? $marketPublicLabel : 'рынка';
         $heroStats = [
             [
                 'label' => 'Витрин',
@@ -526,7 +528,7 @@
     <section class="mp-card" style="padding:0;overflow:hidden;background:linear-gradient(120deg,#0a84d6,#10b2d8 60%,#7bd5ff);color:#fff;">
         <div class="mp-hero-grid{{ collect($infoSlides)->isNotEmpty() ? '' : ' mp-hero-grid--single' }}">
             <div class="mp-hero-main">
-                <div class="mp-hero-eyebrow">Городская Экоярмарка</div>
+                <div class="mp-hero-eyebrow">{{ $marketplaceSettings['hero_eyebrow'] }}</div>
                 <h1 class="mp-hero-title">{{ $marketplaceSettings['hero_title'] }}</h1>
                 <p class="mp-hero-copy">
                     {{ $marketplaceSettings['hero_subtitle'] }}
@@ -625,7 +627,7 @@
             <div class="mp-page-head">
                 <div>
                     <h2 class="mp-page-title" style="font-size:26px;">Анонсы и события</h2>
-                    <p class="mp-page-sub">Праздники, акции, санитарные дни и новости Экоярмарки.</p>
+                    <p class="mp-page-sub">Праздники, акции, санитарные дни и новости {{ $marketPublicLabel }}.</p>
                 </div>
                 <a class="mp-btn" href="{{ route('marketplace.announcements', ['marketSlug' => $market->slug]) }}">Все анонсы</a>
             </div>
@@ -671,7 +673,7 @@
             <div class="mp-page-head">
                 <div>
                     <h2 class="mp-page-title" style="font-size:26px;">Рекомендуем</h2>
-                    <p class="mp-page-sub">Подборка актуальных предложений разных продавцов Экоярмарки.</p>
+                    <p class="mp-page-sub">Подборка актуальных предложений разных продавцов {{ $marketPublicLabel }}.</p>
                 </div>
             </div>
             <div class="mp-grid">
@@ -686,7 +688,7 @@
         <div class="mp-page-head">
             <div>
                 <h2 class="mp-page-title" style="font-size:26px;">Новые товары</h2>
-                <p class="mp-page-sub">Последние добавления по Экоярмарке.</p>
+                <p class="mp-page-sub">Последние добавления по {{ $marketPublicLabel }}.</p>
             </div>
             <a class="mp-btn mp-btn-brand" href="{{ route('marketplace.catalog', ['marketSlug' => $market->slug]) }}">Открыть каталог</a>
         </div>

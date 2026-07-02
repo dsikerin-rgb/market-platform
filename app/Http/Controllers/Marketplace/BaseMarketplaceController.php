@@ -111,16 +111,19 @@ abstract class BaseMarketplaceController extends Controller
     protected function resolveMarketplaceSettings(Market $market): array
     {
         $raw = (array) (($market->settings ?? [])['marketplace'] ?? []);
+        $defaults = $this->defaultMarketplaceSettings($market);
 
         $interval = is_numeric($raw['slider_autoplay_interval_ms'] ?? null)
             ? (int) $raw['slider_autoplay_interval_ms']
             : 7000;
 
         return [
-            'brand_name' => MarketplaceSettingsValue::string($raw['brand_name'] ?? null, 'Маркетплейс Экоярмарки') ?: 'Маркетплейс Экоярмарки',
-            'logo_path' => MarketplaceSettingsValue::string($raw['logo_path'] ?? null),
-            'hero_title' => MarketplaceSettingsValue::string($raw['hero_title'] ?? null, 'Покупки на Экоярмарке в одном месте') ?: 'Покупки на Экоярмарке в одном месте',
-            'hero_subtitle' => MarketplaceSettingsValue::string($raw['hero_subtitle'] ?? null, 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.') ?: 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
+            'brand_name' => MarketplaceSettingsValue::string($raw['brand_name'] ?? null, $defaults['brand_name']) ?: $defaults['brand_name'],
+            'logo_path' => MarketplaceSettingsValue::string($raw['logo_path'] ?? null, $defaults['logo_path']),
+            'hero_eyebrow' => MarketplaceSettingsValue::string($raw['hero_eyebrow'] ?? null, $defaults['hero_eyebrow']) ?: $defaults['hero_eyebrow'],
+            'hero_title' => MarketplaceSettingsValue::string($raw['hero_title'] ?? null, $defaults['hero_title']) ?: $defaults['hero_title'],
+            'hero_subtitle' => MarketplaceSettingsValue::string($raw['hero_subtitle'] ?? null, $defaults['hero_subtitle']) ?: $defaults['hero_subtitle'],
+            'market_public_label' => MarketplaceSettingsValue::string($raw['market_public_label'] ?? null, $defaults['market_public_label']) ?: $defaults['market_public_label'],
             'public_phone' => MarketplaceSettingsValue::string($raw['public_phone'] ?? null, config('marketplace.brand.public_phone', '')),
             'public_email' => MarketplaceSettingsValue::string($raw['public_email'] ?? null, config('marketplace.brand.public_email', '')),
             'public_address' => MarketplaceSettingsValue::string($raw['public_address'] ?? null, $market->address ?? config('marketplace.brand.public_address', '')),
@@ -137,6 +140,46 @@ abstract class BaseMarketplaceController extends Controller
                 ? (bool) $raw['demo_content_enabled']
                 : (bool) config('marketplace.demo_content_enabled', false),
         ];
+    }
+
+    /**
+     * @return array{brand_name:string, logo_path:?string, hero_eyebrow:string, hero_title:string, hero_subtitle:string, market_public_label:string}
+     */
+    protected function defaultMarketplaceSettings(Market $market): array
+    {
+        if ($this->isSyntheticDemoMarket($market)) {
+            return [
+                'brand_name' => 'Демо-рынок Центральный',
+                'logo_path' => 'marketplace/brand/demo-market-logo.svg',
+                'hero_eyebrow' => 'Демонстрационный рынок',
+                'hero_title' => 'Покупки на демо-рынке в одном месте',
+                'hero_subtitle' => 'Единая витрина товаров, карта демо-рынка, прямой чат с продавцами, отзывы и анонсы мероприятий.',
+                'market_public_label' => 'рынка «Демо-рынок Центральный»',
+            ];
+        }
+
+        return [
+            'brand_name' => 'Маркетплейс Экоярмарки',
+            'logo_path' => null,
+            'hero_eyebrow' => 'Городская Экоярмарка',
+            'hero_title' => 'Покупки на Экоярмарке в одном месте',
+            'hero_subtitle' => 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
+            'market_public_label' => 'Экоярмарки',
+        ];
+    }
+
+    protected function isSyntheticDemoMarket(Market $market): bool
+    {
+        $source = trim((string) data_get($market->settings, 'demo_pilot.synthetic_source', ''));
+        $expectedSource = trim((string) config('demo_pilot.synthetic_source', 'demo_pilot'));
+
+        if ($source !== '' && $source === $expectedSource) {
+            return true;
+        }
+
+        $demoSlug = trim((string) config('demo_pilot.market_slug', 'demo-market'));
+
+        return $demoSlug !== '' && (string) ($market->slug ?? '') === $demoSlug;
     }
 
     /**
