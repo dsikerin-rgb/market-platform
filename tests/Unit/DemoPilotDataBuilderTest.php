@@ -109,6 +109,9 @@ class DemoPilotDataBuilderTest extends TestCase
         self::assertSame('demo-honey-jar', $dataSet['marketplace_products'][1]['slug']);
         self::assertSame('Ярмарка выходного дня', $dataSet['announcements'][0]['title']);
         self::assertSame('demo-weekend-market', $dataSet['announcements'][0]['slug']);
+        self::assertSame('Демо-рынок Центральный', $dataSet['market']['settings']['marketplace']['brand_name']);
+        self::assertSame('Покупки на демо-рынке в одном месте', $dataSet['market']['settings']['marketplace']['hero_title']);
+        self::assertSame('marketplace/brand/demo-market-logo.svg', $dataSet['market']['settings']['marketplace']['logo_path']);
     }
 
     public function test_normalizes_empty_overrides_to_safe_defaults(): void

@@ -10,8 +10,8 @@ return [
         'allowed_user_ids' => [1],
         'allowed_user_emails' => ['321_123@bk.ru'],
     ],
-    'current_focus' => 'Public demo открыт на prod через lead-gated entry; связка admin/demo с маркетплейсом фиксируется так, чтобы публичная витрина открывалась для текущего рынка, а не для первого активного рынка.',
-    'next_step' => 'Проверить demo -> admin -> Маркетплейс: из демо-рынка должна открываться публичная витрина /m/demo-market, из боевого рынка - витрина боевого market slug.',
+    'current_focus' => 'Public demo открыт на prod через lead-gated entry; публичная витрина demo-market изолируется по бренду, hero-текстам и marketplace-настройкам, чтобы демо не показывало название боевого рынка.',
+    'next_step' => 'Задеплоить фикс marketplace-branding, выполнить demo:sync-marketplace-branding --execute только для synthetic demo-market и проверить, что /m/demo-market не показывает бренд/hero Экоярмарки.',
     'release_policy' => 'Работа идёт малыми пакетами: local/staging сначала, prod после успешного smoke без ожидания отдельного подтверждения, кроме миграций, .env, DB writes, flags или иных реальных рисков.',
     'stages' => [
         [
@@ -125,6 +125,7 @@ return [
                 ['title' => 'Public demo session guards: существующая super-admin сессия не заменяется demo-пользователем, staff rail/quick chat/live feed должны оставаться в market context текущей админской страницы', 'status' => 'done'],
                 ['title' => 'Tenant cabinet exit guards: выход из кабинета арендатора возвращает в админку без 419 и восстанавливает market context исходного рынка', 'status' => 'done'],
                 ['title' => 'Admin/demo links на публичный маркетплейс привязаны к текущему market context: demo открывает /m/demo-market, боевой рынок открывает свой market slug, общий /marketplace остаётся только fallback', 'status' => 'done'],
+                ['title' => 'Marketplace-branding для demo-market изолируется от боевого бренда: demo defaults, демо-логотип и безопасная команда sync только для settings.marketplace synthetic demo-рынка подготовлены', 'status' => 'in_progress'],
                 ['title' => 'Простая карта рынка с 5 фигурами мест', 'status' => 'done'],
                 ['title' => 'Demo-карта на staging сбалансирована: 228/228 фигур привязаны, острова оформлены как групповые места, O2/O5/O6/O7 разделены на 2-4 арендатора, 130 дочерних мест, 16 родительских групп, 0 фигур без привязки, ставки подняты примерно на 30% с более дорогими центральными и входными зонами', 'status' => 'done'],
                 ['title' => 'Prod demo market создан отдельным рынком: id=2, 244 места, 228 фигур, 21 арендатор, 5 пользователей, PDF-подложка, 0 live 1C/webhook интеграций', 'status' => 'done'],

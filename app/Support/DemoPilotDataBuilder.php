@@ -88,6 +88,16 @@ class DemoPilotDataBuilder
                     'synthetic_source' => $source,
                     'external_integrations_enabled' => false,
                 ],
+                'marketplace' => [
+                    'brand_name' => 'Демо-рынок Центральный',
+                    'logo_path' => 'marketplace/brand/demo-market-logo.svg',
+                    'hero_eyebrow' => 'Демонстрационный рынок',
+                    'hero_title' => 'Покупки на демо-рынке в одном месте',
+                    'hero_subtitle' => 'Единая витрина товаров, карта демо-рынка, прямой чат с продавцами, отзывы и анонсы мероприятий.',
+                    'market_public_label' => 'рынка «Демо-рынок Центральный»',
+                    'demo_content_enabled' => true,
+                    'allow_public_sales_without_active_contracts' => true,
+                ],
             ],
             'features' => [
                 'marketplace' => true,

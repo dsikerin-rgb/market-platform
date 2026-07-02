@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="72" viewBox="0 0 260 72" role="img" aria-label="Демо-рынок Центральный">
+  <rect width="260" height="72" rx="18" fill="#ffffff"/>
+  <g transform="translate(18 14)">
+    <rect x="0" y="11" width="20" height="20" rx="6" fill="#16a34a"/>
+    <rect x="23" y="2" width="20" height="20" rx="6" fill="#0ea5e9"/>
+    <rect x="23" y="26" width="20" height="20" rx="6" fill="#f59e0b"/>
+    <path d="M11 10C14 4 21 1 28 2C23 8 17 11 11 10Z" fill="#14532d"/>
+  </g>
+  <g fill="#102a43" font-family="Arial, Helvetica, sans-serif">
+    <text x="74" y="31" font-size="24" font-weight="700">Демо-рынок</text>
+    <text x="75" y="51" font-size="14" font-weight="700" fill="#64748b">Маркетплейс продавцов</text>
+  </g>
+</svg>
