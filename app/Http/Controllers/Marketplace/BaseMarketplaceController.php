@@ -197,6 +197,10 @@ abstract class BaseMarketplaceController extends Controller
             return $value;
         }
 
+        if (! str_contains($value, '..') && ! str_contains($value, '\\') && is_file(public_path($value))) {
+            return asset($value);
+        }
+
         return Storage::disk('public')->url($value);
     }
 

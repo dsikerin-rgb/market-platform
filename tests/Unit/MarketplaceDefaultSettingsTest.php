@@ -6,6 +6,7 @@ namespace Tests\Unit;
 
 use App\Http\Controllers\Marketplace\BaseMarketplaceController;
 use App\Models\Market;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class MarketplaceDefaultSettingsTest extends TestCase
@@ -48,6 +49,24 @@ class MarketplaceDefaultSettingsTest extends TestCase
         self::assertSame('Экоярмарки', $settings['market_public_label']);
     }
 
+    public function test_bundled_public_logo_path_uses_public_asset_url(): void
+    {
+        $url = $this->controller()->exposeMarketplaceLogoUrl([
+            'logo_path' => 'marketplace/brand/demo-market-logo.svg',
+        ]);
+
+        self::assertSame(asset('marketplace/brand/demo-market-logo.svg'), $url);
+    }
+
+    public function test_uploaded_logo_path_still_uses_public_storage_url(): void
+    {
+        $url = $this->controller()->exposeMarketplaceLogoUrl([
+            'logo_path' => 'marketplace/brand/custom-upload.svg',
+        ]);
+
+        self::assertSame(Storage::disk('public')->url('marketplace/brand/custom-upload.svg'), $url);
+    }
+
     private function controller(): object
     {
         return new class extends BaseMarketplaceController {
@@ -57,6 +76,14 @@ class MarketplaceDefaultSettingsTest extends TestCase
             public function exposeMarketplaceSettings(Market $market): array
             {
                 return $this->resolveMarketplaceSettings($market);
+            }
+
+            /**
+             * @param  array<string, mixed>  $settings
+             */
+            public function exposeMarketplaceLogoUrl(array $settings): string
+            {
+                return $this->resolveMarketplaceLogoUrl($settings);
             }
         };
     }
