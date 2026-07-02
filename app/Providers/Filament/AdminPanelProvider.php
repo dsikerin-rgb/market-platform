@@ -29,6 +29,9 @@ use App\Filament\Widgets\RecentTenantRequestsWidget;
 use App\Filament\Widgets\TenantActivityStatsWidget;
 use App\Http\Middleware\RestoreAdminFromImpersonation;
 use App\Http\Middleware\TrackAdminUserPresence;
+use App\Models\Market;
+use App\Support\MarketBrandAssets;
+use App\Support\MarketContext;
 use App\Support\MarketplacePublicUrl;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
@@ -119,7 +122,7 @@ class AdminPanelProvider extends PanelProvider
             ])
 
             // ВАЖНО: динамически, на каждый запрос.
-            // super-admin -> "Управление рынком"
+            // super-admin -> название выбранного рынка
             // остальные -> название рынка пользователя
             ->brandName(function (): string {
                 $user = Filament::auth()->user();
@@ -129,6 +132,12 @@ class AdminPanelProvider extends PanelProvider
                 }
 
                 if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
+                    $marketId = app(MarketContext::class)->currentMarketId($user);
+
+                    if ($marketId) {
+                        return (string) (Market::query()->whereKey($marketId)->value('name') ?: 'Управление рынком');
+                    }
+
                     return 'Управление рынком';
                 }
 
@@ -143,7 +152,7 @@ class AdminPanelProvider extends PanelProvider
 
             // Favicon (нативный способ Filament).
             // PNG поддерживается всеми современными браузерами.
-            ->favicon(url('favicon.png'))
+            ->favicon(fn (): string => app(MarketBrandAssets::class)->faviconUrlForCurrentAdmin(Filament::auth()->user()))
 
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
 

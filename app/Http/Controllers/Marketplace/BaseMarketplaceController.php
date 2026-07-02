@@ -11,10 +11,9 @@ use App\Models\User;
 use App\Services\Auth\PortalAccessService;
 use App\Services\Marketplace\MarketplaceDemoContentService;
 use App\Services\Marketplace\MarketplaceContextService;
+use App\Support\MarketBrandAssets;
 use App\Support\MarketplaceSettingsValue;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 abstract class BaseMarketplaceController extends Controller
 {
@@ -39,7 +38,8 @@ abstract class BaseMarketplaceController extends Controller
      *   marketplaceChatUnreadCount: int,
      *   marketplaceSettings: array<string,mixed>,
      *   marketplaceBrandName: string,
-     *   marketplaceLogoUrl: string
+     *   marketplaceLogoUrl: string,
+     *   marketplaceFaviconUrl: string
      * }
      */
     protected function sharedViewData(Request $request, Market $market): array
@@ -102,6 +102,7 @@ abstract class BaseMarketplaceController extends Controller
             'marketplaceSettings' => $marketplaceSettings,
             'marketplaceBrandName' => (string) ($marketplaceSettings['brand_name'] ?? 'Маркетплейс Экоярмарки'),
             'marketplaceLogoUrl' => $this->resolveMarketplaceLogoUrl($marketplaceSettings),
+            'marketplaceFaviconUrl' => $this->resolveMarketplaceFaviconUrl($marketplaceSettings),
         ];
     }
 
@@ -120,6 +121,7 @@ abstract class BaseMarketplaceController extends Controller
         return [
             'brand_name' => MarketplaceSettingsValue::string($raw['brand_name'] ?? null, $defaults['brand_name']) ?: $defaults['brand_name'],
             'logo_path' => MarketplaceSettingsValue::string($raw['logo_path'] ?? null, $defaults['logo_path']),
+            'favicon_path' => MarketplaceSettingsValue::string($raw['favicon_path'] ?? null, $defaults['favicon_path']),
             'hero_eyebrow' => MarketplaceSettingsValue::string($raw['hero_eyebrow'] ?? null, $defaults['hero_eyebrow']) ?: $defaults['hero_eyebrow'],
             'hero_title' => MarketplaceSettingsValue::string($raw['hero_title'] ?? null, $defaults['hero_title']) ?: $defaults['hero_title'],
             'hero_subtitle' => MarketplaceSettingsValue::string($raw['hero_subtitle'] ?? null, $defaults['hero_subtitle']) ?: $defaults['hero_subtitle'],
@@ -143,7 +145,7 @@ abstract class BaseMarketplaceController extends Controller
     }
 
     /**
-     * @return array{brand_name:string, logo_path:?string, hero_eyebrow:string, hero_title:string, hero_subtitle:string, market_public_label:string}
+     * @return array{brand_name:string, logo_path:?string, favicon_path:?string, hero_eyebrow:string, hero_title:string, hero_subtitle:string, market_public_label:string}
      */
     protected function defaultMarketplaceSettings(Market $market): array
     {
@@ -151,6 +153,7 @@ abstract class BaseMarketplaceController extends Controller
             return [
                 'brand_name' => 'Демо-рынок Центральный',
                 'logo_path' => 'marketplace/brand/demo-market-logo.svg',
+                'favicon_path' => null,
                 'hero_eyebrow' => 'Демонстрационный рынок',
                 'hero_title' => 'Покупки на демо-рынке в одном месте',
                 'hero_subtitle' => 'Единая витрина товаров, карта демо-рынка, прямой чат с продавцами, отзывы и анонсы мероприятий.',
@@ -161,6 +164,7 @@ abstract class BaseMarketplaceController extends Controller
         return [
             'brand_name' => 'Маркетплейс Экоярмарки',
             'logo_path' => null,
+            'favicon_path' => null,
             'hero_eyebrow' => 'Городская Экоярмарка',
             'hero_title' => 'Покупки на Экоярмарке в одном месте',
             'hero_subtitle' => 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
@@ -187,21 +191,15 @@ abstract class BaseMarketplaceController extends Controller
      */
     protected function resolveMarketplaceLogoUrl(array $settings): string
     {
-        $value = MarketplaceSettingsValue::string($settings['logo_path'] ?? null);
+        return app(MarketBrandAssets::class)->logoUrlForSettings($settings);
+    }
 
-        if ($value === '') {
-            return asset('marketplace/brand/eko-fair-logo.svg');
-        }
-
-        if (Str::startsWith($value, ['http://', 'https://', 'data:', '/'])) {
-            return $value;
-        }
-
-        if (! str_contains($value, '..') && ! str_contains($value, '\\') && is_file(public_path($value))) {
-            return asset($value);
-        }
-
-        return Storage::disk('public')->url($value);
+    /**
+     * @param  array<string, mixed>  $settings
+     */
+    protected function resolveMarketplaceFaviconUrl(array $settings): string
+    {
+        return app(MarketBrandAssets::class)->faviconUrlForSettings($settings);
     }
 
     protected function marketplaceDemoContentEnabled(Market $market): bool

@@ -57,6 +57,7 @@ class MarketplaceSettings extends Page
     public array $data = [
         'brand_name' => 'Маркетплейс Экоярмарки',
         'logo_path' => null,
+        'favicon_path' => null,
         'hero_title' => 'Покупки на Экоярмарке в одном месте',
         'hero_subtitle' => 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
         'public_phone' => '+7 (3852) 55-67-55',
@@ -95,6 +96,7 @@ class MarketplaceSettings extends Page
         $this->form->fill([
             'brand_name' => trim((string) ($settings['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
             'logo_path' => MarketplaceSettingsValue::nullablePath($settings['logo_path'] ?? null),
+            'favicon_path' => MarketplaceSettingsValue::nullablePath($settings['favicon_path'] ?? null),
             'hero_title' => trim((string) ($settings['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
             'hero_subtitle' => trim((string) ($settings['hero_subtitle'] ?? '')) ?: 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
             'public_phone' => trim((string) ($settings['public_phone'] ?? '+7 (3852) 55-67-55')),
@@ -140,6 +142,15 @@ class MarketplaceSettings extends Page
                             ->directory('marketplace/brand')
                             ->visibility('public')
                             ->maxSize(5120),
+
+                        Forms\Components\FileUpload::make('favicon_path')
+                            ->label('Favicon')
+                            ->helperText('Иконка вкладки браузера. Если не задана, будет использован логотип, затем общий favicon сервиса.')
+                            ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/x-icon', 'image/vnd.microsoft.icon'])
+                            ->disk('public')
+                            ->directory('marketplace/brand')
+                            ->visibility('public')
+                            ->maxSize(1024),
 
                         Forms\Components\TextInput::make('public_phone')
                             ->label('Телефон')
@@ -226,6 +237,7 @@ class MarketplaceSettings extends Page
         $settings['marketplace'] = [
             'brand_name' => trim((string) ($state['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
             'logo_path' => MarketplaceSettingsValue::nullablePath($state['logo_path'] ?? null),
+            'favicon_path' => MarketplaceSettingsValue::nullablePath($state['favicon_path'] ?? null),
             'hero_title' => trim((string) ($state['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
             'hero_subtitle' => trim((string) ($state['hero_subtitle'] ?? '')),
             'public_phone' => trim((string) ($state['public_phone'] ?? '')),

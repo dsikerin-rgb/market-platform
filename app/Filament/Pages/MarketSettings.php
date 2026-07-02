@@ -108,6 +108,7 @@ class MarketSettings extends Page
         'personal_notification_topics' => [],
         'brand_name' => 'Маркетплейс Экоярмарки',
         'logo_path' => null,
+        'favicon_path' => null,
         'hero_title' => 'Покупки на Экоярмарке в одном месте',
         'hero_subtitle' => 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
         'public_phone' => '+7 (3852) 55-67-55',
@@ -292,6 +293,7 @@ class MarketSettings extends Page
             'personal_notification_topics' => $personalTopics,
             'brand_name' => trim((string) ($marketplaceSettings['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
             'logo_path' => MarketplaceSettingsValue::nullablePath($marketplaceSettings['logo_path'] ?? null),
+            'favicon_path' => MarketplaceSettingsValue::nullablePath($marketplaceSettings['favicon_path'] ?? null),
             'hero_title' => trim((string) ($marketplaceSettings['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
             'hero_subtitle' => trim((string) ($marketplaceSettings['hero_subtitle'] ?? '')) ?: 'Единая витрина товаров, карта Экоярмарки, прямой чат с продавцами, отзывы и анонсы мероприятий.',
             'public_phone' => trim((string) ($marketplaceSettings['public_phone'] ?? '+7 (3852) 55-67-55')),
@@ -448,6 +450,19 @@ class MarketSettings extends Page
                             ->directory('marketplace/brand')
                             ->visibility('public')
                             ->maxSize(5120)
+                            ->disabled(fn (): bool => ! $this->canEditMarket)
+                            ->columnSpan([
+                                'default' => 12,
+                                'lg' => 6,
+                            ]),
+                        Forms\Components\FileUpload::make('favicon_path')
+                            ->label('Favicon')
+                            ->helperText('Иконка вкладки браузера. Если не задана, будет использован логотип, затем общий favicon сервиса.')
+                            ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/x-icon', 'image/vnd.microsoft.icon'])
+                            ->disk('public')
+                            ->directory('marketplace/brand')
+                            ->visibility('public')
+                            ->maxSize(1024)
                             ->disabled(fn (): bool => ! $this->canEditMarket)
                             ->columnSpan([
                                 'default' => 12,
@@ -956,6 +971,7 @@ class MarketSettings extends Page
         $settings['marketplace'] = [
             'brand_name' => trim((string) ($state['brand_name'] ?? '')) ?: 'Маркетплейс Экоярмарки',
             'logo_path' => MarketplaceSettingsValue::nullablePath($state['logo_path'] ?? null),
+            'favicon_path' => MarketplaceSettingsValue::nullablePath($state['favicon_path'] ?? null),
             'hero_title' => trim((string) ($state['hero_title'] ?? '')) ?: 'Покупки на Экоярмарке в одном месте',
             'hero_subtitle' => trim((string) ($state['hero_subtitle'] ?? '')),
             'public_phone' => trim((string) ($state['public_phone'] ?? '')),
