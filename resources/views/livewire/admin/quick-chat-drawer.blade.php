@@ -821,23 +821,28 @@
         .quick-chat__input-shell {
             display: grid;
             grid-template-columns: auto minmax(0, 1fr);
-            align-items: center;
+            align-items: end;
             gap: 0.55rem;
             min-width: 0;
         }
 
         .quick-chat__textarea {
+            display: block;
+            box-sizing: border-box;
             width: 100%;
-            min-height: 2.35rem;
+            min-height: 2.65rem;
+            max-height: 10rem;
             resize: none;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: hidden;
             border: 0;
             background: transparent;
-            padding: 0.35rem 0;
+            padding: 0.48rem 0 0.56rem;
             color: #0f172a;
             font-size: 0.95rem;
-            line-height: 1.3;
+            line-height: 1.42;
             outline: none;
+            scrollbar-gutter: stable;
         }
 
         .quick-chat__textarea:focus {
@@ -879,9 +884,11 @@
         .quick-chat__file-label {
             display: inline-flex;
             align-items: center;
+            align-self: end;
             justify-content: center;
             width: 2.25rem;
             height: 2.25rem;
+            margin-bottom: 0.18rem;
             border: 0;
             border-radius: 999px;
             background: transparent;
@@ -925,6 +932,7 @@
             flex: 0 0 auto;
             width: 2.65rem;
             height: 2.65rem;
+            margin-bottom: 0.05rem;
             border: 0;
             border-radius: 999px;
             background: transparent;
@@ -1356,9 +1364,19 @@
                                             wire:model.live.debounce.250ms="messageBody"
                                             placeholder="{{ $isAiChat ? 'Спросите по данным рынка...' : 'Сообщение...' }}"
                                             rows="1"
-                                            x-data
-                                            x-init="$el.style.height = 'auto'; $el.style.height = Math.min($el.scrollHeight, 160) + 'px'"
-                                            x-on:input="$el.style.height = 'auto'; const height = Math.min($el.scrollHeight, 160); $el.style.height = height + 'px'; $el.style.overflowY = $el.scrollHeight > 160 ? 'auto' : 'hidden'"
+                                            x-data="{
+                                                resize() {
+                                                    const maxHeight = 160;
+
+                                                    this.$el.style.height = 'auto';
+                                                    this.$el.style.height = Math.min(this.$el.scrollHeight, maxHeight) + 'px';
+                                                    this.$el.style.overflowY = this.$el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+                                                },
+                                            }"
+                                            x-init="resize()"
+                                            x-effect="$wire.messageBody; $nextTick(() => resize())"
+                                            x-on:input="resize()"
+                                            x-on:quick-chat-updated.window="$nextTick(() => resize())"
                                         ></textarea>
                                     </div>
 
