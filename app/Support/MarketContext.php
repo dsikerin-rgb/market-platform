@@ -9,11 +9,14 @@ use App\Models\User;
 use Closure;
 use Filament\Facades\Filament;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Throwable;
 
 final class MarketContext
 {
+    private const LAST_SELECTED_MARKET_PREFERENCE_KEY = 'admin.last_selected_market_id';
+
     private const DEFAULT_SESSION_KEYS = [
         'dashboard_market_id',
         'filament.{panel}.selected_market_id',
@@ -65,6 +68,7 @@ final class MarketContext
 
         if (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) {
             return $this->selectedMarketIdFromSession()
+                ?? $this->rememberedSelectedMarketIdForUser($user)
                 ?? $this->fallbackMarketIdForSuperAdmin();
         }
 
@@ -128,12 +132,16 @@ final class MarketContext
         return null;
     }
 
-    public function syncSelectedMarketIdInSession(?int $marketId, ?string $panelId = null): void
+    public function syncSelectedMarketIdInSession(?int $marketId, ?string $panelId = null, bool $rememberForUser = true): void
     {
         $keys = $this->sessionKeys($panelId);
 
         if ($marketId === null || $marketId <= 0) {
             session()->forget($keys);
+
+            if ($rememberForUser) {
+                $this->forgetRememberedSelectedMarketIdForUser();
+            }
 
             return;
         }
@@ -141,6 +149,42 @@ final class MarketContext
         foreach ($keys as $key) {
             session()->put($key, $marketId);
         }
+
+        if ($rememberForUser) {
+            $this->rememberSelectedMarketIdForUser($marketId);
+        }
+    }
+
+    public function restoreRememberedSelectedMarketIdInSession(?User $user = null, ?string $panelId = null): ?int
+    {
+        $marketId = $this->rememberedSelectedMarketIdForUser($user);
+
+        if ($marketId === null) {
+            return null;
+        }
+
+        $this->syncSelectedMarketIdInSession($marketId, $panelId, rememberForUser: false);
+
+        return $marketId;
+    }
+
+    public function rememberedSelectedMarketIdForUser(?User $user = null): ?int
+    {
+        $user ??= $this->authenticatedUser();
+
+        if (! $this->canRememberSelectedMarketForUser($user)) {
+            return null;
+        }
+
+        $marketId = $this->normalizeMarketId(data_get($user?->notification_preferences ?? [], self::LAST_SELECTED_MARKET_PREFERENCE_KEY));
+
+        if ($marketId === null) {
+            return null;
+        }
+
+        return Market::query()->whereKey($marketId)->exists()
+            ? $marketId
+            : null;
     }
 
     public function panelId(): string
@@ -247,6 +291,51 @@ final class MarketContext
         $marketId = (int) $value;
 
         return $marketId > 0 ? $marketId : null;
+    }
+
+    private function rememberSelectedMarketIdForUser(int $marketId, ?User $user = null): void
+    {
+        $user ??= $this->authenticatedUser();
+
+        if (! $this->canRememberSelectedMarketForUser($user)) {
+            return;
+        }
+
+        if (! Market::query()->whereKey($marketId)->exists()) {
+            return;
+        }
+
+        $preferences = (array) ($user?->notification_preferences ?? []);
+        data_set($preferences, self::LAST_SELECTED_MARKET_PREFERENCE_KEY, $marketId);
+
+        $user?->forceFill(['notification_preferences' => $preferences])->saveQuietly();
+    }
+
+    private function forgetRememberedSelectedMarketIdForUser(?User $user = null): void
+    {
+        $user ??= $this->authenticatedUser();
+
+        if (! $this->canRememberSelectedMarketForUser($user)) {
+            return;
+        }
+
+        $preferences = (array) ($user?->notification_preferences ?? []);
+        data_forget($preferences, self::LAST_SELECTED_MARKET_PREFERENCE_KEY);
+
+        $user?->forceFill(['notification_preferences' => $preferences])->saveQuietly();
+    }
+
+    private function canRememberSelectedMarketForUser(?User $user): bool
+    {
+        if (! $user || ! method_exists($user, 'isSuperAdmin') || ! $user->isSuperAdmin()) {
+            return false;
+        }
+
+        try {
+            return Schema::hasColumn($user->getTable(), 'notification_preferences');
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     private function fallbackMarketIdForSuperAdmin(): ?int

@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Filament\Auth\Login as AdminLogin;
+use App\Filament\Pages\Dashboard;
+use App\Filament\Widgets\MarketSwitcherWidget;
 use App\Models\Market;
 use App\Models\User;
 use App\Support\MarketContext;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use ReflectionMethod;
 use RuntimeException;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -55,6 +60,86 @@ class MarketContextTest extends TestCase
         self::assertSame((int) $selectedMarket->id, $context->currentMarketId());
     }
 
+    public function test_super_admin_remembered_market_is_current_context_when_session_is_empty(): void
+    {
+        $firstMarket = $this->createMarket('Market A');
+        $rememberedMarket = $this->createMarket('Market B');
+        $superAdmin = $this->createSuperAdmin([
+            'notification_preferences' => [
+                'admin' => [
+                    'last_selected_market_id' => (int) $rememberedMarket->id,
+                ],
+            ],
+        ]);
+
+        $this->actingAsFilamentUser($superAdmin);
+
+        $context = app(MarketContext::class);
+
+        self::assertNull($context->selectedMarketIdFromSession());
+        self::assertSame((int) $rememberedMarket->id, $context->currentMarketId());
+        self::assertNotSame((int) $firstMarket->id, $context->currentMarketId());
+    }
+
+    public function test_sync_selected_market_remembers_it_for_super_admin(): void
+    {
+        $market = $this->createMarket('Market A');
+        $superAdmin = $this->createSuperAdmin();
+
+        $this->actingAsFilamentUser($superAdmin);
+
+        app(MarketContext::class)->syncSelectedMarketIdInSession((int) $market->id, 'admin');
+
+        $superAdmin->refresh();
+
+        self::assertSame((int) $market->id, data_get($superAdmin->notification_preferences, 'admin.last_selected_market_id'));
+    }
+
+    public function test_remembered_market_can_be_restored_to_session_after_login(): void
+    {
+        $market = $this->createMarket('Market A');
+        $superAdmin = $this->createSuperAdmin([
+            'notification_preferences' => [
+                'admin' => [
+                    'last_selected_market_id' => (int) $market->id,
+                ],
+            ],
+        ]);
+
+        $this->actingAsFilamentUser($superAdmin);
+        session()->flush();
+
+        $restored = app(MarketContext::class)->restoreRememberedSelectedMarketIdInSession($superAdmin, 'admin');
+
+        self::assertSame((int) $market->id, $restored);
+        self::assertSame((int) $market->id, app(MarketContext::class)->selectedMarketIdFromSession('admin'));
+        self::assertSame((int) $market->id, session('dashboard_market_id'));
+        self::assertSame((int) $market->id, session('filament.admin.selected_market_id'));
+        self::assertSame((int) $market->id, session('selected_market_id'));
+    }
+
+    public function test_super_admin_login_restores_remembered_market_to_session(): void
+    {
+        $market = $this->createMarket('Market A');
+        $superAdmin = $this->createSuperAdmin([
+            'notification_preferences' => [
+                'admin' => [
+                    'last_selected_market_id' => (int) $market->id,
+                ],
+            ],
+        ]);
+
+        Livewire::test(AdminLogin::class)
+            ->set('data.email', $superAdmin->email)
+            ->set('data.password', 'password')
+            ->set('data.remember', false)
+            ->call('authenticate');
+
+        self::assertSame((int) $market->id, session('dashboard_market_id'));
+        self::assertSame((int) $market->id, session('filament.admin.selected_market_id'));
+        self::assertSame((int) $market->id, session('selected_market_id'));
+    }
+
     public function test_super_admin_has_no_fallback_market_by_default(): void
     {
         $this->createMarket('Market A');
@@ -77,6 +162,16 @@ class MarketContextTest extends TestCase
 
         self::assertSame((int) $firstByName->id, app(MarketContext::class)->currentMarketId());
         self::assertNotSame((int) $secondByName->id, app(MarketContext::class)->currentMarketId());
+    }
+
+    public function test_dashboard_and_switcher_default_to_first_market_by_id_not_name(): void
+    {
+        $firstById = $this->createMarket('Zoo Market');
+        $firstByName = $this->createMarket('Alpha Market');
+
+        self::assertSame((int) $firstById->id, $this->invokePrivateMethod(new Dashboard, 'resolveDefaultMarketId'));
+        self::assertSame((int) $firstById->id, $this->invokePrivateMethod(new MarketSwitcherWidget, 'resolveDefaultMarketId'));
+        self::assertNotSame((int) $firstByName->id, $this->invokePrivateMethod(new Dashboard, 'resolveDefaultMarketId'));
     }
 
     public function test_with_market_overrides_and_restores_context(): void
@@ -128,14 +223,17 @@ class MarketContextTest extends TestCase
         ]);
     }
 
-    private function createSuperAdmin(): User
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createSuperAdmin(array $attributes = []): User
     {
         Role::findOrCreate('super-admin', 'web');
 
-        $user = User::factory()->create([
+        $user = User::factory()->create(array_replace([
             'market_id' => null,
             'email' => 'super-admin-' . uniqid('', true) . '@example.test',
-        ]);
+        ], $attributes));
         $user->assignRole('super-admin');
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
@@ -147,5 +245,13 @@ class MarketContextTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
         $this->actingAs($user, Filament::getAuthGuard());
+    }
+
+    private function invokePrivateMethod(object $object, string $methodName): mixed
+    {
+        $method = new ReflectionMethod($object, $methodName);
+        $method->setAccessible(true);
+
+        return $method->invoke($object);
     }
 }
